@@ -1,5 +1,11 @@
 # BascomTask
-BascomTask is a library for running tasks with optional dependencies in parallel. Typical uses cases include at least some relatively expensive tasks, possibly with different task wirings based on various conditions. The foremost example is in processing page or microservice requests that must in turn reach out to other services and/or datastores.
+For complex web pages and increasingly for microservice development, processing requests often requires reaching out to multiple external sources such as other services or datastores. A common challenge in implementing such requests is running some operations in parallel while also ensuring strict dependency ordering. The mechanisms of object orientation can be a great aid for making this work more manageable: each work item is split into its own task object, then a means to wire them together and execute them is needed, often referred to as "task orchestration". Several goals can be achieved by breaking work items into tasks in this way:
+
+* Enforcing separation of concerns between tasks
+* Unifying cross-cutting capabilities such as logging and exception handling across tasks
+* Parallel execution among tasks
+
+BascomTask is a task orchestration library that features auto-wiring and optimal thread management among other features. Typical uses cases include at least some relatively expensive tasks, possibly with different task wirings based on various conditions. The foremost example is in processing page or microservice requests that must in turn reach out to other services and/or datastores.
 
 ## Basics 
 Any POJO can be a task. Such POJOs can have @Work annotated methods (often just one) that can take other tasks as arguments:
