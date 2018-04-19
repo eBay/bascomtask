@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import com.ebay.bascomtask.main.ITask;
 
@@ -61,7 +60,8 @@ abstract class PathTask {
 			return false;
 		}
 		@Override public String toString() {
-			return "{" + args.stream().map(Object::toString).collect(Collectors.joining(",")) + "}";
+			return css(args,PathTask.class);
+			//return "{" + args.stream().map(Object::toString).collect(Collectors.joining(",")) + "}";
 		}
 	}
 	
@@ -104,9 +104,18 @@ abstract class PathTask {
 		return new SingleArg(this);
 	}
 	
+	static List<PathTask.Arg> toArgs(PathTask...tasks) {
+		List<PathTask.Arg> args = new ArrayList<>();
+		for (PathTask next: Arrays.asList(tasks)) {
+			args.add(next.asArg());
+		}
+		return args;
+	}
+	
 	PathTask exp(PathTask...tasks) {
 		if (tasks.length > 0) {
-			List<PathTask.Arg> args = Arrays.asList(tasks).stream().map(t -> t.asArg()).collect(Collectors.toList());
+			List<PathTask.Arg> args = toArgs(tasks); 
+			//List<PathTask.Arg> args = Arrays.asList(tasks).stream().map(t -> t.asArg()).collect(Collectors.toList());
 			exp.add(args);
 		}
 		return this;
@@ -114,7 +123,7 @@ abstract class PathTask {
 	
 	PathTask got(PathTask...tasks) {
 		if (tasks.length > 0) {
-			List<PathTask.Arg> args = Arrays.asList(tasks).stream().map(t -> t.asArg()).collect(Collectors.toList());
+			List<PathTask.Arg> args = toArgs(tasks); 
 			got.add(args);
 		}
 		if (sleepFor > 0) {
@@ -124,7 +133,18 @@ abstract class PathTask {
 	}
 	
 	String fmt(List<PathTask.Arg> args) {
-		return "(" + args.stream().map(Object::toString).collect(Collectors.joining(",")) + ")";
+		return "(" + css(args,PathTask.Arg.class) + ")"; 
+		//return "(" + args.stream().map(Object::toString).collect(Collectors.joining(",")) + ")";
+	}
+	
+	static <T> String css(List<T> os, Class<T> cls) {
+		StringBuilder sb = new StringBuilder();
+		for (int i=0; i<os.size(); i++) {
+			Object next = os.get(i);
+			if (i==0) sb.append(',');
+			sb.append(next.toString());
+		}
+		return sb.toString();
 	}
 
 	/**
@@ -143,7 +163,7 @@ abstract class PathTask {
 			}
 		}
 		if (bad.size() > 0) {
-			fail(taskInstance.getName() + " " + String.join(",",bad));
+			fail(taskInstance.getName() + " " + css(bad,String.class));
 		}
 		// This might happen when task is called extra times with same argument(s)
 		int expSize = exp.size();

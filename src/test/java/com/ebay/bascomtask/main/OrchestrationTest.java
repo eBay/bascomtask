@@ -429,7 +429,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(1,2);
 	}
 	
-	private void testPathExecutedConditionally(boolean result) {
+	private void testPathExecutedConditionally(final boolean result) {
 		class A extends PathTask {
 			@Work public void exec() {got();}
 		}
@@ -577,7 +577,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		PathTask taskB1 = track.work(b1).name("b1").exp(a1).exp(a2);
 		PathTask taskB2 = track.work(b2).name("b2").exp(a1).exp(a2);
 		PathTask taskC = track.work(c).exp(b1).exp(b1).exp(b2).exp(b2);
-		verify(3);
+		verify(2,3);
 	}
 
 	@Test

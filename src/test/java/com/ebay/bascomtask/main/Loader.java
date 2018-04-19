@@ -38,7 +38,7 @@ public class Loader {
 	
 	private static final long MNS = 1000000;
 
-	private void run2(ExecutorService es, int runLoop, int targetDurationSeconds, int threadsPerLoop, Runner runner) throws Exception {
+	private void run2(ExecutorService es, int runLoop, int targetDurationSeconds, int threadsPerLoop, final Runner runner) throws Exception {
 
 		report(runLoop,"Load test invoked with targetDurationSeconds=%d, threadsPerLoop=%d%n",targetDurationSeconds,threadsPerLoop);
 
@@ -50,7 +50,7 @@ public class Loader {
         final long targetEndTime = start + targetDurationSeconds * MNS * 1000;
         int loops = 0;
         long time;
-        AtomicInteger exceptions = new AtomicInteger(0);
+        final AtomicInteger exceptions = new AtomicInteger(0);
 
         while ((time=System.nanoTime()) < targetEndTime) {
         	loops++;

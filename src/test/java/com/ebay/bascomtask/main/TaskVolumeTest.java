@@ -10,6 +10,7 @@ import com.ebay.bascomtask.annotations.Work;
  */
 public class TaskVolumeTest extends PathTaskTestBase {
 	
+	@SuppressWarnings("unused")
 	@Test
 	public void test50TasksBy10Deep() {
 		class Root1 extends PathTask {
@@ -141,11 +142,11 @@ public class TaskVolumeTest extends PathTaskTestBase {
 		class D5 extends PathTask {
 			@Work public void exec(C1 c1, B7 b7) {got(c1,b7);}
 		}
-		PathTask d1 = track.work(new D1()).exp(c3,a4);
-		PathTask d2 = track.work(new D2()).exp(r10,r8);
-		PathTask d3 = track.work(new D3()).exp(b4,b5);
-		PathTask d4 = track.work(new D4()).exp(c2,c3,c4,c5);
-		PathTask d5 = track.work(new D5()).exp(c1,b7);
+		final PathTask d1 = track.work(new D1()).exp(c3,a4);
+		final PathTask d2 = track.work(new D2()).exp(r10,r8);
+		final PathTask d3 = track.work(new D3()).exp(b4,b5);
+		final PathTask d4 = track.work(new D4()).exp(c2,c3,c4,c5);
+		final PathTask d5 = track.work(new D5()).exp(c1,b7);
 		
 		class E1 extends PathTask {
 			@Work public void exec(D3 c3, A4 a4) {got(d3,a4);}

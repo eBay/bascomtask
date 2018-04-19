@@ -45,15 +45,17 @@ class TaskParser {
 		return task;
 	}
 	
+
+	
 	private void parse(Task task) {
 		for (Method method: task.taskClass.getDeclaredMethods()) {
 			Call call = null;
-			Work work = method.getDeclaredAnnotation(Work.class);
+			Work work = method.getAnnotation(Work.class);
 			if (work != null) {
 				call = new Call(task,method,work.scope(),work.light());
 				task.workCalls.add(call);
 			}
-			PassThru passThru = method.getDeclaredAnnotation(PassThru.class);
+			PassThru passThru = method.getAnnotation(PassThru.class);
 			if (passThru != null) {
 				// @PassThru methods are always consider 'light'
 				call = new Call(task,method,Scope.FREE,true);   
@@ -65,7 +67,7 @@ class TaskParser {
 				int index = 0;
 				Type[] genericParameterTypes = method.getGenericParameterTypes();
 				Class<?>[] pt = method.getParameterTypes();
-				for (int i=0; i<method.getParameterCount(); i++) {
+				for (int i=0; i<method.getParameterTypes().length; i++) {
 					boolean isList = false;
 					Type nextMethodParamType = genericParameterTypes[i];
 					Class<?> nextMethodParamClass = pt[i];

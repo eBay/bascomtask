@@ -681,12 +681,12 @@ public class Orchestrator {
 		waitForTasks.remove(taskInstance);
 	}
 
-	synchronized void spawn(Invocation invocation) {
+	synchronized void spawn(final Invocation invocation) {
 		if (!requestMainThreadComplete(invocation)) {
 			LOG.debug("Spawning \"{}\"",invocation);
 			final Orchestrator lock = this;
 			threadBalance++;
-			IBascomConfig config = BascomConfigFactory.getConfig();
+			final IBascomConfig config = BascomConfigFactory.getConfig();
 			ExecutorService executor = config.getExecutor();
 			final Thread parent = Thread.currentThread();
 			executor.execute(new Runnable() {
