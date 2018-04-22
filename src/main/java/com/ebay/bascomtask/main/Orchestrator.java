@@ -2,8 +2,10 @@ package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,12 +13,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.ebay.bascomtask.annotations.Scope;
 import com.ebay.bascomtask.config.BascomConfigFactory;
 import com.ebay.bascomtask.config.IBascomConfig;
 import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
+import com.ebay.bascomtask.main.Call.Param;
 
 /**
  * A dataflow-driven collector and executor of tasks that implicitly honors all 
@@ -105,11 +107,22 @@ import com.ebay.bascomtask.exceptions.RuntimeGraphError;
  *  
  * @author brendanmccarthy
  */
+/**
+ * @author bremccarthy
+ *
+ */
 public class Orchestrator {
 	
 	static final Logger LOG = LoggerFactory.getLogger(Orchestrator.class);
 
+	/**
+	 * How we know which task instances are active for a given Task, relative to this orchestrator
+	 */
 	private final Map<Task,List<Task.Instance>> taskMapByType = new HashMap<>();
+	
+	/*
+	 * For performance we also maintain the list directly
+	 */
 	private final List<Task.Instance> allTasks = new ArrayList<>();
 
 	/**
@@ -118,21 +131,14 @@ public class Orchestrator {
 	private final Map<String,Task.Instance> taskMapByName = new HashMap<>();
 	
 	/**
-	 * A Call, in the context of an orchestrator can have many instances,
-	 * one for each instance of the owning task.
+	 * All Calls of all Task.Instances in this orchestrator
 	 */
 	private final Map<Call,List<Call.Instance>> callMap = new HashMap<>();
 	
 	/**
-	 * Calls that have no arguments. 
+	 * All Parameters of all such calls in this orchestrator
 	 */
-	private final List<Call.Instance> roots = new ArrayList<>();
-	
-	/**
-	 * Tasks that have no methods -- these are immediately available to other
-	 * calls as arguments without any method execution on those classes.
-	 */
-	private final List<Task.Instance> dolts = new ArrayList<>();
+	private final Map<Param,List<Param.Instance>> paramMap = new HashMap<>();
 	
 	/**
 	 * Aggregates exceptions from sub-threads to roll-up to the main thread
@@ -152,7 +158,7 @@ public class Orchestrator {
 	/**
 	 * How {@link #execute()} knows to exit: when this list is empty
 	 */
-	private final List<Task.Instance> waitForTasks = new ArrayList<>();
+	private final Set<Task.Instance> waitForTasks = new HashSet<>();
 	
 	/**
 	 * Pending call set by a different thread, waiting for main thread to pick it up
@@ -163,6 +169,12 @@ public class Orchestrator {
 	 * How a non-main thread knows the main thread's invocationPickup can be set
 	 */
 	private boolean waiting = false;
+	
+	/**
+	 * Accumulates instances prior to execute() -- thread-specific to avoid conflicts
+	 * between two separate threads dynamically adding tasks at the same time 
+	 */
+	private Map<Thread,List<Task.Instance>> nestedAdds = new HashMap<>();
 	
 	/**
 	 * For debugging/logging each Orchestrator has a unique id
@@ -195,8 +207,6 @@ public class Orchestrator {
 		sb.append(allTasks.size());
 		sb.append(",#calls=");
 		sb.append(callMap.size());
-		sb.append(",#roots=");
-		sb.append(roots.size());
 		sb.append(",#waiting=");
 		sb.append(waitForTasks.size());
 		sb.append(",#threads=");
@@ -280,27 +290,29 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * Adds a task whose {@literal @}Work method(s) will be invoked, and which will in turn be supplied as an actual 
-	 * parameter to other tasks with {@literal @}Work methods that match that parameter type. Note that:
+	 * Adds a task to be made available to other task's task ({@literal @}Work or {@literal @}PassThru) methods, 
+	 * and whose {@literal @}Work methods will only be invoked (fired) when its task arguments have so fired.
+	 * <p>
+	 * The rules for execution are as follows:
 	 * <ul>
-	 * <li> A POJO can have no {@literal @}Work methods in which case it will instantly be available to other
-	 * tasks. 
+	 * <li> A POJO can have no {@literal @}Work methods in which case it will instantly be available to other tasks.
 	 * <li> Any {@literal @}Work method with no arguments will be started immediately in its own thread (which
 	 * might be the calling thread of the orchestrator if it is not busy with other work).
-	 * <li> Any {@literal @}Work method with arguments will only be invoked when its task parameters are
+	 * <li> Any {@literal Work} method with arguments will only be invoked when its task parameters are
 	 * ready and available.
-	 * <li> Each {@literal @}@Work method will in fact be invoked with the cross-product of all available matching
+	 * <li> Each {@literal @}Work method will in fact be invoked with the cross-product of all available matching
 	 * instances.
 	 * </ul>
 	 * <p>
 	 * Regarding the last point, although it is common to add just one instance of a given POJO type,
 	 * it is safe to add any number. The default behavior of {@literal @}Work methods receiving argument sequences
 	 * with multiple instances is that each is executed potentially in parallel. Different options can be set through
-	 * {@literal @}Work.scope, see {@link com.ebay.bascomtask.annotations.Scope}. Alternatively, a {@literal @}Work
-	 * parameter can simply be a list of tasks in which case the entire set of matching instances will
+	 * {@literal @}Work.scope, see {@link com.ebay.bascomtask.annotations.Scope}. Alternatively, a @{literal @}Work 
+	 * method parameter can simply be a list of tasks in which case the entire set of matching instances will
 	 * be made available once all instances are available.
 	 * 
 	 * @param any java object
+	 * @returns a 'shadow' task object which allows for various customization
 	 */
 	public ITask addWork(Object task) {
 		return add(task,true);
@@ -309,33 +321,36 @@ public class Orchestrator {
 
 	/**
 	 * Adds a task whose {@literal @}PassThru methods (rather than its {@literal @}@Work methods) will 
- 	 * be invoked. Otherwise behaves the same as {@link #addWork(Object)}.
+ 	 * be invoked, always in the calling thread -- no separate thread is created to execute a {@literal @}PassThru
+ 	 * method since it assumed to perform simple actions like providing a default or passing-through its arguments
+ 	 * with no or little change. Otherwise behaves the same as {@link #addWork(Object)}.
 	 * @param any java object
 	 */
 	public ITask addPassThru(Object task) {
 		return add(task,false);
 	}
 
-	private ITask add(Object targetTask, boolean activeElsePassive) {
+	/**
+	 * Records an added task to be added during a subsequent execute(), whether the latter is explicit
+	 * or implied as a result of a nested inline call. We don't add right away because of the possibility
+	 * of other active threads. The actual addition is only performed when we can synchronize the 
+	 * orchestrator and perform the additions atomically without impacting running threads.
+	 * @param targetTask
+	 * @param workElsePassThru
+	 * @return
+	 */
+	private ITask add(Object targetTask, boolean workElsePassThru) {
 		Class<?> targetClass = targetTask.getClass();
 		Task task = TaskParser.parse(targetClass);
-		List<Task.Instance> tasksForType = taskMapByType.get(task);
-		if (tasksForType==null) {
-			tasksForType = new ArrayList<>();
-			taskMapByType.put(task,tasksForType);
-		}
-		int ixt = tasksForType.size();
-		Task.Instance taskInstance = task.new Instance(this,targetTask,activeElsePassive,ixt);
-		taskMapByName.put(taskInstance.getName(),taskInstance);
-		tasksForType.add(taskInstance);
-		allTasks.add(taskInstance);
-
-		inflate(taskInstance,activeElsePassive ? task.workCalls : task.passThruCalls);
-		
-		// Exclude from the the waitlist tasks that have no methods because they would never be 
-		// invoked. Note that this check is done *after* inflate() so that taskInstance.calls is populated. 
-		if (taskInstance.calls.size() > 0) {
-			waitForTasks.add(taskInstance);
+		Task.Instance taskInstance = task.new Instance(this,targetTask,workElsePassThru);
+		Thread t = Thread.currentThread();
+		synchronized (nestedAdds) {
+			List<Task.Instance> acc = nestedAdds.get(t);
+			if (acc==null) {
+				acc = new ArrayList<>();
+				nestedAdds.put(t,acc);
+			}
+			acc.add(taskInstance);
 		}
 		return taskInstance;
 	}
@@ -357,27 +372,8 @@ public class Orchestrator {
 	}
 	
 	
-	private void inflate(Task.Instance task, List<Call> calls) {
-		if (calls.size()==0) {
-			dolts.add(task);
-		}
-		for (Call call: calls) {
-			Call.Instance ci = call.new Instance(task);
-			task.calls.add(ci);
-			List<Call.Instance> callInstances = callMap.get(call);
-			if (callInstances==null) {
-				callInstances = new ArrayList<>();
-				callMap.put(call,callInstances);
-			}
-			callInstances.add(ci);
-			if (call.getNumberOfParams()==0) {
-				roots.add(ci);
-			}
-		}
-	}
-	
 	/**
-	 * Calls {@link Orchestrator#execute(long)} with a default of 10 minutes.
+	 * Calls {@link #execute(long)} with a default of 10 minutes.
 	 */
 	public void execute() {
 		execute(TimeUnit.MINUTES.toMillis(10L));
@@ -401,27 +397,41 @@ public class Orchestrator {
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
 	 */
 	public void execute(long maxExecutionTimeMillis) {
-		this.maxExecutionTimeMillis = maxExecutionTimeMillis;
-		this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
-		startTime = System.currentTimeMillis();
-		callingThread = Thread.currentThread();
-		try {
-			linkTasksBackToWaitingParams();
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("firing with {}/{}/{} tasks\n{}",allTasks.size(),roots.size(),dolts.size(),getGraphState());
-			}
-			fireRoots();
-			waitForCompletion();
-			checkForExceptions();
+		final Thread t = Thread.currentThread();
+		List<Task.Instance> taskInstances = nestedAdds.remove(t);
+		if (callingThread != null) {
+			executeTasks(taskInstances,"nested");
 		}
-		finally {
-			callingThread = null;
-			exitExecutionTime = System.currentTimeMillis();
-			if (lastThreadCompleteTime < exitExecutionTime) {
-				lastThreadCompleteTime = exitExecutionTime;
+		else {
+			this.maxExecutionTimeMillis = maxExecutionTimeMillis;
+			this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
+			startTime = System.currentTimeMillis();
+			callingThread = t;
+			try {
+				executeTasks(taskInstances,"top-level");
+				waitForCompletion();
+				checkForExceptions();
+			}
+			finally {
+				callingThread = null;
+				exitExecutionTime = System.currentTimeMillis();
+				if (lastThreadCompleteTime < exitExecutionTime) {
+					lastThreadCompleteTime = exitExecutionTime;
+				}
 			}
 		}
 	}
+	
+	private void executeTasks(List<Task.Instance> taskInstances, String context) {
+		if (taskInstances != null) {
+			List<Call.Instance> roots = linkGraph(taskInstances);
+			if (LOG.isDebugEnabled()) {
+				LOG.debug("firing {} with {} tasks / {} roots\n{}",context,allTasks.size(),roots.size(),getGraphState());
+			}
+			fireRoots(roots);
+		}
+	}
+
 	
 	/**
 	 * Thread which calls begin()
@@ -431,72 +441,195 @@ public class Orchestrator {
 		return Thread.currentThread() == callingThread;
 	}
 	
+	int linkLevel = 0;
+	
 	/**
-	 * Links each parameter of each applicable (@Work or @PassThru) call with each instance of that parameter's 
-	 * type. Also verifies that all tasks are callable, by ensuring that they have at least one such call that 
-	 * has all parameters available.
+	 * Adds the given tasks and links each parameter of each applicable (@Work or @PassThru) call with each instance 
+	 * of that parameter's type. Also verifies that all tasks are callable, by ensuring that they have at least one 
+	 * such call that has all parameters available.
 	 * @throws InvalidGraph if any task is uncallable, and if so include list of all such tasks (if more than one)
 	 */
-	private void linkTasksBackToWaitingParams() {
+	private List<Call.Instance> linkGraph(List<Task.Instance> taskInstances) {
+		// First establish all references from the orchestrator to taskInstances.
+		// Later steps depend on these references having been set.
+		for (Task.Instance taskInstance: taskInstances) {
+			addActual(taskInstance);
+		}
+		List<Call.Instance> roots = null;
+		// Now the taskInstances themselves can be linked
+		for (Task.Instance taskInstance: taskInstances) {
+			Call.Instance root = null;
+			if (taskInstance.calls.size()==0) {
+				// If no calls at all, the task is trivially available to all who depend on it.
+				// We create a dummy call so the task can then be processed like any other root.
+				root = taskInstance.genNoCall();
+			}
+			else {
+				root = linkAll(taskInstance);
+			}
+			if (root != null) {
+				if (roots == null) {
+					roots = new ArrayList<>();
+				}
+				roots.add(root);
+			}
+		}
+		// With all linkages in place, thresholds can be (re)computed, and final verification performed
+		List<Call.Param.Instance> badParams = recomputeAllThresholdsAndVerify();
+		if (badParams != null) {
+			throwUncompletableParams(badParams);
+		}
+		return roots;
+	}
+
+	private void addActual(Task.Instance taskInstance) {
+		allTasks.add(taskInstance);
+		recordCallsAndParameterInstances(taskInstance);
+		Task task = taskInstance.getTask();
+		List<Task.Instance> instances = taskMapByType.get(task);
+		if (instances==null) {
+			instances = new ArrayList<>();
+			taskMapByType.put(task,instances);
+		}
+		taskInstance.setIndexInType(instances.size());
+		instances.add(taskInstance);
+	}
+	
+	private void recordCallsAndParameterInstances(Task.Instance task) {
+		for (Call.Instance callInstance: task.calls) {
+			Call call = callInstance.getCall();
+			List<Call.Instance> callInstances = callMap.get(call);
+			if (callInstances==null) {
+				callInstances = new ArrayList<>();
+				callMap.put(call,callInstances);
+			}
+			for (Param.Instance nextParamInstance: callInstance.paramInstances) {
+				Param nextParam = nextParamInstance.getParam();
+				List<Param.Instance> paramInstances = paramMap.get(nextParam);
+				if (paramInstances == null) {
+					paramInstances = new ArrayList<>();
+					paramMap.put(nextParam,paramInstances);
+				}
+				paramInstances.add(nextParamInstance);
+			}
+		}
+	}
+	
+	/**
+	 * Recomputes thresholds and returns bad parameters if any
+	 * @return possibly null list of bad parameters
+	 */
+	private List<Call.Param.Instance> recomputeAllThresholdsAndVerify() {
+		linkLevel++;
 		List<Call.Param.Instance> badParams = null;
-		for (Task.Instance taskInstance: allTasks) {
-			computeThreshold(taskInstance);
-			if (taskInstance.calls.size() > 0) {  // Don't do the enclosed checks if there are no calls
-				List<Call.Param.Instance> badCallParams = null;
+		for (Task.Instance nextTaskInstance: allTasks) {
+			computeThreshold(nextTaskInstance,linkLevel);
+			if (nextTaskInstance.calls.size() > 0) {  // Don't do the enclosed checks if there are no calls
 				// If at least one call for a task has all parameters, the graph is resolvable.
 				// If there is no such call, report all unbound parameters.
-				int badCallCount = 0;
-				for (Call.Instance callInstance: taskInstance.calls) {
-					for (Call.Param.Instance param: callInstance.paramInstances) {
-						Task task = param.getTask();
-						List<Task.Instance> instances = taskMapByType.get(task);
-						if (instances==null) {
-							badCallCount++;
-							if (badCallParams==null) {
-								badCallParams = new ArrayList<>();
-							}
-							badCallParams.add(param);
-						}
-						else {
-							int np = instances.size();
-							param.setThreshold(np);
-							for (Task.Instance supplier: instances) {
-								supplier.backList.add(param);
+				if (!nextTaskInstance.isCompletable()) {
+					if (badParams == null) {
+						badParams = new ArrayList<>();
+					}
+					boolean any = false;
+					for (Call.Instance nextCall: nextTaskInstance.calls) {
+						for (Param.Instance nextParam: nextCall.paramInstances) {
+							if (nextParam.getThreshold() == 0) {
+								badParams.add(nextParam);
+								any = true;
 							}
 						}
 					}
-				}
-				int goodCallCount = taskInstance.calls.size() - badCallCount;
-				if (goodCallCount==0) {
-					// badCallParams will be non-null
-					if (badParams==null) {
-						badParams = badCallParams;
+					if (!any) {
+						throw new RuntimeException("Internal error, task falsely not completable: " + nextTaskInstance);
 					}
-					else {
-						badParams.addAll(badCallParams);
-					}
-				}
-				if (goodCallCount > 1 && !taskInstance.isMultiMethodOk()) {
-					String msg = "Task " + taskInstance.getName() + " has " + goodCallCount;
-					msg += " matching calls, either remove the extra tasks or mark task as multiMethodOk()";
-					throw new InvalidGraph.MultiMethod(msg);
 				}
 			}
 		}
-		// If there is any task that lacks at least one resolvable call, generate an error
-		// and include all unresolvable parameters so the user can result them with a holistic
-		// view rather having to fix/re-execute/find-problem/fix/etc.
-		if (badParams != null) {
-			StringBuilder sb = new StringBuilder();
-			sb.append("Call parameters have no matching task instance:\n");
-			for (Call.Param.Instance param: badParams) {
-				sb.append("    ");
-				sb.append(param.getTypeName());
-				sb.append(" in ");
-				sb.append( param.getCall().getCall().signature());
-				sb.append('\n');
+		return badParams;
+	}
+
+	/**
+	 * Links a taskInstance together with any incoming tasks or outgoing parameters
+	 * @param taskInstance to link
+	 * @return a no-arg call if there is one, else null
+	 */
+	private Call.Instance linkAll(Task.Instance taskInstance) {
+		Call.Instance root = null;
+		int matchableCallCount = 0;
+		for (Call.Instance callInstance: taskInstance.calls) {
+			if (callInstance.paramInstances.length == 0) {
+				root = callInstance;
 			}
-			throw new InvalidGraph.MissingDependents(sb.toString());
+			boolean match = true;
+			for (Call.Param.Instance param: callInstance.paramInstances) {
+				Task task = param.getTask();
+				List<Task.Instance> instances = taskMapByType.get(task);
+				if (instances==null) {
+					match = false;
+				}
+				else {
+					for (Task.Instance supplier: instances) {
+						backLink(supplier,param);
+					}
+				}
+			}
+			if (match) {
+				matchableCallCount++;
+			}
+		}
+		if (matchableCallCount > 1 && !taskInstance.isMultiMethodOk()) {
+			String msg = "Task " + taskInstance.getName() + " has " + matchableCallCount;
+			msg += " matching calls, either remove the extra tasks or mark task as multiMethodOk()";
+			throw new InvalidGraph.MultiMethod(msg);
+		}
+		for (Param backParam: taskInstance.getTask().backList) {
+			List<Param.Instance> paramInstances = paramMap.get(backParam);
+			if (paramInstances != null) {
+				// It will be null if it links e.g. to a passthru method but was added as a work task 
+				for (Param.Instance nextParamInstance: paramInstances) {
+					backLink(taskInstance,nextParamInstance);
+				}
+			}
+		}
+		return root;
+	}
+	
+	/**
+	 * If there is any task that lacks at least one resolvable call, generate an error
+	 * and include all unresolvable parameters so the user can result them with a holistic
+	 * view rather having to fix/re-execute/find-problem/fix/etc.
+	 * @param badParams
+	 */
+	private void throwUncompletableParams(List<Call.Param.Instance> badParams) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Call parameters have no matching task instance:\n");
+		for (Call.Param.Instance param: badParams) {
+			sb.append("    ");
+			sb.append(param.getTypeName());
+			sb.append(" in ");
+			sb.append( param.getCall().getCall().signature());
+			sb.append('\n');
+		}
+		throw new InvalidGraph.MissingDependents(sb.toString());
+	}
+
+	/**
+	 * Link a taskInstance to a parameter that expects it, also bumping the threshold on that parameter.
+	 * @param taskInstance
+	 * @param paramInstance
+	 */
+	private void backLink(Task.Instance taskInstance, Param.Instance paramInstance) {
+		// The relationship might already have been established because we link incoming *and* 
+		// outgoing in the same batch, i.e. between an "A" and a "B(A)" this method is
+		// called twice but should only be counted once.
+		if (!taskInstance.backList.contains(paramInstance)) {
+			taskInstance.backList.add(paramInstance);
+			paramInstance.bumpThreshold();
+			Task.Instance backTaskInstance = paramInstance.getCall().taskInstance;
+			if (backTaskInstance.wait) {
+				waitForTasks.add(backTaskInstance);
+			}
 		}
 	}
 	
@@ -507,11 +640,11 @@ public class Orchestrator {
 	 * @param taskInstance
 	 * @return
 	 */
-	private int computeThreshold(Task.Instance taskInstance) {
-		return computeThreshold(taskInstance, taskInstance);
+	private int computeThreshold(Task.Instance taskInstance, int level) {
+		return computeThreshold(taskInstance, level, taskInstance);
 	}
-	private int computeThreshold(Task.Instance base, Task.Instance taskInstance) {
-		if (!taskInstance.countHasBeenComputed()) {
+	private int computeThreshold(final Task.Instance base, final int level, final Task.Instance taskInstance) {
+		if (taskInstance.recomputeForLevel(level)) {
 			int tc = 0;
 			for (Call.Instance nextCall: taskInstance.calls) {
 				int cc = 1;
@@ -528,7 +661,7 @@ public class Orchestrator {
 								if (base==nextTaskInstance) {
 									throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
 								}
-								pc += computeThreshold(base,nextTaskInstance);
+								pc += computeThreshold(base,level,nextTaskInstance);
 							}
 						}
 					}
@@ -539,7 +672,14 @@ public class Orchestrator {
 			}
 			taskInstance.setCompletionThreshold(tc);
 		}
-		return taskInstance.getCompletionThreshold();
+		int result = taskInstance.getCompletionThreshold();
+		if (taskInstance.calls.size()==0) {
+			// With no calls, the taskInstance has no threshold but we return a 1 here
+			// to indicate that a thread will still go through this taskInstance and 
+			// invoke dependents.
+			result += 1;
+		}
+		return result;
 	}
 	
 	
@@ -628,12 +768,8 @@ public class Orchestrator {
 		return sb.toString();
 	}
 
-	private void fireRoots() {
+	private void fireRoots(List<Call.Instance> roots) {
 		Invocation inv = spawnAllButOne(roots,-1,null,null);
-		
-		for (Task.Instance nextTaskInstance: dolts) {
-			inv = continueOrSpawn(nextTaskInstance, "dolt",inv);
-		}
 		
 		if (inv != null) {
 			invokeAndFinish(inv,"own-root");
@@ -643,9 +779,9 @@ public class Orchestrator {
 	/**
 	 * Invokes a test method then follows up with any on-completion bookkeeping
 	 * which may include recursively invoking (or spawning new threads for) tasks 
-	 * that become ready as a result of the incoming call completing.
+	 * that become ready as a result of the incoming call having completed.
 	 * @param inv
-	 * @param context
+	 * @param context descriptive term for log messages
 	 */
 	void invokeAndFinish(Invocation inv, String context) {	
 		Call.Instance completedCall = inv.getCallInstance();
@@ -657,6 +793,10 @@ public class Orchestrator {
 			if (taskOfCompletedCall.completeOneCall()) {
 				complete = true;
 				waitForTasks.remove(taskOfCompletedCall);
+			}
+			List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
+			if (newTaskInstances != null) {
+				executeTasks(newTaskInstances,"nested");
 			}
 		}
 		LOG.debug("Evaluating {} exit on {} {} backLinks",fire,completedCall,taskOfCompletedCall.backList.size());

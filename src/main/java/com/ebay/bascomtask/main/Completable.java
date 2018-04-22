@@ -15,12 +15,22 @@ class Completable {
 	// Number of actual invocations so far completed
 	private int completed = 0;
 	
+	private int computedThresholdAtLevel = -1;
+	
 	/**
-	 * Has been initalized?
+	 * Has been initalized at the given level?
 	 * @return
 	 */
-	boolean countHasBeenComputed() {
-		return completionThresholdCount >= 0;
+	boolean recomputeForLevel(int level) {
+		if (computedThresholdAtLevel != level) {
+			computedThresholdAtLevel = level;
+			return true;
+		}
+		return false;
+	}
+	
+	boolean isCompletable() {
+		return completionThresholdCount > 0;
 	}
 	
 	void startOneCall() {
@@ -48,7 +58,7 @@ class Completable {
 	void setCompletionThreshold(int tc) {
 		this.completionThresholdCount = tc;
 	}
-	
+
 	String completionSay() {
 		Completable oc = containingCompletable();
 		String outerText = oc==null ? "" : " of " + oc.completionSay();

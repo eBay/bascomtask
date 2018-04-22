@@ -7,17 +7,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.ebay.bascomtask.main.Call.Param;
+import com.ebay.bascomtask.annotations.Scope;
 
 /**
- * A wrapper for a user task class.
+ * A wrapper for a user task class. An instance is created for each unique class
+ * of POJO added to any orchestrator.
  * @author brendanmccarthy
  */
 class Task {
 	
 	static final Logger LOG = LoggerFactory.getLogger(Orchestrator.class);
 
+	/**
+	 * Class of POJO.
+	 */
 	final Class<?> taskClass;
 	
+	/**
+	 * For logging and debugging.
+	 */
 	private final String name;
 
 	/**
@@ -31,15 +39,20 @@ class Task {
 	List<Call> passThruCalls = new ArrayList<>();
 	
 	/**
-	 * Links to parameters of calls that might be invoked when one of our 
-	 * task calls 'fires' (completes). This list is used to drive the dataflow
+	 * Used when a task has no task methods; not used if a task has task methods.
+	 */
+	final Call no_call = new Call(this,null,Scope.FREE,true); 
+	
+	/**
+	 * Links to parameters of calls that expect this task as a parameter.
+	 * This list is used to drive the dataflow forward.
 	 * graph to completion.
 	 */
-	private List<Call.Param> backList = new ArrayList<>();
+	List<Call.Param> backList = new ArrayList<>();
 	
 	/**
 	 * From a user perspective, a 'task' is what they add @Work methods to; 
-	 * here we shadow that task with a Task.Instance. A Task.Instance is created
+	 * BascomTask shadows that task with a Task.Instance. A Task.Instance is created
 	 * for each added user task, even if multiple tasks instances are added that 
 	 * are the same Java type.
 	 */
@@ -53,9 +66,10 @@ class Task {
 		final Object targetPojo;
 		
 		/**
-		 * Each instance has a unique index with respect to its type
+		 * Each instance has a unique index with respect to its type, which
+		 * should be set by Orchestrator.
 		 */
-		final int indexInType;
+		private int indexInType = -1;
 		
 		/**
 		 * Was this task added through addWork() or addPassThru()?
@@ -73,6 +87,11 @@ class Task {
 		private String name = null;
 		
 		/**
+		 * True when user has set name, which therefore won't be auto-generated
+		 */
+		private boolean userSuppliedName = false;
+		
+		/**
 		 * Multiple matching methods ok?
 		 */
 		private boolean multiMethodOk = false;
@@ -81,17 +100,20 @@ class Task {
 		 * One for each @Work method (or each @PassThru method if added as passthru)
 		 */
 		final List<Call.Instance> calls = new ArrayList<>();
-
+		
 		/**
 		 * All parameters of all calls that have the type of our targetTask 
 		 */
 		final List<Param.Instance> backList = new ArrayList<>();
 		
-		Instance(Orchestrator orc, Object targetTask, boolean workElsePassThru, int indexInType) {
+		Instance(Orchestrator orc, Object targetTask, boolean workElsePassThru) {
 			this.orc = orc;
 			this.targetPojo = targetTask;
 			this.workElsePassThru = workElsePassThru;
-			this.indexInType = indexInType;
+			List<Call> targetCalls = workElsePassThru ? workCalls : passThruCalls;
+			for (Call call: targetCalls) {
+				calls.add(call.new Instance(this));
+			}			
 		}
 		
 		@Override
@@ -127,11 +149,19 @@ class Task {
 			return nm;
 		}
 		
+		void setIndexInType(int indexInType) {
+			this.indexInType = indexInType;
+			if (!userSuppliedName) {
+				this.name = null;
+			}
+		}
+		
 		@Override
 		public ITask name(String name) {
 			// Expect exception throw if name conflict
 			orc.setUniqueTaskInstanceName(this,name);
 			this.name = name;
+			this.userSuppliedName = true;
 			return this;
 		}
 		
@@ -161,6 +191,14 @@ class Task {
 		@Override
 		public boolean isMultiMethodOk() {
 			return multiMethodOk;
+		}
+
+		public Task getTask() {
+			return Task.this;
+		}
+		
+		Call.Instance genNoCall() {
+			return no_call.genInstance(this);
 		}
 	}	
 	

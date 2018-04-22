@@ -68,10 +68,10 @@ Task instances need not be limited to just one; sometimes it is desirable to add
 
 ```Java
 class X {
-	@Work public void exec() {}
+	@Work public void exec() {...}
 }
 class Y {
-	@Work public void exec(X x) {}
+	@Work public void exec(X x) {...}
 }
 Orchestrator orc = Orchestrator.create();
 orc.addWork(new X());
@@ -92,10 +92,10 @@ Alternatively, a receiving task can elect to receive all parameter instances at 
 
 ```Java
 class X {
-	@Work public void exec() {}
+	@Work public void exec() {...}
 }
 class Y {
-	@Work public void exec(List<X> x) {}
+	@Work public void exec(List<X> x) {...}
 }
 Orchestrator orc = Orchestrator.create();
 orc.addWork(new X());
@@ -103,6 +103,65 @@ orc.addWork(new X());  // A second X is added
 orc.addWork(new Y());  // Only invoked once with two Xs
 orc.execute();
 ```
+
+## Inline Conditional Wiring
+In the examples so far, conditional wiring (e.g. adding variant tasks, addConditionally, etc.) in BascomTask is done up front prior to execute(). However, sometimes that conditionality depends on the the outcome of executing other tasks and thus cannot therefore all be done up front. One easy approach to this problem is to simply nest a new Orchestrator inside a task method controlled by an outer Orchestrator; there is no limit on nesting in this way. 
+
+In addition, BascomTask allows dynamic extension of a single Orchestrator which can expose more potential parallelism. Consider the following example with three independent roots A, B, and C as well as two tasks that depend on B and C _but_ those dependent tasks should only run based on an outcome from A:
+
+ ```Java
+class A {
+	@Work public void exec() {...}
+}
+class B {
+	@Work public void exec() {...}
+}
+class C {
+	@Work public void exec() {...}
+}
+class DependsOnB {
+	@Work public void exec(B b) {...}
+}
+class DependsOnC {
+	@Work public void exec(C c) {...}
+}
+class Chooser {
+	@Work public void exec(A a, B b, C c) {
+		if (a.someConditionIsTrue()) {
+			Orchestrator orc = Orchestrator.create();
+			orc.addWork(b);
+			orc.addWork(c);
+			orc.addWork(new DependsOnB());
+			orc.addWork(new DependsOnC());
+			orc.execute(); 
+		}
+	}
+}
+
+Orchestrator orc = Orchestrator.create();
+orc.addWork(new A());
+orc.addWork(new B());
+orc.addWork(new C());
+orc.addWork(new Chooser());
+orc.execute();
+```
+Notice that Chooser.exec will only run when the A, B, and C instances are available when in fact the DependsOnB instance can run when A and B are available, and DependsOnC can run when A and C are available. Using inline wiring accommodates this scenario directly by replacing Chooser with a version that depends only on A, here illustrated with the inline anonymous class _new Object(){...}_:
+
+```Java
+Orchestrator orc = Orchestrator.create();
+orc.addWork(new A());
+orc.addWork(new B());
+orc.addWork(new C());
+orc.addWork(new Object() {
+  @Work void exec(A a) {
+    if (a.someConditionIsTrue()) {
+      orc.addWork(new DependsOnB());
+      orc.addWork(new DependsOnC());
+    }
+  }
+orc.execute();
+```
+Now, for example, DependsOnB can execute even if C has not yet completed.
 
 ## Configuration
 

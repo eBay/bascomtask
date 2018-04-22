@@ -25,7 +25,8 @@ class Call {
 	private final Task task;
 	
 	/**
-	 * Corresponding method on user POJO
+	 * Corresponding method on user POJO. This may be null, but only when this call is used as
+	 * a dummy call for tasks that have no task methods.
 	 */
 	private final Method method;
 	
@@ -61,6 +62,10 @@ class Call {
 		params.add(param);
 	}
 	
+	Instance genInstance(Task.Instance taskInstance) {
+		return new Instance(taskInstance);
+	}
+	
 	private static final int[] EMPTY_FREEZE = new int[0]; 
 		
 	/**
@@ -73,6 +78,9 @@ class Call {
 	class Instance extends Completable {
 		final Task.Instance taskInstance;
 		
+		/**
+		 * Paramater instances that correspond to param list in outer call
+		 */
 		final Param.Instance[] paramInstances = new Param.Instance[params.size()];
 		
 		/**
@@ -127,7 +135,7 @@ class Call {
 			StringBuilder sb = new StringBuilder();
 			sb.append(task.getName());
 			sb.append('.');
-			sb.append(method.getName());
+			sb.append(format(method));
 			sb.append('(');
 			boolean first = true;
 			for (Param.Instance next: paramInstances) {
@@ -288,11 +296,12 @@ class Call {
 				}
 				synchronized (this) {
 					startOneCall();
-					//started++;
 				}
-				Object methodResult = method.invoke(taskInstance.targetPojo, (Object[])args);
-				if (Boolean.FALSE.equals(methodResult)) {
-					result = false;
+				if (method != null) {
+					Object methodResult = method.invoke(taskInstance.targetPojo, (Object[])args);
+					if (Boolean.FALSE.equals(methodResult)) {
+						result = false;
+					}
 				}
 				// For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
 				// for all threads to just reset this to false.
@@ -338,11 +347,15 @@ class Call {
 		return "Call " + sig;
 	}
 	
+	private String format(Method method) {
+		return method==null ? "<<no-method>>" : method.getName();
+	}
+	
 	String signature() {
 		StringBuilder sb = new StringBuilder();
 		sb.append(task.getName());
 		sb.append('.');
-		sb.append(method.getName());
+		sb.append(format(method));
 		sb.append('(');
 		boolean first = true;
 		for (Param next: params) {
@@ -386,7 +399,7 @@ class Call {
 			/**
 			 * How we know, for list arguments, when all parameters are ready 
 			 */
-			private int threshold = 1;
+			private int threshold = 0;
 			
 			Instance(Call.Instance callInstance) {
 				this.callInstance = callInstance;
@@ -402,8 +415,12 @@ class Call {
 				return isList ? bc >= threshold : bc > 0;
 			}
 			
-			void setThreshold(int threshold) {
-				this.threshold = threshold;
+			void bumpThreshold() {
+				this.threshold += 1;
+			}
+			
+			int getThreshold() {
+				return threshold;
 			}
 
 			Task getTask() {return taskParam;}

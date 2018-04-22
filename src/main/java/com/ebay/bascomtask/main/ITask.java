@@ -3,7 +3,7 @@ package com.ebay.bascomtask.main;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 
 /**
- * Shadow object for POJOs added as tasks.
+ * Shadow object for POJOs added to an orchestrator.
  * @author brendanmccarthy
  */
 public interface ITask {

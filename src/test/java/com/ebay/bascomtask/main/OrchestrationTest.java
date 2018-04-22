@@ -377,7 +377,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		
 		A a = new A();
 		B b = new B();
-		PathTask taskA = track.passThru(a);
+		PathTask taskA = track.passThru(a);  // No @PassThru on A, but it should be exposed to B
 		PathTask taskB = track.work(b).exp(a);
 		verify(0);
 	}

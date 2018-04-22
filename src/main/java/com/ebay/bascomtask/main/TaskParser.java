@@ -26,7 +26,7 @@ class TaskParser {
 	
 	/**
 	 * Returns the task representation of any java class, pre-processing it if
-	 * it does not already exist in the cache. 
+	 * it does not already exist in the cache.
 	 * @param clazz
 	 * @return
 	 */
@@ -34,7 +34,7 @@ class TaskParser {
 		return taskParser.parse2(clazz);
 	}
 
-	private Task parse2(Class<?> clazz) {
+	private synchronized Task parse2(Class<?> clazz) {
 		Task task = map.get(clazz);
 		if (task==null) {
 			task = new Task(clazz);
@@ -44,8 +44,6 @@ class TaskParser {
 		}
 		return task;
 	}
-	
-
 	
 	private void parse(Task task) {
 		for (Method method: task.taskClass.getDeclaredMethods()) {

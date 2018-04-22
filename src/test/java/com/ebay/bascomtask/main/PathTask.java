@@ -154,12 +154,12 @@ abstract class PathTask {
 		List<String> bad = new ArrayList<>();
 		for (List<PathTask.Arg> next: exp) {
 			if (!got.contains(next)) {
-				bad.add("msng" + next);
+				bad.add("missing" + next);
 			}
 		}
 		for (List<PathTask.Arg>next: got) {
 			if (!exp.contains(next)) {
-				bad.add("unxp " + next);
+				bad.add("unexp " + next);
 			}
 		}
 		if (bad.size() > 0) {
