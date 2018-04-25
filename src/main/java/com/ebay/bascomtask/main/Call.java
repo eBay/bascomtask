@@ -196,7 +196,6 @@ class Call {
 				synchronized (this) {
 					ordinalOfFiringParameter = firingParemeter.bindings.size();
 					firingParemeter.bindings.add(userTaskInstance);
-					System.out.println("BIND " + userTaskInstance.getClass().getName() + " for " + firingParemeter);
 					for (Param.Instance next: paramInstances) {
 						if (!next.ready()) {
 							return inv; // If not all parameters have at least one binding, not ready to execute call

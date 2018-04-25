@@ -121,7 +121,22 @@ abstract class PathTask {
 		return this;
 	}
 	
+	private long timestamp = 0;
+	
+	/**
+	 * Did both tasks execute, and did this one execute after the given one?
+	 * @param other
+	 * @return
+	 */
+	public boolean followed(PathTask other) {
+		if (this.timestamp==0 || other.timestamp==0) {
+			throw new RuntimeException("Timestamps unset this="+this.timestamp + ", other="+other.timestamp);
+		}
+		return this.timestamp > other.timestamp;
+	}
+	
 	PathTask got(PathTask...tasks) {
+		timestamp = System.nanoTime();
 		if (tasks.length > 0) {
 			List<PathTask.Arg> args = toArgs(tasks); 
 			got.add(args);

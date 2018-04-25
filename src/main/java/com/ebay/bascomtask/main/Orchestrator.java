@@ -428,15 +428,22 @@ public class Orchestrator {
 	}
 	
 	private void executeTasks(List<Task.Instance> taskInstances, String context) {
+		Invocation inv = executeTasks(taskInstances,context,null);
+		invokeAndFinish(inv,"own-task");
+	}
+	
+	private synchronized Invocation executeTasks(List<Task.Instance> taskInstances, String context, Invocation inv) {
 		if (taskInstances != null) {
+			int currentTaskCount = allTasks.size();
 			List<Call.Instance> roots = linkGraph(taskInstances);
 			if (roots != null) {
 				if (LOG.isDebugEnabled()) {
-					LOG.debug("firing {} with {} tasks / {} roots\n{}",context,allTasks.size(),roots.size(),getGraphState());
+					LOG.debug("firing {} with {}->{} tasks / {} roots\n{}",context,currentTaskCount,allTasks.size(),roots.size(),getGraphState());
 				}
-				fireRoots(roots);
+				inv = fireRoots(roots,inv);
 			}
 		}
+		return inv;
 	}
 
 	
@@ -780,20 +787,13 @@ public class Orchestrator {
 		return sb.toString();
 	}
 
-	private void fireRoots(List<Call.Instance> roots) {
-	//private Invocation spawnAllButOne(List<Call.Instance> cis, int pos, Object actualParamValue, Invocation inv) {
-		Invocation inv = null;
+	private Invocation fireRoots(List<Call.Instance> roots, Invocation inv) {
 		for (Call.Instance nextBackCallInstance: roots) {
 			//inv = nextBackCallInstance.bind(this, "TBD", null, -1, inv);
 			int[] freeze = nextBackCallInstance.startingFreeze;
 			inv = nextBackCallInstance.crossInvoke(inv, freeze, -1, -1, this, "root");
 		}
-		
-		//Invocation inv = spawnAllButOne(roots,-1,null,null);
-		
-		if (inv != null) {
-			invokeAndFinish(inv,"own-root");
-		}
+		return inv;
 	}
 	
 	/**
@@ -803,40 +803,23 @@ public class Orchestrator {
 	 * @param inv
 	 * @param context descriptive term for log messages
 	 */
-	void invokeAndFinish(Invocation inv, String context) {	
-		Call.Instance callInstance = inv.getCallInstance();
-		Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
-		taskOfCallInstance.startOneCall();
-		boolean complete = false;
-		boolean fire = inv.invoke(this,context);
-		Task task = taskOfCallInstance.getTask();
-		TaskRec rec = taskMapByType.get(task);
-		synchronized (this) {
-			rec.fired.add(taskOfCallInstance);
-			if (taskOfCallInstance.completeOneCall()) {
-				complete = true;
-				waitForTasks.remove(taskOfCallInstance);
+	void invokeAndFinish(Invocation inv, String context) {
+		if (inv != null) {
+			Call.Instance callInstance = inv.getCallInstance();
+			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
+			taskOfCallInstance.startOneCall();
+			boolean complete = false;
+			boolean fire = inv.invoke(this,context);
+			Task task = taskOfCallInstance.getTask();
+			TaskRec rec = taskMapByType.get(task);
+
+			inv = processPostExecution(rec,callInstance,taskOfCallInstance,fire);
+			invokeAndFinish(inv,"post");
+			Object[] followArgs = callInstance.popSequential();
+			if (followArgs != null) {
+				inv = new Invocation(callInstance,followArgs);
+				invokeAndFinish(inv,"follow");
 			}
-			List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
-			if (newTaskInstances != null) {
-				executeTasks(newTaskInstances,"nested");
-			}
-		}
-		LOG.debug("Evaluating {} exit on {} {} backLinks",fire,callInstance,taskOfCallInstance.backList.size());
-		if (fire) {
-			finishWork(inv,fire);
-		} 
-		else if (complete) {
-			//LOG.debug("Completed task \"{}\" checking {} back params",completedCall.taskInstance.getName(),back.size());
-			//Call.Instance callInstance = inv.getCallInstance();
-			//taskOfCompletedCall.propagateComplete(callInstance);
-			taskOfCallInstance.propagateComplete();
-			//propagateComplete(inv.getCallInstance());
-		}
-		Object[] followArgs = callInstance.popSequential();
-		if (followArgs != null) {
-			inv = new Invocation(callInstance,followArgs);
-			invokeAndFinish(inv,"follow");
 		}
 	}
 	
@@ -889,21 +872,34 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * After a task method has been invoked, look for more work, 
-	 * spawning more threads if there is more than one ready-to-go
-	 * non-light method (execute the light methods directly by this thread).
+	 * After a task method has been invoked, look for more work, spawning more threads if there is more than one ready-to-go
+	 * non-light method (execute the light methods directly by this thread). The work here involves possibly changing fields
+	 * in this class and is therefore synchronized. However, call invocations are either spawned and or one is provided as
+	 * a return result to be executed after the lock on this class has been released. (TBD... light tasks are executed while
+	 * the lock is still held).
 	 * @param completed
 	 */
-	private void finishWork(Invocation mine, boolean fire) {
-		Call.Instance completedCall = mine.getCallInstance();
-		Task.Instance taskInstance = completedCall.taskInstance;
-		List<Call.Param.Instance> backList = taskInstance.backList;
-		String compName = taskInstance.getName();
-		LOG.debug("After firing task \"{}\" checking {} back params",compName,backList.size());
-		mine = continueOrSpawn(taskInstance,"back",null);
-		if (mine!=null && mine.ready()) {
-			invokeAndFinish(mine,"on-finish");
+	private synchronized Invocation processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, boolean fire) {
+		@SuppressWarnings("unused") // TBD need propagateComplete
+		boolean complete;
+		rec.fired.add(taskOfCallInstance);
+		if (taskOfCallInstance.completeOneCall()) {
+			complete = true;
+			waitForTasks.remove(taskOfCallInstance);
 		}
+		List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
+		Invocation inv = null;
+		if (newTaskInstances != null) {
+			inv = executeTasks(newTaskInstances,"nested",inv);
+		}
+		LOG.debug("Evaluating {} exit on {} {} backLinks",fire,callInstance,taskOfCallInstance.backList.size());
+		if (fire) {
+			List<Call.Param.Instance> backList = taskOfCallInstance.backList;
+			String compName = taskOfCallInstance.getName();
+			LOG.debug("After firing task \"{}\" checking {} back params",compName,backList.size());
+			inv = continueOrSpawn(taskOfCallInstance,"back",inv);
+		}
+		return inv;
 	}
 
 	private synchronized Invocation continueOrSpawn(Task.Instance taskInstance, String context, Invocation inv) {
@@ -916,13 +912,5 @@ public class Orchestrator {
 		}
 		return inv;
 	}
-
-	/*
-	private Invocation spawnAllButOne(List<Call.Instance> cis, int pos, Object actualParamValue, Invocation inv) {
-		for (Call.Instance nextBackCallInstance: cis) {
-			inv = nextBackCallInstance.bind(this, "TBD", actualParamValue, pos, inv);
-		}
-		return inv;
-	}*/
 }
 
