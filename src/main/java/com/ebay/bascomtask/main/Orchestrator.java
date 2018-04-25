@@ -394,6 +394,10 @@ public class Orchestrator {
 	 * <li> All of its methods that can fire (because there are matching instances as parameters) have fired
 	 * <li> It has at least one such fireable method that may fire again
 	 * </ol>
+	 * This method can safely be called multiple times, each time accounting for any new tasks added and firing
+	 * all tasks that are firable as a result of those new tasks added. In this way, each call to execute acts
+	 * like a synchronizer across all executable tasks. Tasks added within a nested task can but do not have
+	 * to call execute() if they add tasks, as there is an implicit call done automatically in this case.
 	 * @param maxExecutionTimeMillis to timeout
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
 	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no {@literal @}Work
