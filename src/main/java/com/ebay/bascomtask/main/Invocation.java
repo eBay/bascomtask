@@ -25,6 +25,14 @@ class Invocation {
 	
 	@Override
 	public String toString() {
+		if (callInstance == null) {
+			return "<<no call instance>>";
+		}
+		else {
+			String what = called?"called@":ready()?"ready@":"not-ready@";
+			return what + callInstance.formatState();
+		}
+		/*
 		String cn = "???";
 		String mn = "?";
 		if (callInstance != null) {
@@ -50,6 +58,7 @@ class Invocation {
 		}
 		sb.append(')');
 		return sb.toString();
+		*/
 	}
 	
 	Call.Instance getCallInstance() {

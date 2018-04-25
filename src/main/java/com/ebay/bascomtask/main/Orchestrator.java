@@ -114,11 +114,16 @@ import com.ebay.bascomtask.main.Call.Param;
 public class Orchestrator {
 	
 	static final Logger LOG = LoggerFactory.getLogger(Orchestrator.class);
+	
+	private class TaskRec {
+		final List<Task.Instance> added = new ArrayList<>();  // Unique elements
+		final List<Task.Instance> fired = new ArrayList<>();  // May have dups
+	}
 
 	/**
 	 * How we know which task instances are active for a given Task, relative to this orchestrator
 	 */
-	private final Map<Task,List<Task.Instance>> taskMapByType = new HashMap<>();
+	private final Map<Task,TaskRec> taskMapByType = new HashMap<>();
 	
 	/*
 	 * For performance we also maintain the list directly
@@ -425,10 +430,12 @@ public class Orchestrator {
 	private void executeTasks(List<Task.Instance> taskInstances, String context) {
 		if (taskInstances != null) {
 			List<Call.Instance> roots = linkGraph(taskInstances);
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("firing {} with {} tasks / {} roots\n{}",context,allTasks.size(),roots.size(),getGraphState());
+			if (roots != null) {
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("firing {} with {} tasks / {} roots\n{}",context,allTasks.size(),roots.size(),getGraphState());
+				}
+				fireRoots(roots);
 			}
-			fireRoots(roots);
 		}
 	}
 
@@ -447,7 +454,7 @@ public class Orchestrator {
 	 * Adds the given tasks and links each parameter of each applicable (@Work or @PassThru) call with each instance 
 	 * of that parameter's type. Also verifies that all tasks are callable, by ensuring that they have at least one 
 	 * such call that has all parameters available.
-	 * @throws InvalidGraph if any task is uncallable, and if so include list of all such tasks (if more than one)
+	 * @throws InvalidGraph if any task is un-callable, and if so include list of all such tasks (if more than one)
 	 */
 	private List<Call.Instance> linkGraph(List<Task.Instance> taskInstances) {
 		// First establish all references from the orchestrator to taskInstances.
@@ -455,23 +462,16 @@ public class Orchestrator {
 		for (Task.Instance taskInstance: taskInstances) {
 			addActual(taskInstance);
 		}
-		List<Call.Instance> roots = null;
+		List<Call.Instance> roots = new ArrayList<>();
 		// Now the taskInstances themselves can be linked
 		for (Task.Instance taskInstance: taskInstances) {
-			Call.Instance root = null;
 			if (taskInstance.calls.size()==0) {
 				// If no calls at all, the task is trivially available to all who depend on it.
 				// We create a dummy call so the task can then be processed like any other root.
-				root = taskInstance.genNoCall();
+				roots.add(taskInstance.genNoCall());
 			}
 			else {
-				root = linkAll(taskInstance);
-			}
-			if (root != null) {
-				if (roots == null) {
-					roots = new ArrayList<>();
-				}
-				roots.add(root);
+				linkAll(taskInstance,roots);
 			}
 		}
 		// With all linkages in place, thresholds can be (re)computed, and final verification performed
@@ -486,13 +486,13 @@ public class Orchestrator {
 		allTasks.add(taskInstance);
 		recordCallsAndParameterInstances(taskInstance);
 		Task task = taskInstance.getTask();
-		List<Task.Instance> instances = taskMapByType.get(task);
-		if (instances==null) {
-			instances = new ArrayList<>();
-			taskMapByType.put(task,instances);
+		TaskRec rec = taskMapByType.get(task);
+		if (rec==null) {
+			rec = new TaskRec();
+			taskMapByType.put(task,rec);
 		}
-		taskInstance.setIndexInType(instances.size());
-		instances.add(taskInstance);
+		taskInstance.setIndexInType(rec.added.size());
+		rec.added.add(taskInstance);
 	}
 	
 	private void recordCallsAndParameterInstances(Task.Instance task) {
@@ -552,27 +552,40 @@ public class Orchestrator {
 	/**
 	 * Links a taskInstance together with any incoming tasks or outgoing parameters
 	 * @param taskInstance to link
-	 * @return a no-arg call if there is one, else null
+	 * @param roots to add to for each call of each of the supplied taskInstances that is immediately ready to fire
 	 */
-	private Call.Instance linkAll(Task.Instance taskInstance) {
-		Call.Instance root = null;
+	private void linkAll(Task.Instance taskInstance, List<Call.Instance> roots) {
 		int matchableCallCount = 0;
 		for (Call.Instance callInstance: taskInstance.calls) {
-			if (callInstance.paramInstances.length == 0) {
-				root = callInstance;
-			}
 			boolean match = true;
-			for (Call.Param.Instance param: callInstance.paramInstances) {
-				Task task = param.getTask();
-				List<Task.Instance> instances = taskMapByType.get(task);
-				if (instances==null) {
-					match = false;
+			boolean root = true;
+			for (int i=0; i < callInstance.paramInstances.length; i++) {
+				Call.Param.Instance paramInstance = callInstance.paramInstances[i];
+				Task task = paramInstance.getTask();
+				TaskRec rec = taskMapByType.get(task);
+				if (rec==null) {
+					match = root = false;
 				}
 				else {
-					for (Task.Instance supplier: instances) {
-						backLink(supplier,param);
+					for (Task.Instance supplierTaskInstance: rec.added) {
+						backLink(supplierTaskInstance,paramInstance);
+					}
+					int numberAlreadyFired = rec.fired.size();
+					if (numberAlreadyFired==0) {
+						root = false;
+					}
+					else if (paramInstance.getParam().isList && numberAlreadyFired < paramInstance.getThreshold()) {
+						root = false;
+					}
+					// Add all tasks that have already fired
+					callInstance.startingFreeze[i] = numberAlreadyFired;
+					for (Task.Instance nextAlreadyFiredTask: rec.fired) {
+						paramInstance.bindings.add(nextAlreadyFiredTask.targetPojo);
 					}
 				}
+			}
+			if (root) {
+				roots.add(callInstance);
 			}
 			if (match) {
 				matchableCallCount++;
@@ -592,7 +605,6 @@ public class Orchestrator {
 				}
 			}
 		}
-		return root;
 	}
 	
 	/**
@@ -655,9 +667,9 @@ public class Orchestrator {
 					}
 					else {
 						Task task = nextParam.getTask();
-						List<Task.Instance> tis = taskMapByType.get(task);
-						if (tis != null) {
-							for (Task.Instance nextTaskInstance: tis) {
+						TaskRec rec = taskMapByType.get(task);
+						if (rec != null) {
+							for (Task.Instance nextTaskInstance: rec.added) {
 								if (base==nextTaskInstance) {
 									throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
 								}
@@ -762,14 +774,22 @@ public class Orchestrator {
 				sb.append("   ");
 				sb.append(callInstance.hasCompleted() ? ' ' : '!');
 				sb.append("  ");
-				sb.append(callInstance.formatState(null));
+				sb.append(callInstance.formatState());
 			}
 		}
 		return sb.toString();
 	}
 
 	private void fireRoots(List<Call.Instance> roots) {
-		Invocation inv = spawnAllButOne(roots,-1,null,null);
+	//private Invocation spawnAllButOne(List<Call.Instance> cis, int pos, Object actualParamValue, Invocation inv) {
+		Invocation inv = null;
+		for (Call.Instance nextBackCallInstance: roots) {
+			//inv = nextBackCallInstance.bind(this, "TBD", null, -1, inv);
+			int[] freeze = nextBackCallInstance.startingFreeze;
+			inv = nextBackCallInstance.crossInvoke(inv, freeze, -1, -1, this, "root");
+		}
+		
+		//Invocation inv = spawnAllButOne(roots,-1,null,null);
 		
 		if (inv != null) {
 			invokeAndFinish(inv,"own-root");
@@ -784,22 +804,25 @@ public class Orchestrator {
 	 * @param context descriptive term for log messages
 	 */
 	void invokeAndFinish(Invocation inv, String context) {	
-		Call.Instance completedCall = inv.getCallInstance();
-		Task.Instance taskOfCompletedCall = completedCall.getTaskInstance();
-		taskOfCompletedCall.startOneCall();
+		Call.Instance callInstance = inv.getCallInstance();
+		Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
+		taskOfCallInstance.startOneCall();
 		boolean complete = false;
 		boolean fire = inv.invoke(this,context);
+		Task task = taskOfCallInstance.getTask();
+		TaskRec rec = taskMapByType.get(task);
 		synchronized (this) {
-			if (taskOfCompletedCall.completeOneCall()) {
+			rec.fired.add(taskOfCallInstance);
+			if (taskOfCallInstance.completeOneCall()) {
 				complete = true;
-				waitForTasks.remove(taskOfCompletedCall);
+				waitForTasks.remove(taskOfCallInstance);
 			}
 			List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
 			if (newTaskInstances != null) {
 				executeTasks(newTaskInstances,"nested");
 			}
 		}
-		LOG.debug("Evaluating {} exit on {} {} backLinks",fire,completedCall,taskOfCompletedCall.backList.size());
+		LOG.debug("Evaluating {} exit on {} {} backLinks",fire,callInstance,taskOfCallInstance.backList.size());
 		if (fire) {
 			finishWork(inv,fire);
 		} 
@@ -807,12 +830,12 @@ public class Orchestrator {
 			//LOG.debug("Completed task \"{}\" checking {} back params",completedCall.taskInstance.getName(),back.size());
 			//Call.Instance callInstance = inv.getCallInstance();
 			//taskOfCompletedCall.propagateComplete(callInstance);
-			taskOfCompletedCall.propagateComplete();
+			taskOfCallInstance.propagateComplete();
 			//propagateComplete(inv.getCallInstance());
 		}
-		Object[] followArgs = completedCall.popSequential();
+		Object[] followArgs = callInstance.popSequential();
 		if (followArgs != null) {
-			inv = new Invocation(completedCall,followArgs);
+			inv = new Invocation(callInstance,followArgs);
 			invokeAndFinish(inv,"follow");
 		}
 	}
@@ -894,11 +917,12 @@ public class Orchestrator {
 		return inv;
 	}
 
+	/*
 	private Invocation spawnAllButOne(List<Call.Instance> cis, int pos, Object actualParamValue, Invocation inv) {
 		for (Call.Instance nextBackCallInstance: cis) {
 			inv = nextBackCallInstance.bind(this, "TBD", actualParamValue, pos, inv);
 		}
 		return inv;
-	}
+	}*/
 }
 

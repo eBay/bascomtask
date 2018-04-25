@@ -76,12 +76,24 @@ class Call {
 	 * @author brendanmccarthy
 	 */
 	class Instance extends Completable {
+		
+		/**
+		 * Owner of this call 
+		 */
 		final Task.Instance taskInstance;
 		
 		/**
-		 * Paramater instances that correspond to param list in outer call
+		 * Parameter instances that correspond to param list in outer call
 		 */
 		final Param.Instance[] paramInstances = new Param.Instance[params.size()];
+		
+		/**
+		 * The positions of active parameters at the time of creation of this instance. This allows for task 
+		 * instances that have already fired to be replayed for this task when added dynamically (i.e. other
+		 * tasks were already started and may therefore have already fired prior to this instance being
+		 * added or even created).
+		 */
+		final int[] startingFreeze = new int[params.size()];
 		
 		/**
 		 * Non-null if Scope.Sequential has been set, and if so this accumulates calls while a task is active 
@@ -111,7 +123,7 @@ class Call {
 		
 		@Override
 		public String toString() {
-			return "Call.Instance " + formatState(null);
+			return "Call.Instance " + formatState();
 		}
 		
 		Call getCall() {
@@ -130,10 +142,14 @@ class Call {
 		boolean isNoWait() {
 			return !taskInstance.wait;
 		}
+		
+		String formatState() {
+			return formatState(null);
+		}
 
-		String formatState(Param.Instance p) {
+		private String formatState(Param.Instance p) {
 			StringBuilder sb = new StringBuilder();
-			sb.append(task.getName());
+			sb.append(taskInstance.getName());
 			sb.append('.');
 			sb.append(format(method));
 			sb.append('(');
@@ -173,13 +189,14 @@ class Call {
 				ordinalOfFiringParameter = -1;
 			}
 			else {
-				final Param.Instance firingParameter = paramInstances[parameterIndex];
+				final Param.Instance firingParemeter = paramInstances[parameterIndex];
 				// Obtain a unique set of parameter indexes within the synchronized block such that no
 				// other thread would get the same set. Once these are set, the actual execution can 
 				// safely proceed outside the synchronized block.
 				synchronized (this) {
-					ordinalOfFiringParameter = firingParameter.bindings.size();
-					firingParameter.bindings.add(userTaskInstance);
+					ordinalOfFiringParameter = firingParemeter.bindings.size();
+					firingParemeter.bindings.add(userTaskInstance);
+					System.out.println("BIND " + userTaskInstance.getClass().getName() + " for " + firingParemeter);
 					for (Param.Instance next: paramInstances) {
 						if (!next.ready()) {
 							return inv; // If not all parameters have at least one binding, not ready to execute call
@@ -191,17 +208,22 @@ class Call {
 					}
 				}
 			}
-			Object[] args = new Object[paramInstances.length];
-			return crossInvoke(0,args,inv,freeze,parameterIndex,ordinalOfFiringParameter,orc,context);
+
+			return crossInvoke(inv,freeze,parameterIndex,ordinalOfFiringParameter,orc,context);
+		}
+		
+		Invocation crossInvoke(Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+			Object[] args = new Object[paramInstances.length];			
+			return crossInvoke(0,args,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
 		}
 
 		/**
-		 * Invokes our task method 1 or more times with the cross-product off all parameters within the 'freeze' range,
+		 * Invokes our task method 1 or more times with the cross-product off all parameters within the 'startingFreeze' range,
 		 * *except* for the the firing parameter for which we don't include any of its sibling parameters.
 		 * @param px the looping parameter index (incremented recursively)
 		 * @param args array accumulating args for the next call
 		 * @param inv the current invocation to be returned to the calling thread, null if none
-		 * @param freeze the max ordinal position of each parameter to include
+		 * @param startingFreeze the max ordinal position of each parameter to include
 		 * @param firingParameterIndex which parameter fired that cause this method to be invoked
 		 * @param ordinalOfFiringParameter the ordinal position of the firing parameter within its Param.Instance.bindings
 		 * @param orc
