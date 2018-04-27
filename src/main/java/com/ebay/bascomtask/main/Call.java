@@ -217,7 +217,7 @@ class Call {
 		}
 
 		/**
-		 * Invokes our task method 1 or more times with the cross-product off all parameters within the 'startingFreeze' range,
+		 * Invokes POJO task method 1 or more times with the cross-product off all parameters within the 'startingFreeze' range,
 		 * *except* for the the firing parameter for which we don't include any of its sibling parameters.
 		 * @param px the looping parameter index (incremented recursively)
 		 * @param args array accumulating args for the next call
@@ -237,6 +237,10 @@ class Call {
 				}
 				else if (isNoWait() && orc.isCallingThread()) {
 					// Don't assign main thread with tasks it should not wait for.
+					orc.spawn(newInvocation);
+				}
+				else if (taskInstance.isFork()) {
+					// Spawn right away if taskInstance has been flagged this way
 					orc.spawn(newInvocation);
 				}
 				else if (!postPending(newInvocation)) {

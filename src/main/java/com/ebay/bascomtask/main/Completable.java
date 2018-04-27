@@ -55,8 +55,15 @@ class Completable {
 		return completionThresholdCount;
 	}
 
-	void setCompletionThreshold(int tc) {
+	/**
+	 * Sets threshold which determines when this completeable item is completed
+	 * @param tc
+	 * @return true iff new value is more than old
+	 */
+	boolean setCompletionThreshold(int tc) {
+		boolean result = tc > this.completionThresholdCount;
 		this.completionThresholdCount = tc;
+		return result;
 	}
 
 	String completionSay() {

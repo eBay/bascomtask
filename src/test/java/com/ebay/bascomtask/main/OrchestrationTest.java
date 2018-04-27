@@ -305,7 +305,8 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(0);
 	}
 
-	// These defined outside of testCircular3Fail because of forward ref
+	// These defined outside of testCircular3Fail because forward ref 
+	// would otherwise cause compiler to complain
 	class CA extends PathTask {
 		@Work public void exec(CC c) {}
 	}

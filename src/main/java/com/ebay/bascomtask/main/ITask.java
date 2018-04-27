@@ -10,7 +10,7 @@ public interface ITask {
 	/**
 	 * The name of this pojo instance in an orchestrator, guaranteed to always be unique
 	 * that orchestrator.
-	 * @return
+	 * @return the user-supplied or auto-generated name, will never be null
 	 */
 	public String getName();
 	
@@ -59,4 +59,18 @@ public interface ITask {
 	 * @return
 	 */
 	public boolean isMultiMethodOk();
+	
+	/**
+	 * Prevents this task from being run by the calling thread, spawning a new thread if
+	 * needed. Usually only needed if there is work needed to be done by the calling thread
+	 * and it is desirable to get to that work without waiting for this task to complete.
+	 * @return
+	 */
+	public ITask fork();
+	
+	/**
+	 * Should this task not be run in the calling thread?
+	 * @return
+	 */
+	public boolean isFork();
 }

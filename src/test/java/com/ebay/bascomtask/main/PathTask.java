@@ -67,10 +67,14 @@ abstract class PathTask {
 	
 	@Override
 	public String toString() {
-		return taskInstance.getName()+':'+exp.size()+':'+got.size();
+		return getName()+':'+exp.size()+':'+got.size();
 	}
 	
 	String getName() {
+		// taskInstance might not be set in nested @Work cases
+		if (taskInstance==null) {
+			return "???";
+		}
 		return taskInstance.getName();
 	}
 	
@@ -86,6 +90,11 @@ abstract class PathTask {
 	
 	PathTask multiMethodOk() {
 		taskInstance.multiMethodOk();
+		return this;
+	}
+	
+	PathTask fork() {
+		taskInstance.fork();
 		return this;
 	}
 	

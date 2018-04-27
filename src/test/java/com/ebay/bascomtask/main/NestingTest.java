@@ -111,6 +111,46 @@ public class NestingTest extends PathTaskTestBase {
 		verify(1);
 	}
 
+	private void testNestedBackwardDependency(boolean fork) {
+		class A extends PathTask {
+			@Work public void exec() {got();}
+		}
+		class B extends PathTask {
+			@Work public void exec(A a) {got(a);}
+		}
+		A a1 = new A();
+		final A a2 = new A();  // Not added immediately, on in nested exec
+		B b = new B();
+		class C extends PathTask {
+			@Work public void exec() {
+				sleep(20);
+				PathTask taskA2 = track.work(a2);
+			}
+		}
+		C c = new C();
+
+		PathTask taskA = track.work(a1);
+		PathTask taskB = track.work(b).exp(a1).exp(a2);
+		PathTask taskC = track.work(c);
+		if (fork) {
+			// Forking, in combination with the sleep delay in C.exec, ensures
+			// that a2 is only added after B completes; the orechestrator execute
+			// should still not complete until both a1-b and a2-b have completed.
+			taskC = taskC.fork();
+		}
+		verify(1);
+	}
+
+	@Test
+	public void testNestedBackwardDependencyWithFork() {
+		testNestedBackwardDependency(true);
+	}
+
+	@Test
+	public void testNestedBackwardDependencyWithoutFork() {
+		testNestedBackwardDependency(false);
+	}
+
 	@Test
 	public void testNestedParllelization() {
 		class A extends PathTask {

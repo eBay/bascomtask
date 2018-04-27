@@ -26,7 +26,7 @@ class Task {
 	/**
 	 * For logging and debugging.
 	 */
-	private final String name;
+	private final String taskName;
 
 	/**
 	 * All the @Work methods in the task. 
@@ -66,12 +66,6 @@ class Task {
 		final Object targetPojo;
 		
 		/**
-		 * Each instance has a unique index with respect to its type, which
-		 * should be set by Orchestrator.
-		 */
-		private int indexInType = -1;
-		
-		/**
 		 * Was this task added through addWork() or addPassThru()?
 		 */
 		final boolean workElsePassThru;
@@ -82,12 +76,12 @@ class Task {
 		boolean wait = true;
 		
 		/**
-		 * For logging/debugging
+		 * For logging/debugging; never null
 		 */
-		private String name = null;
+		private String instanceName;
 		
 		/**
-		 * True when user has set name, which therefore won't be auto-generated
+		 * True when user has set instanceName, which therefore won't be auto-generated
 		 */
 		private boolean userSuppliedName = false;
 		
@@ -95,6 +89,11 @@ class Task {
 		 * Multiple matching methods ok?
 		 */
 		private boolean multiMethodOk = false;
+		
+		/**
+		 * Should never be executed by calling thread?
+		 */
+		private boolean fork = false;
 
 		/**
 		 * One for each @Work method (or each @PassThru method if added as passthru)
@@ -113,7 +112,9 @@ class Task {
 			List<Call> targetCalls = workElsePassThru ? workCalls : passThruCalls;
 			for (Call call: targetCalls) {
 				calls.add(call.new Instance(this));
-			}			
+			}
+			// Will be reset later, but assign here so that getName() will never return null
+			this.instanceName = Task.this.getName() + "-???";
 		}
 		
 		@Override
@@ -138,29 +139,27 @@ class Task {
 		List<Call> getCandidateCalls() {
 			return workElsePassThru ? workCalls : passThruCalls;
 		}
-
+		
+		synchronized void setIndexInType(int indexInType) {
+			if (!userSuppliedName) {
+				// No conflict check here, since this should be unique and anyway would later be caught
+				this.instanceName = Task.this.taskName + "-" + indexInType;
+			}
+		}
+		
 		@Override
 		public String getName() {
-			String nm = name;
-			if (nm==null) {
-				nm = Task.this.name + "-" + indexInType;
-				this.name = nm; // Avoid recomputing every time (also threadsafe)
-			}
-			return nm;
-		}
-		
-		void setIndexInType(int indexInType) {
-			this.indexInType = indexInType;
-			if (!userSuppliedName) {
-				this.name = null;
-			}
+			return instanceName;
 		}
 		
 		@Override
-		public ITask name(String name) {
-			// Expect exception throw if name conflict
-			orc.setUniqueTaskInstanceName(this,name);
-			this.name = name;
+		public synchronized ITask name(String name) {
+			if (name==null) {
+				throw new RuntimeException("Task instanceName must not be null");
+			}
+			// Expect exception thrown if instanceName conflict
+			orc.checkPendingTaskInstanceInstanceName(name);
+			this.instanceName = name;
 			this.userSuppliedName = true;
 			return this;
 		}
@@ -192,6 +191,19 @@ class Task {
 		public boolean isMultiMethodOk() {
 			return multiMethodOk;
 		}
+		
+		@Override
+		public ITask fork() {
+			fork = true;
+			return this;
+		}
+
+		@Override
+		public boolean isFork() {
+			return fork;
+		}
+
+		
 
 		public Task getTask() {
 			return Task.this;
@@ -204,11 +216,11 @@ class Task {
 	
 	Task(Class<?> clazz) {
 		this.taskClass = clazz;
-		this.name = clazz.getSimpleName();
+		this.taskName = clazz.getSimpleName();
 	}
 
 	String getName() {
-		return name;
+		return taskName;
 	}
 	
 	@Override

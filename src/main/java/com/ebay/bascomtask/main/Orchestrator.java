@@ -315,6 +315,9 @@ public class Orchestrator {
 	 * {@literal @}Work.scope, see {@link com.ebay.bascomtask.annotations.Scope}. Alternatively, a @{literal @}Work 
 	 * method parameter can simply be a list of tasks in which case the entire set of matching instances will
 	 * be made available once all instances are available.
+	 * <p>
+	 * An added task will have no effect until {@link #execute(long)} is called, either directly or implicitly
+	 * as a result of a nested task method completing.
 	 * 
 	 * @param any java object
 	 * @returns a 'shadow' task object which allows for various customization
@@ -369,11 +372,26 @@ public class Orchestrator {
 		}
 	}
 	
-	void setUniqueTaskInstanceName(Task.Instance taskInstance, String name) {
+	/**
+	 * Throws exception conflicts with a task already linked in the graph, or another task added but not yet linked
+	 * @param name
+	 */
+	void checkPendingTaskInstanceInstanceName(String name) {
+		checkUniqueTaskInstanceName(name);
+		List<Task.Instance> pending = nestedAdds.get(Thread.currentThread());
+		for (Task.Instance nextTaskInstance: pending) {
+			if (name.equals(nextTaskInstance.getName())) {
+				throw new InvalidTask.NameConflict("Task name\"" + name + "\" already in use");
+			}
+		}
+		// There still might be a conflict when we add nestedAdds to the graph, but we can't check
+		// that until that actually occurs due the way names are auto-generated.
+	}
+	
+	private void checkUniqueTaskInstanceName(String name) {
 		if (taskMapByName.get(name) != null) {
 			throw new InvalidTask.NameConflict("Task name\"" + name + "\" already in use");
 		}
-		taskMapByName.put(name,taskInstance);
 	}
 	
 	
@@ -503,6 +521,9 @@ public class Orchestrator {
 			taskMapByType.put(task,rec);
 		}
 		taskInstance.setIndexInType(rec.added.size());
+		String tn = taskInstance.getName();
+		checkUniqueTaskInstanceName(tn);
+		taskMapByName.put(tn,taskInstance);
 		rec.added.add(taskInstance);
 	}
 	
@@ -693,7 +714,12 @@ public class Orchestrator {
 				nextCall.setCompletionThreshold(cc);
 				tc += cc;
 			}
-			taskInstance.setCompletionThreshold(tc);
+			if (taskInstance.setCompletionThreshold(tc)) {
+				if (taskInstance.wait) {
+					// Ensure that a task that may have already completed is added back into wait list
+					waitForTasks.add(taskInstance);
+				}
+			}
 		}
 		int result = taskInstance.getCompletionThreshold();
 		if (taskInstance.calls.size()==0) {
@@ -812,7 +838,7 @@ public class Orchestrator {
 			Call.Instance callInstance = inv.getCallInstance();
 			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
 			taskOfCallInstance.startOneCall();
-			boolean complete = false;
+			//boolean complete = false;
 			boolean fire = inv.invoke(this,context);
 			Task task = taskOfCallInstance.getTask();
 			TaskRec rec = taskMapByType.get(task);

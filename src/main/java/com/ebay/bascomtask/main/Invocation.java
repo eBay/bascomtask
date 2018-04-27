@@ -1,7 +1,7 @@
 package com.ebay.bascomtask.main;
 
 /**
- * A call with its formal parameters that knows when it is ready to be called.
+ * A call wrapped with its actual parameters.
  * @author brendanmccarthy
  */
 class Invocation {
@@ -32,40 +32,13 @@ class Invocation {
 			String what = called?"called@":ready()?"ready@":"not-ready@";
 			return what + callInstance.formatState();
 		}
-		/*
-		String cn = "???";
-		String mn = "?";
-		if (callInstance != null) {
-			Call call = callInstance.getCall();
-			cn = call.getTask().getName();
-			mn = call.getMethodName();
-		}
-		StringBuilder sb = new StringBuilder();
-		sb.append(called?"called@":ready()?"ready@":"not-ready@");
-		sb.append(cn);
-		sb.append('.');
-		sb.append(mn);
-		sb.append('(');
-		if (args==null) {
-			sb.append("???");
-		}
-		else for (int i=0; i< args.length; i++) {
-			if (i>0) sb.append(',');
-			sb.append(args[i]==null ? '-' : '+');
-			if (callInstance != null) {
-				sb.append(callInstance.paramInstances[i].getTypeName());
-			}
-		}
-		sb.append(')');
-		return sb.toString();
-		*/
 	}
 	
 	Call.Instance getCallInstance() {
 		return callInstance;
 	}
 	
-	boolean ready() {
+	private boolean ready() {
 		if (called) return false;
 		if (args == null) return false;
 		for (Object next: args) {
@@ -86,10 +59,10 @@ class Invocation {
 	}
 
 	boolean invoke(Orchestrator orc, String context) {
-		if (ready()) {
-			called = true;
-			return callInstance.invoke(orc,context,args);
+		if (!ready()) {
+			throw new RuntimeException("Invocation not ready: " + this);
 		}
-		return false;
+		called = true;
+		return callInstance.invoke(orc,context,args);
 	}
 }
