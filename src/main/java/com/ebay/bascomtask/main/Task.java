@@ -49,7 +49,18 @@ class Task {
 	 * graph to completion.
 	 */
 	List<Call.Param> backList = new ArrayList<>();
+
+	/**
+	 * Which set of task methods should be considered?
+	 */
+	enum TaskMethodBehavior {
+		WORK,
+		PASSTHRU,
+		NONE
+	}	
 	
+	private static List<Call> EMPTY_CALLS = new ArrayList<>();
+
 	/**
 	 * From a user perspective, a 'task' is what they add @Work methods to; 
 	 * BascomTask shadows that task with a Task.Instance. A Task.Instance is created
@@ -64,11 +75,11 @@ class Task {
 		 * The POJO task which was added to the orchestrator
 		 */
 		final Object targetPojo;
-		
+
 		/**
-		 * Was this task added through addWork() or addPassThru()?
+		 * What task methods will be processed?
 		 */
-		final boolean workElsePassThru;
+		final TaskMethodBehavior taskMethodBehavior;
 		
 		/**
 		 * Should orchestrator wait for task to finish?
@@ -105,11 +116,11 @@ class Task {
 		 */
 		final List<Param.Instance> backList = new ArrayList<>();
 		
-		Instance(Orchestrator orc, Object targetTask, boolean workElsePassThru) {
+		Instance(Orchestrator orc, Object targetTask, TaskMethodBehavior taskMethodBehavior) {
 			this.orc = orc;
 			this.targetPojo = targetTask;
-			this.workElsePassThru = workElsePassThru;
-			List<Call> targetCalls = workElsePassThru ? workCalls : passThruCalls;
+			this.taskMethodBehavior = taskMethodBehavior;
+			List<Call> targetCalls = getCandidateCalls();
 			for (Call call: targetCalls) {
 				calls.add(call.new Instance(this));
 			}
@@ -119,12 +130,16 @@ class Task {
 		
 		@Override
 		public String toString() {
-			String mode = workElsePassThru ? "work" : "passthru";
-			return getName() + '(' + mode + ") ==> " + targetPojo.toString();
+			return getName() + '(' + taskMethodBehavior + ") ==> " + targetPojo.toString();
 		}
-
+		
 		List<Call> getCandidateCalls() {
-			return workElsePassThru ? workCalls : passThruCalls;
+			switch (taskMethodBehavior) {
+				case WORK: return workCalls;
+				case PASSTHRU: return passThruCalls;
+				case NONE: return EMPTY_CALLS;
+			}
+			throw new RuntimeException("Unexpected fall-thru");
 		}
 		
 		synchronized void setIndexInType(int indexInType) {

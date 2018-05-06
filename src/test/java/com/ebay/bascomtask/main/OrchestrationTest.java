@@ -240,6 +240,35 @@ public class OrchestrationTest extends PathTaskTestBase {
 	}
 	
 	@Test
+	public void testSimple() {
+		class A extends PathTask {
+			boolean hit = false;
+			@Work public void exec() {hit=true;}
+		}
+		A a = new A();
+		PathTask taskA = track.simple(a);
+		verify(0);
+		assertFalse(a.hit);
+	}
+	
+	@Test
+	public void testSimpleWithDependency() {
+		class A extends PathTask {
+			boolean hit = false;
+			@Work public void exec() {hit=true;}
+		}
+		class B extends PathTask {
+			@Work public void exec(A a) {got(a);}
+		}
+		A a = new A();
+		B b = new B();
+		PathTask taskA = track.simple(a);
+		PathTask taskB = track.work(b).exp(a);
+		verify(0);
+		assertFalse(a.hit);
+	}
+	
+	@Test
 	public void test2Dependents1Light() {
 		class A extends PathTask {
 			@Work public void exec() {got();}

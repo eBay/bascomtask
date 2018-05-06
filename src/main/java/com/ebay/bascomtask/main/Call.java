@@ -329,7 +329,7 @@ class Call {
 		 */
 		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
 			boolean returnValue = true;
-			String kind = taskInstance.workElsePassThru ? "@Work" :  "@PassThru";
+			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
 			long start = 0;
 			String msg = null;
 			try {

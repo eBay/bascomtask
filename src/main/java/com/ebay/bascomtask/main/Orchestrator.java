@@ -19,6 +19,7 @@ import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
 import com.ebay.bascomtask.main.Call.Param;
+import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
 
 /**
  * A dataflow-driven collector and executor of tasks that implicitly honors all 
@@ -285,7 +286,7 @@ public class Orchestrator {
 	 * @returns a 'shadow' task object which allows for various customization
 	 */
 	public ITask addWork(Object task) {
-		return add(task,true);
+		return add(task,TaskMethodBehavior.WORK);
 	}
 	
 
@@ -297,7 +298,20 @@ public class Orchestrator {
 	 * @param any java object
 	 */
 	public ITask addPassThru(Object task) {
-		return add(task,false);
+		return add(task,Task.TaskMethodBehavior.PASSTHRU);
+	}
+	
+	/**
+	 * Adds the object without considering any {@literal @}Work or {@literal @}PassThru methods even if they
+	 * exist, as if the object did not have such methods in the first place. This enables the object to be
+	 * make available as a parameter to other task methods without the object's task methods firing. Usage of 
+	 * this method is relatively uncommon, but does provide another way to handle variant situations be 
+	 * allowing a task object to be exposed but have its behavior managed outside the scope of this orchestrator.
+	 * @param task
+	 * @return
+	 */
+	public ITask addSimple(Object task) {
+		return add(task,Task.TaskMethodBehavior.NONE);
 	}
 
 	/**
@@ -309,18 +323,18 @@ public class Orchestrator {
 	 * @param workElsePassThru
 	 * @return
 	 */
-	private ITask add(Object targetTask, boolean workElsePassThru) {
+	private ITask add(Object targetTask,  Task.TaskMethodBehavior taskMethodBehavior) {
 		Class<?> targetClass = targetTask.getClass();
 		Task task = TaskParser.parse(targetClass);
-		Task.Instance taskInstance = task.new Instance(this,targetTask,workElsePassThru);
+		Task.Instance taskInstance = task.new Instance(this,targetTask,taskMethodBehavior);
 		Thread t = Thread.currentThread();
 		synchronized (nestedAdds) {
-			List<Task.Instance> acc = nestedAdds.get(t);
-			if (acc==null) {
-				acc = new ArrayList<>();
-				nestedAdds.put(t,acc);
+			List<Task.Instance> taskInstances = nestedAdds.get(t);
+			if (taskInstances==null) {
+				taskInstances = new ArrayList<>();
+				nestedAdds.put(t,taskInstances);
 			}
-			acc.add(taskInstance);
+			taskInstances.add(taskInstance);
 		}
 		return taskInstance;
 	}

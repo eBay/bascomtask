@@ -45,6 +45,10 @@ public abstract class PathTaskTestBase {
 			task.taskInstance = orc.addPassThru(task);
 			return add(task);
 		}
+		PathTask simple(PathTask task) {
+			task.taskInstance = orc.addSimple(task);
+			return add(task);
+		}
 		private PathTask add(PathTask task) {
 			tasks.add(task);
 			return task;
