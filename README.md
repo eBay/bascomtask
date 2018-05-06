@@ -1,11 +1,68 @@
 # BascomTask
-For complex web pages and increasingly for microservice development, processing requests often requires reaching out to multiple external sources such as other services or datastores. A common challenge in implementing such requests is running some operations in parallel while also ensuring strict dependency ordering. The mechanisms of object orientation can be a great aid for making this work more manageable: each work item is split into its own task object, then a means to wire them together and execute them is needed, often referred to as "task orchestration". Several goals can be achieved by breaking work items into tasks in this way:
+Implementing microservices often requires processing requests that reach out to multiple external sources such as other services or datastores. A common challenge in implementing such requests is running some of these operations in parallel while also ensuring strict dependency ordering. The mechanisms of object orientation can be a great aid for making this work more manageable: each work item is split into its own task object, then a means to wire them together and execute them is needed, often referred to as "task orchestration". Several benefits can be achieved by breaking work items into tasks in this way:
 
 * Enforcing separation of concerns between tasks
 * Unifying cross-cutting capabilities such as logging and exception handling across tasks
 * Parallel execution among tasks
 
-BascomTask is a task orchestration library that features auto-wiring and optimal thread management among other features. Typical uses cases include at least some relatively expensive tasks, possibly with different task wirings based on various conditions. The foremost example is in processing page or microservice requests that must in turn reach out to other services and/or datastores.
+BascomTask is a task orchestration library that features:
+
+* Auto-wiring 
+* Conditional wiring
+* Multiple instance support
+* Dynamic graph modification
+* Optimal thread management
+
+Core design philosophies of BascomTask include: 
+
+* Flexibility while maximizing the benefits of Java's strong typing
+* Dependency decisions made locally within each task definition without that logic having to account for anything beyond its immediate inputs and outputs
+* Affording the wiring logic to only focus on inclusion or exclusion of tasks
+
+## Hello World
+Any POJO can be a task. BascomTask looks for methods annotated with @Work and executes them:
+
+```java
+   class HelloWorldTask {
+     @Work public void exec() {
+  	   System.out.println("Hello World");
+     }
+   }
+   Orchestrator orc = Orchestrator.create();
+   orc.addWork(new HelloWorldTask());
+   orc.execute();  // Invokes tasks and waits all results are ready
+```
+
+More usefully, several tasks would be involved, and @Work methods can take other tasks as arguments:
+
+```java
+   class HelloTask {
+     String getMessage() {
+       return "Hello";
+     }
+   }
+   class WorldTask {
+     private String msg;
+     String getMessage() {
+       return msg;
+     "
+     @Work public void exec() {
+  	   this.msg = "World";
+     }
+   }
+   class ConcatenatorTask {
+     @Work public void exec(HelloTask helloTask, WorldTask worldTask) {
+  	   System.out.println(helloTask.getMessage() + " " + worldTask.getMessage());
+     }
+   }
+   Orchestrator orc = Orchestrator.create();
+   orc.addWork(new HelloTask());
+   orc.addWork(new WorldTask());
+   orc.addWork(new ConcatenatorTask());
+   orc.execute();
+```
+In the example above, HellTask has no @Work methods. When added to the orchestrator graph it is immediately made available to downstream tasks (ConcatenatorTask in this case). WorldTask has a @Work method with no arguments and is started right away. ConcatenatorTask is started once WorldTask is completed. BascomTask processes these tasks all in the calling thread as there is no point in spawning separate threads. If HelloTask were to instead have a @Work method like WorldTask, BascomTask would spawn a thread to execute either HelloTask or WorldTask in parallel while the calling thread executes the other. BascomTask is dataflow driven and attempts to only create create threads when there is opportunity for parallelism.
+
 
 ## Basics 
 Any POJO can be a task. Such POJOs can have @Work annotated methods (often just one) that can take other tasks as arguments:

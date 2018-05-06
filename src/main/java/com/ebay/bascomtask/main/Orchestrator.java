@@ -24,92 +24,47 @@ import com.ebay.bascomtask.main.Call.Param;
  * A dataflow-driven collector and executor of tasks that implicitly honors all 
  * dependencies while pursuing maximum parallelization with a minimum number of threads. 
  * <p>
- * A task can be any POJO which can have any number of @Work or @PassThru annotated methods.
+ * A task can be any POJO which can have any number of {@literal @}Work or {@literal @}PassThru 
+ * annotated methods, which we refer to as task methods.
  * Once added, {@link #execute()} will execute those methods either if they have no arguments
- * or once those arguments become available as a result of executing other tasks. For
- * any POJO added as a task, either its @Work or its @PassThru method(s) will be
- * executed (never both), depending on whether it was added by {@link #addWork(Object)} 
- * or by {@link #addPassThru(Object)}. @PassThru is intended for use when a
+ * or once those arguments become available as a result of executing other tasks. A task method's 
+ * arguments will never be null, so no null checks are required in task methods.
+ * For any POJO added as a task, either its {@literal @}Work or its {@literal @}PassThru method(s) 
+ * will be executed (never both), depending on whether it was added by {@link #addWork(Object)} 
+ * or by {@link #addPassThru(Object)}. {@literal @}PassThru is intended for use when a
  * task needs to do only simple bookkeeping but otherwise is not actively contributing
- * to the overall result. Commonly, a given POJO will have just one @Work and possibly
- * one @PassThru method, but can have any number of these; at runtime, whichever method
+ * to the overall result. Typically a given POJO will have just one {@literal @}Work and possibly
+ * one {@literal @}PassThru method, but can have any number of these; at runtime, whichever method
  * matches based on available inputs will fire (execute). 
  * <p>
- * A BascomTask hello world is simply as follows:
+ * An example pojo invoked with BascomTask might be as follows:
  * <p> 
  * <pre>
- * class HelloWorldTask {
- *   {@literal @}Work void exec() {
- *      System.out.println("Hello world");
- *   }
+ * class MyTask {
+ *   {@literal @}Work void exec(MyOtherTask x, SomeOtherTask y) {...}
  * }
  * Orchestrator orc = Orchestrator.create();
- * orc.addWork(new HelloWorldTask());
+ * orc.addWork(new new MyTask());
+ * orc.addWork(new new MyOtherTask());
+ * orc.addWork(new new SomeOtherTask());
  * orc.execute();
  * </pre>
- * If split across two tasks it could be thus:
- * <pre>
- * class HelloTask {
- *   String value;
- *   {@literal @}Work void exec() {
- *      value = "Hello";
- *   }
- * }
- * class WorldTask {
- *   {@literal @}Work void exec(HelloTask task) {
- *      System.out.println(task.value + " World");
- *   }
- * }
- * Orchestrator orc = Orchestrator.create();
- * orc.addWork(new HelloTask());
- * orc.addWork(new WorldTask());
- * orc.execute();
- * </pre>
- * In the example above, there is no opportunity for parallelism so both tasks would be executed in the
- * calling thread. In the following example, HelloTask and WorldTask can be executed in parallel so one
- * of them would be spawned in a separate thread:
- * <pre>
- * class HelloTask {
- *   String value;
- *   {@literal @}Work void exec() {
- *      value = "Hello";
- *   }
- * }
- * class WorldTask {
- *   String value;
- *   {@literal @}Work void exec() {
- *      value = "World";
- *   }
- * }
- * class CombinerTask {
- *   {@literal @}Work void exec(HelloTask helloTask, WorldTask worldTask) {
- *      System.out.println(helloTask.value + " " + worldTask.value);
- *   }
- * }
- * Orchestrator orc = Orchestrator.create();
- * orc.addWork(new HelloTask());
- * orc.addWork(new WorldTask());
- * orc.addWork(new CombinerTask());
- * orc.execute();
- * </pre>
- * 
+ * If MyOtherTask and SomOtherTask have no common dependencies then they may be executed in
+ * parallel in different threads. BascomTask is dataflow driven, attempting to execute tasks
+ * in parallel where possible while avoiding wasteful creation of threads where possible.
  * <p>
  * Multiple instances of a given POJO class can also be added, each being executed separately and
- * each being supplied to all downstream @Work or @Passthru methods with that type as an argument.
- * If two HelloTasks were added to the previous example, each would start in its own thread and
- * CombinerTask.exec() would be invoked twice, each time with a different HelloTask instance.
+ * each being supplied to all downstream task methods with that type as an argument.
+ * If two instances of MyOtherTask were added to the previous example, each would start in its own thread and
+ * MyTask.exec() would be invoked twice, each time with a different MyOtherTask instance.
  * The default behavior for a task that receives multiple calls is simply to allow them to proceed
- * independently each firing in turn to any downstream tasks. This assumes that the task (CombinerTask
+ * independently each firing in turn to any downstream tasks. This assumes that the task (MyTask
  * in the above example) is thread-safe. There are several options for varying this behavior by
- * adding a scope argument to @Work, see {@link Scope} for a description of options. Even simplier
- * is to simply change a task argument to a list, then all instances of that type will be
+ * adding a scope argument to {@literal @}Work, see {@link Scope} for a description of options. Even simpler
+ * is to simply change a task argument to a list, in which case all instances of that type will be
  * received at once.
  *  
  * @author brendanmccarthy
- */
-/**
- * @author bremccarthy
- *
  */
 public class Orchestrator {
 	
@@ -233,6 +188,8 @@ public class Orchestrator {
 	}
 	
 	/**
+	 * Sets the id of any thread spawned during execution by this orchestrator.
+	 * Publicly exposed to allow for different configuration strategies.
 	 * Must be invoked once thread is pulled from its pool.
 	 */
 	public void setThreadId() {
@@ -296,28 +253,33 @@ public class Orchestrator {
 	
 	/**
 	 * Adds a task to be made available to other task's task ({@literal @}Work or {@literal @}PassThru) methods, 
-	 * and whose {@literal @}Work methods will only be invoked (fired) when its task arguments have so fired.
+	 * and whose own {@literal @}Work methods will only be invoked (fired) when its task arguments have so fired.
 	 * <p>
 	 * The rules for execution are as follows:
 	 * <ul>
 	 * <li> A POJO can have no {@literal @}Work methods in which case it will instantly be available to other tasks.
 	 * <li> Any {@literal @}Work method with no arguments will be started immediately in its own thread (which
 	 * might be the calling thread of the orchestrator if it is not busy with other work).
-	 * <li> Any {@literal Work} method with arguments will only be invoked when its task parameters are
-	 * ready and available.
-	 * <li> Each {@literal @}Work method will in fact be invoked with the cross-product of all available matching
-	 * instances.
+	 * <li> Any {@literal Work} method with arguments will only be invoked when all of its task parameters have
+	 * themselves completed with a proper return (see last point below).
+	 * <li> Each {@literal @}Work method will be invoked with the cross-product of all available matching instances.
 	 * </ul>
 	 * <p>
 	 * Regarding the last point, although it is common to add just one instance of a given POJO type,
 	 * it is safe to add any number. The default behavior of {@literal @}Work methods receiving argument sequences
 	 * with multiple instances is that each is executed potentially in parallel. Different options can be set through
 	 * {@literal @}Work.scope, see {@link com.ebay.bascomtask.annotations.Scope}. Alternatively, a @{literal @}Work 
-	 * method parameter can simply be a list of tasks in which case the entire set of matching instances will
-	 * be made available once all instances are available.
+	 * method parameter can simply be a {@link java.util.List} of tasks in which case the entire set of matching 
+	 * instances will be made available once all instances are available.
 	 * <p>
 	 * An added task will have no effect until {@link #execute(long)} is called, either directly or implicitly
 	 * as a result of a nested task method completing.
+	 * <p>
+	 * A {@literal @}Work can return a boolean result or simply be void, which equates to returning {@code true}.
+	 * A return value of {@code false} indicates that downstream tasks should not fire: any task fires only if
+	 * all of its inputs have fired, except for {@link java.util.List} parameters, which never prevent firing
+	 * but instead any false-returning tasks will be excluded from the list (which means that a list parameter 
+	 * may be empty).
 	 * 
 	 * @param any java object
 	 * @returns a 'shadow' task object which allows for various customization

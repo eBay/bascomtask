@@ -334,20 +334,19 @@ class Call {
 			String msg = null;
 			try {
 				start = System.currentTimeMillis();
-				if (LOG.isDebugEnabled()) {
-					LOG.debug("Invoking {} {} {}",context,kind,this);
-				}
 				synchronized (this) {
 					startOneCall();
 				}
 				if (method != null) {
 					if (fire) {
+						LOG.debug("Invoking {} {} {}",context,kind,this);
 						Object methodResult = method.invoke(taskInstance.targetPojo, (Object[])args);
 						if (Boolean.FALSE.equals(methodResult)) {
 							returnValue = false;
 						}
 					}
 					else {
+						LOG.debug("Skipping {} {} {}",context,kind,this);
 						returnValue = false;
 					}
 				}
