@@ -123,7 +123,7 @@ class Call {
 		
 		@Override
 		public String toString() {
-			return "Call.Instance " + formatState();
+			return formatState();
 		}
 		
 		Call getCall() {
@@ -181,7 +181,7 @@ class Call {
 		 * @param inv current invocation, null if none
 		 * @return same or possibly new invocation for the calling thread to invoke
 		 */
-		Invocation bind(Orchestrator orc, String context, Object userTaskInstance, int parameterIndex, Invocation inv) {
+		Invocation bind(Orchestrator orc, String context, Object userTaskInstance, Firing firing, int parameterIndex, Invocation inv) {
 			int[] freeze;
 			int ordinalOfFiringParameter;
 			if (parameterIndex < 0) {  // A root task call, i.e. one with no task parameters? 
@@ -195,7 +195,7 @@ class Call {
 				// safely proceed outside the synchronized block.
 				synchronized (this) {
 					ordinalOfFiringParameter = firingParemeter.bindings.size();
-					firingParemeter.bindings.add(userTaskInstance);
+					firingParemeter.bindings.add(firing);
 					for (Param.Instance next: paramInstances) {
 						if (!next.ready()) {
 							return inv; // If not all parameters have at least one binding, not ready to execute call
@@ -211,29 +211,34 @@ class Call {
 			return crossInvoke(inv,freeze,parameterIndex,ordinalOfFiringParameter,orc,context);
 		}
 		
-		Invocation crossInvoke(Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
-			Object[] args = new Object[paramInstances.length];			
-			return crossInvoke(0,args,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
-		}
-
 		/**
-		 * Invokes POJO task method 1 or more times with the cross-product off all parameters within the 'startingFreeze' range,
+		 * Invokes POJO task method 1 or more times with the cross-product off all parameters within the 'freeze' range,
 		 * *except* for the the firing parameter for which we don't include any of its sibling parameters.
-		 * @param px the looping parameter index (incremented recursively)
-		 * @param args array accumulating args for the next call
 		 * @param inv the current invocation to be returned to the calling thread, null if none
-		 * @param startingFreeze the max ordinal position of each parameter to include
+		 * @param freeze the max ordinal position of each parameter to include
 		 * @param firingParameterIndex which parameter fired that cause this method to be invoked
 		 * @param ordinalOfFiringParameter the ordinal position of the firing parameter within its Param.Instance.bindings
 		 * @param orc
-		 * @param context
-		 * @return inv or a replacement to be called by the invoking thread
+		 * @param context descriptive text for logging
+		 * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
 		 */
-		private Invocation crossInvoke(int px, Object[]args, Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		Invocation crossInvoke(Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+			Object[] args = new Object[paramInstances.length];			
+			return crossInvoke(0,args,true,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+		}
+		
+		/**
+		 * Invoked recursively for each parameter position, accumulating parameter assignments in args, and performing the invocation 
+		 * when (and if) all args are assigned.
+		 */
+		private Invocation crossInvoke(int px, Object[]args, boolean fire, Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			if (px == args.length) {
 				Invocation newInvocation = new Invocation(this,args);  // makes a copy of args!
-				if (light) {
-					orc.invokeAndFinish(newInvocation,"light");
+				if (!fire) {
+					orc.invokeAndFinish(newInvocation,"non-fire",fire);
+				}
+				else if (light) {
+					orc.invokeAndFinish(newInvocation,"light",fire);
 				}
 				else if (isNoWait() && orc.isCallingThread()) {
 					// Don't assign main thread with tasks it should not wait for.
@@ -252,33 +257,46 @@ class Call {
 			}
 			else {
 				final Param.Instance paramAtIndex = paramInstances[px];
-				if (px==firingParameterIndex) {
-					if (paramAtIndex.getParam().isList) {
-						if (!paramAtIndex.ready()) {
-							return inv; // List arg not ready
-						}
-						args[px] = paramAtIndex.bindings;
-					}
-					else {
-						args[px] = paramAtIndex.bindings.get(ordinalOfFiringParameter);
-					}
-					inv = crossInvoke(px+1,args,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
-				}
-				else if (paramAtIndex.getParam().isList) {
+				if (paramAtIndex.getParam().isList) {
 					if (!paramAtIndex.ready()) {
 						return inv;  // List arg not ready
 					}
-					args[px] = paramAtIndex.bindings;
-					inv = crossInvoke(px+1,args,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+					args[px] = paramAtIndex.asListArg();
+					// Don't change 'fire' value -- args only contains values that have fired; may even be empty but fire anyway
+					inv = crossInvoke(px+1,args,fire,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+				}
+				else if (px==firingParameterIndex) {
+					inv = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
 				}
 				else {
 					for (int i=0; i<freeze[px]; i++) {
-						args[px] = paramAtIndex.bindings.get(i);
-						inv = crossInvoke(px+1,args,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+						inv = crossInvokeNext(px,args,fire,i,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
 					}
 				}
 			}
 			return inv;
+		}
+		
+		/**
+		 * Assigns a parameter value and proceeds to the next parameter position.
+		 * @param px
+		 * @param args
+		 * @param fire
+		 * @param bindingIndex
+		 * @param inv
+		 * @param freeze
+		 * @param firingParameterIndex
+		 * @param ordinalOfFiringParameter
+		 * @param orc
+		 * @param context
+		 * @return
+		 */
+		private Invocation crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+			Param.Instance paramAtIndex = paramInstances[px];
+			Call.Instance.Firing firing = paramAtIndex.bindings.get(bindingIndex);
+			args[px] = firing.pojoCalled;
+			boolean fireAtLevel = fire && firing.taskMethodReturnValue;
+			return crossInvoke(px+1,args,fireAtLevel,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
 		}
 
 		/**
@@ -309,23 +327,28 @@ class Call {
 		 * @param args for target call
 		 * @return false iff the java method returned a boolean false indicating that the method should not fire
 		 */
-		boolean invoke(Orchestrator orc, String context, Object[] args) {
-			boolean result = true;
+		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
+			boolean returnValue = true;
 			String kind = taskInstance.workElsePassThru ? "@Work" :  "@PassThru";
 			long start = 0;
 			String msg = null;
 			try {
 				start = System.currentTimeMillis();
 				if (LOG.isDebugEnabled()) {
-					LOG.debug("Invoking {} task \"{}\" {} {}",context,taskInstance.getName(),kind,signature());
+					LOG.debug("Invoking {} {} {}",context,kind,this);
 				}
 				synchronized (this) {
 					startOneCall();
 				}
 				if (method != null) {
-					Object methodResult = method.invoke(taskInstance.targetPojo, (Object[])args);
-					if (Boolean.FALSE.equals(methodResult)) {
-						result = false;
+					if (fire) {
+						Object methodResult = method.invoke(taskInstance.targetPojo, (Object[])args);
+						if (Boolean.FALSE.equals(methodResult)) {
+							returnValue = false;
+						}
+					}
+					else {
+						returnValue = false;
 					}
 				}
 				// For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
@@ -344,11 +367,11 @@ class Call {
 				long dur = end - start;
 				if (LOG.isDebugEnabled()) {
 					String rez = msg==null ? "success" : msg;
-					LOG.debug("Completed {} task \"{}\" {} {} in {}ms result: {}",
-							context,taskInstance.getName(),kind,signature(),dur,rez);
+					LOG.debug("Completed {} {} {} in {}ms result: {}",
+							context,kind,this,dur,rez);
 				}
 			}
-			return result;
+			return new Firing(taskInstance.targetPojo,returnValue);
 		}
 		
 		Object[] popSequential() {
@@ -356,6 +379,30 @@ class Call {
 				return followCallArgs.pollFirst();
 			}
 			return null;
+		}
+		
+		/**
+		 * Associates a return value with the specific pojoCalled instance whose task method was invoked.
+		 * This is necessary because even when a pojoCalled task method returns false (it doesn't 'fire'), 
+		 * the result of completion is still propagated throughout the graph so that the termination 
+		 * logic can be applied.
+		 * @author bremccarthy
+		 */
+		class Firing {
+			/**
+			 * The actual POJO added to the orchestrator, or a clone of that object for SCOPE TODO
+			 */
+			final Object pojoCalled;
+
+			/**
+			 * The value returned by the task method applied to that pojoCalled
+			 */
+			final boolean taskMethodReturnValue;
+
+			Firing(Object pojo, boolean returnValue) {
+				this.pojoCalled = pojo;
+				this.taskMethodReturnValue = returnValue;
+			}
 		}
 	}
 	
@@ -414,7 +461,7 @@ class Call {
 			 * The actual arguments in proper order, all of which will be POJOs added 
 			 * to the orchestrator as tasks
 			 */
-			final List<Object> bindings = new ArrayList<>();
+			final List<Call.Instance.Firing> bindings = new ArrayList<>();
 			
 			/**
 			 * The call which contains this parameter 
@@ -433,6 +480,16 @@ class Call {
 			@Override
 			public String toString() {
 				return taskParam.taskClass.getSimpleName() + ':' + bindings.size() + '/' + threshold;
+			}
+			
+			List<Object> asListArg() {
+				List<Object> result = new ArrayList<>(bindings.size());
+				for (Call.Instance.Firing next: bindings) {
+					if (next.taskMethodReturnValue) {
+						result.add(next.pojoCalled);
+					}
+				}
+				return result;
 			}
 			
 			boolean ready() {

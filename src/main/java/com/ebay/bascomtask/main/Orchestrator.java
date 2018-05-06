@@ -117,7 +117,7 @@ public class Orchestrator {
 	
 	private class TaskRec {
 		final List<Task.Instance> added = new ArrayList<>();  // Unique elements
-		final List<Task.Instance> fired = new ArrayList<>();  // May have dups
+		final List<Call.Instance.Firing> fired = new ArrayList<>();  // May have dups
 	}
 
 	/**
@@ -451,7 +451,7 @@ public class Orchestrator {
 	
 	private void executeTasks(List<Task.Instance> taskInstances, String context) {
 		Invocation inv = executeTasks(taskInstances,context,null);
-		invokeAndFinish(inv,"own-task");
+		invokeAndFinish(inv,"own",true);
 	}
 	
 	private synchronized Invocation executeTasks(List<Task.Instance> taskInstances, String context, Invocation inv) {
@@ -611,8 +611,8 @@ public class Orchestrator {
 					}
 					// Add all tasks that have already fired
 					callInstance.startingFreeze[i] = numberAlreadyFired;
-					for (Task.Instance nextAlreadyFiredTask: rec.fired) {
-						paramInstance.bindings.add(nextAlreadyFiredTask.targetPojo);
+					for (Call.Instance.Firing fired: rec.fired) {
+						paramInstance.bindings.add(fired);
 					}
 				}
 			}
@@ -755,7 +755,7 @@ public class Orchestrator {
 			while (invocationPickup != null) {
 				Invocation inv = invocationPickup;
 				invocationPickup = null;
-				invokeAndFinish(inv,"redirect");
+				invokeAndFinish(inv,"redirect",true);
 			}
 			synchronized (this) {
 				do {
@@ -827,28 +827,28 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * Invokes a test method then follows up with any on-completion bookkeeping
+	 * Invokes a task method then follows up with any on-completion bookkeeping
 	 * which may include recursively invoking (or spawning new threads for) tasks 
 	 * that become ready as a result of the incoming call having completed.
 	 * @param inv
 	 * @param context descriptive term for log messages
 	 */
-	void invokeAndFinish(Invocation inv, String context) {
+	void invokeAndFinish(Invocation inv, String context, boolean fire) {
 		if (inv != null) {
 			Call.Instance callInstance = inv.getCallInstance();
 			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
 			taskOfCallInstance.startOneCall();
 			//boolean complete = false;
-			boolean fire = inv.invoke(this,context);
+			Call.Instance.Firing firing = inv.invoke(this,context,fire);
 			Task task = taskOfCallInstance.getTask();
 			TaskRec rec = taskMapByType.get(task);
 
-			inv = processPostExecution(rec,callInstance,taskOfCallInstance,fire);
-			invokeAndFinish(inv,"post");
+			inv = processPostExecution(rec,callInstance,taskOfCallInstance,firing);
+			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fire
 			Object[] followArgs = callInstance.popSequential();
 			if (followArgs != null) {
 				inv = new Invocation(callInstance,followArgs);
-				invokeAndFinish(inv,"follow");
+				invokeAndFinish(inv,"follow",true);
 			}
 		}
 	}
@@ -871,7 +871,7 @@ public class Orchestrator {
 					config.linkParentChildThread(lock,parent,Thread.currentThread());
 					Exception err = null;
 					try {
-						invokeAndFinish(invocation,"spawned");
+						invokeAndFinish(invocation,"spawned",true);
 					}
 					catch (Exception e) {
 						err = e;
@@ -909,10 +909,9 @@ public class Orchestrator {
 	 * the lock is still held).
 	 * @param completed
 	 */
-	private synchronized Invocation processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, boolean fire) {
-		@SuppressWarnings("unused") // TBD need propagateComplete
-		boolean complete;
-		rec.fired.add(taskOfCallInstance);
+	private synchronized Invocation processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, Call.Instance.Firing firing) {
+		boolean complete = false;
+		rec.fired.add(firing);
 		if (taskOfCallInstance.completeOneCall()) {
 			complete = true;
 			waitForTasks.remove(taskOfCallInstance);
@@ -922,23 +921,20 @@ public class Orchestrator {
 		if (newTaskInstances != null) {
 			inv = executeTasks(newTaskInstances,"nested",inv);
 		}
-		LOG.debug("Evaluating {} exit on {} {} backLinks",fire,callInstance,taskOfCallInstance.backList.size());
-		if (fire) {
-			List<Call.Param.Instance> backList = taskOfCallInstance.backList;
-			String compName = taskOfCallInstance.getName();
-			LOG.debug("After firing task \"{}\" checking {} back params",compName,backList.size());
-			inv = continueOrSpawn(taskOfCallInstance,"back",inv);
-		}
+		List<Call.Param.Instance> backList = taskOfCallInstance.backList;
+		String cmsg = complete?"":"in";
+		LOG.debug("On {}complete exit from {} eval {} backLinks ",cmsg,callInstance,backList.size());
+		inv = continueOrSpawn(taskOfCallInstance,firing,"back",inv);
 		return inv;
 	}
 
-	private synchronized Invocation continueOrSpawn(Task.Instance taskInstance, String context, Invocation inv) {
+	private synchronized Invocation continueOrSpawn(Task.Instance taskInstance, Call.Instance.Firing firing, String context, Invocation inv) {
 		List<Call.Param.Instance> backList = taskInstance.backList;
 		for (Call.Param.Instance nextBackParam: backList) {
 			Call.Instance nextCallInstance = nextBackParam.callInstance;
 			int pos = nextBackParam.getParam().paramaterPosition;
 			Object actualParam = taskInstance.targetPojo;
-			inv = nextCallInstance.bind(this,context,actualParam,pos,inv);
+			inv = nextCallInstance.bind(this,context,actualParam,firing,pos,inv);
 		}
 		return inv;
 	}

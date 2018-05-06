@@ -69,7 +69,7 @@ class Completable {
 	String completionSay() {
 		Completable oc = containingCompletable();
 		String outerText = oc==null ? "" : " of " + oc.completionSay();
-		return String.valueOf(started) + '/' + completed + '/' + completionThresholdCount + outerText;
+		return "s" + String.valueOf(started) + "/c" + completed + "/t" + completionThresholdCount + outerText;
 	}
 	
 	Completable containingCompletable() {

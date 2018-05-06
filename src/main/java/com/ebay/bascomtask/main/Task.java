@@ -123,19 +123,6 @@ class Task {
 			return getName() + '(' + mode + ") ==> " + targetPojo.toString();
 		}
 
-		void propagateComplete() {
-			// TBD/TODO
-			/*
-			for (Call.Param.Instance nextBackParam: backList) {
-				Call.Instance nextCallInstance = nextBackParam.getCall();
-				if (!nextCallInstance.mightStillBeCalled()) {
-					System.out.println("TBD...");
-					//propagateComplete(nextCallInstance);
-				}
-			}
-			*/
-		}
-		
 		List<Call> getCandidateCalls() {
 			return workElsePassThru ? workCalls : passThruCalls;
 		}

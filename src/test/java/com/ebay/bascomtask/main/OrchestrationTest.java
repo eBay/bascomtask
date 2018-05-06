@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -430,12 +431,12 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(1,2);
 	}
 	
-	private void testPathExecutedConditionally(final boolean result) {
+	private void testPathExecutedConditionally(final boolean bReturnsTrue) {
 		class A extends PathTask {
 			@Work public void exec() {got();}
 		}
 		class B extends PathTask {
-			@Work public boolean exec(A a) {got(a);return result;}
+			@Work public boolean exec(A a) {got(a);return bReturnsTrue;}
 		}
 		class C extends PathTask {
 			@Work public void exec(A a) {got(a);}
@@ -452,12 +453,14 @@ public class OrchestrationTest extends PathTaskTestBase {
 		PathTask taskA = track.work(a);
 		PathTask taskB = track.work(b).exp(a);
 		PathTask taskC = track.work(c).exp(a);
-		PathTask taskD = track.work(d).exp(b).exp(c).multiMethodOk();
+		PathTask taskD = track.work(d).exp(c).multiMethodOk();
+		if (bReturnsTrue) {
+			taskD = taskD.exp(b);
+		}
 		verify(1);
 	}
 
-	// TODO
-	//@Test
+	@Test
 	public void testOnlyOnePathExecuted() {
 		testPathExecutedConditionally(false);
 	}
@@ -466,6 +469,78 @@ public class OrchestrationTest extends PathTaskTestBase {
 	public void testBothPathsExecuted() {
 		testPathExecutedConditionally(true);
 	}
+	
+	private void testReturn(final boolean which) {
+		class A extends PathTask {
+			@Work public boolean exec() {got();return which;}
+		}
+		A a = new A();
+		PathTask taskA = track.work(a);
+		verify(0);
+	}
+
+	@Test
+	public void testReturnTrue() {
+		testReturn(true);
+	}
+	
+	@Test
+	public void testReturnFalse() {
+		testReturn(false);
+	}
+	
+	private void testReturnTwoDeep(final boolean which) {
+		class A extends PathTask {
+			@Work public boolean exec() {got();return which;}
+		}
+		class B extends PathTask {
+			boolean exec = false;
+			@Work public void exec(A a) {got(a); exec = true;}
+		}
+		A a = new A();
+		B b = new B();
+		PathTask taskA = track.work(a);
+		PathTask taskB = track.work(b);
+		if (which) {
+			taskB = taskB.exp(a);
+		}
+		verify(0);
+		assertEquals(which,b.exec); // Graph completes in either case, but if A.exec returns false then B.exec should not execute
+	}
+
+	@Test
+	public void testReturnTwoDeepTrue() {
+		testReturnTwoDeep(true);
+	}
+	
+	@Test
+	public void testReturnTwoDeepFalse() {
+		testReturnTwoDeep(false);
+	}
+
+	//@Test 
+	public void testReturnMixedIncoming() {
+		class A extends PathTask {
+			final boolean which;
+			A(boolean which) {
+				this.which = which;
+			}
+			@Work public boolean exec() {got();return which;}
+		}
+		class B extends PathTask {
+			AtomicInteger count = new AtomicInteger(0);
+			@Work public void exec(A a) {got(a); count.incrementAndGet();}
+		}
+		A a1 = new A(true);
+		A a2 = new A(false);
+		B b = new B();
+		PathTask taskA1 = track.work(a1);
+		PathTask taskA2 = track.work(a2);
+		PathTask taskB = track.work(b);
+		verify(0);
+		assertEquals(1,b.count.get()); // Graph completes , but B.exec should exec only a1
+	}
+
 
 	private void multiMethodResponse(boolean allow) {
 		class A extends PathTask {

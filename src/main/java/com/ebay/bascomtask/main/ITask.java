@@ -8,7 +8,7 @@ import com.ebay.bascomtask.exceptions.InvalidTask;
  */
 public interface ITask {
 	/**
-	 * The name of this pojo instance in an orchestrator, guaranteed to always be unique
+	 * The name of this pojoCalled instance in an orchestrator, guaranteed to always be unique
 	 * that orchestrator.
 	 * @return the user-supplied or auto-generated name, will never be null
 	 */

@@ -58,11 +58,11 @@ class Invocation {
 		}
 	}
 
-	boolean invoke(Orchestrator orc, String context) {
+	Call.Instance.Firing invoke(Orchestrator orc, String context, boolean fire) {
 		if (!ready()) {
 			throw new RuntimeException("Invocation not ready: " + this);
 		}
 		called = true;
-		return callInstance.invoke(orc,context,args);
+		return callInstance.invoke(orc,context,args,fire);
 	}
 }
