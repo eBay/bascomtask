@@ -64,27 +64,6 @@ More usefully, several tasks would be involved, and @Work methods can take other
 In the example above, HellTask has no @Work methods. When added to the orchestrator graph it is immediately made available to downstream tasks (ConcatenatorTask in this case). WorldTask has a @Work method with no arguments and is started right away. ConcatenatorTask is started once WorldTask is completed. BascomTask processes these tasks all in the calling thread as there is no point in spawning separate threads. If HelloTask were to instead have a @Work method like WorldTask, BascomTask would spawn a thread to execute either HelloTask or WorldTask in parallel while the calling thread executes the other. BascomTask is dataflow driven and attempts to only create create threads when there is opportunity for parallelism.
 
 
-## Basics 
-Any POJO can be a task. Such POJOs can have @Work annotated methods (often just one) that can take other tasks as arguments:
-
-```java
-class MyTask {
-  @Work public void exec(MyOtherTask x, SomeOtherTask y) {...}
-}
-
-```
-The above MyTask.exec (the method name does not matter) will only be executed when its two task arguments have completed execution of their own @Work methods, or 'fired' (which by implication means that parameters of those methods will never be null). To make this execute simply instantiate an Orchestrator, add your tasks to it (in any order), and execute() it:
-
-```Java
-   Orchestrator orc = Orchestrator.create();
-   orc.addWork(new MyOtherTask());
-   orc.addWork(new SomeOtherTask());
-   orc.addWork(new MyTask());
-   orc.execute();  // Waits all results are ready
-```
-If SomeOtherTask and MyOtherTask do not depend on each other, they will be invoked in parallel. One will be run in the this thread (the thread that calls execute()) and the other will run in a spawned thread. BascomTask is data-flow driven, attempting to execute in parallel where it can, otherwise using existing threads for sequential execution. Java POJO tasks are automatically wired to parameters ot other tasks expecting objects of that type; there is no further work required to establish ordering or dependencies between tasks.
-
-
 ## Variant and Optional Tasks
 Sometimes it is desired to modify task behavior based on certain conditions. While such logic can simply be embedded within any task, it can also be useful to preserve the benefit of distinct task responsibility and provide different classes for different variant task behavior. If two variant tasks are logically related in terms of purpose and also produce the same result, then a common base class be introduced that downstream tasks can depend on. This approach is beneficial in terms of hiding the variation from downstream tasks. When it is more natural for a downstream task to be aware of and process the variants differently, then multiple @Work methods can be provided on the downstream task, each with different parameter combinations.
 
