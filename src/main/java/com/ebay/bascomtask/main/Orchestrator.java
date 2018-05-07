@@ -302,15 +302,15 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * Adds the object without considering any {@literal @}Work or {@literal @}PassThru methods even if they
+	 * Adds an object without considering any {@literal @}Work or {@literal @}PassThru methods even if they
 	 * exist, as if the object did not have such methods in the first place. This enables the object to be
 	 * make available as a parameter to other task methods without the object's task methods firing. Usage of 
 	 * this method is relatively uncommon, but does provide another way to handle variant situations be 
-	 * allowing a task object to be exposed but have its behavior managed outside the scope of this orchestrator.
+	 * allowing a task object to be exposed but have its behavior managed outside the scope of an orchestrator.
 	 * @param task
 	 * @return
 	 */
-	public ITask addSimple(Object task) {
+	public ITask addIgnoreTaskMethods(Object task) {
 		return add(task,Task.TaskMethodBehavior.NONE);
 	}
 

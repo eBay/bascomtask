@@ -240,19 +240,19 @@ public class OrchestrationTest extends PathTaskTestBase {
 	}
 	
 	@Test
-	public void testSimple() {
+	public void testIgnoreTaskMethods() {
 		class A extends PathTask {
 			boolean hit = false;
 			@Work public void exec() {hit=true;}
 		}
 		A a = new A();
-		PathTask taskA = track.simple(a);
+		PathTask taskA = track.ignoreTaskMethods(a);
 		verify(0);
 		assertFalse(a.hit);
 	}
 	
 	@Test
-	public void testSimpleWithDependency() {
+	public void testIgnoreTaskMethodsWithDependency() {
 		class A extends PathTask {
 			boolean hit = false;
 			@Work public void exec() {hit=true;}
@@ -262,7 +262,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		}
 		A a = new A();
 		B b = new B();
-		PathTask taskA = track.simple(a);
+		PathTask taskA = track.ignoreTaskMethods(a);
 		PathTask taskB = track.work(b).exp(a);
 		verify(0);
 		assertFalse(a.hit);
