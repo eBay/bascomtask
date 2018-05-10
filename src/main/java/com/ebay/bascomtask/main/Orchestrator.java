@@ -1,3 +1,19 @@
+/************************************************************************
+Copyright 2018 eBay Inc.
+Author/Developer: Brendan McCarthy
+ 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+ 
+    https://www.apache.org/licenses/LICENSE-2.0
+ 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+**************************************************************************/
 package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
@@ -392,9 +408,12 @@ public class Orchestrator {
 	 * all tasks that are firable as a result of those new tasks added. In this way, each call to execute acts
 	 * like a synchronizer across all executable tasks. Tasks added within a nested task can but do not have
 	 * to call execute() if they add tasks, as there is an implicit call done automatically in this case.
+	 * <p>
+	 * Consistency checks are performed prior to any task being started, and if a violation is found a subclass
+	 * of InvalidGraph is thrown.
 	 * @param maxExecutionTimeMillis to timeout
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
-	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no {@literal @}Work
+	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no mathcing {@literal @}Work dependents
 	 * @throws InvalidGraph.Circular if a circular reference between two tasks is detected
 	 * @throws InvalidGraph.MultiMethod if a task has more than one callable method and is not marked multiMethodOk()
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
