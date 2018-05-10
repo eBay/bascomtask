@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 
 import com.ebay.bascomtask.annotations.Scope;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * A wrapper for a Java method on a task POJO, including parameter wrappers for each parameter.
  * @author brendanmccarthy
@@ -117,7 +119,7 @@ class Call {
 		private final ConcurrentLinkedDeque<Object[]> followCallArgs;
 		
 		/**
-		 * True iff a @Work/@Passthru method has been entered and not exited. Only
+		 * True iff a task method has been entered and not exited. Only
 		 * used for Scope.Sequential case, thus only one thread can set it.
 		 */
 		private boolean reserved = false;
@@ -343,6 +345,7 @@ class Call {
 		 * @param args for target call
 		 * @return false iff the java method returned a boolean false indicating that the method should not fire
 		 */
+		@SuppressFBWarnings("IS2_INCONSISTENT_SYNC")
 		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
 			boolean returnValue = true;
 			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
@@ -389,6 +392,7 @@ class Call {
 			return new Firing(taskInstance.targetPojo,returnValue);
 		}
 		
+		@SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")
 		Object[] popSequential() {
 			if (followCallArgs != null) {
 				return followCallArgs.pollFirst();
