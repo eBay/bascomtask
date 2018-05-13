@@ -1,3 +1,19 @@
+/************************************************************************
+Copyright 2018 eBay Inc.
+Author/Developer: Brendan McCarthy
+ 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+ 
+    https://www.apache.org/licenses/LICENSE-2.0
+ 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+**************************************************************************/
 package com.ebay.bascomtask.main;
 
 import java.lang.reflect.InvocationTargetException;
@@ -10,6 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.ebay.bascomtask.annotations.Scope;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * A wrapper for a Java method on a task POJO, including parameter wrappers for each parameter.
@@ -101,7 +119,7 @@ class Call {
 		private final ConcurrentLinkedDeque<Object[]> followCallArgs;
 		
 		/**
-		 * True iff a @Work/@Passthru method has been entered and not exited. Only
+		 * True iff a task method has been entered and not exited. Only
 		 * used for Scope.Sequential case, thus only one thread can set it.
 		 */
 		private boolean reserved = false;
@@ -373,6 +391,7 @@ class Call {
 			return new Firing(taskInstance.targetPojo,returnValue);
 		}
 		
+		@SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")
 		Object[] popSequential() {
 			if (followCallArgs != null) {
 				return followCallArgs.pollFirst();
@@ -389,7 +408,7 @@ class Call {
 		 */
 		class Firing {
 			/**
-			 * The actual POJO added to the orchestrator, or a clone of that object for SCOPE TODO
+			 * The actual POJO added to the orchestrator, or a clone of that object for SCOPE.request TODO 
 			 */
 			final Object pojoCalled;
 

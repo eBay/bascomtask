@@ -1,3 +1,19 @@
+/************************************************************************
+Copyright 2018 eBay Inc.
+Author/Developer: Brendan McCarthy
+ 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+ 
+    https://www.apache.org/licenses/LICENSE-2.0
+ 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+**************************************************************************/
 package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
@@ -71,7 +87,7 @@ public class Orchestrator {
 	
 	static final Logger LOG = LoggerFactory.getLogger(Orchestrator.class);
 	
-	private class TaskRec {
+	private static class TaskRec {
 		final List<Task.Instance> added = new ArrayList<>();  // Unique elements
 		final List<Call.Instance.Firing> fired = new ArrayList<>();  // May have dups
 	}
@@ -209,14 +225,14 @@ public class Orchestrator {
 
 	/**
 	 * Returns the number of threads that have been spawned but not yet completed.
-	 * The returned value may only be > 0 after a call to {@link #execute()} if 
+	 * The returned value may only be > 0 after a call to {@link #execute()} if
 	 * there are nowait tasks.
 	 * @return
 	 */
 	public int getNumberOfOpenThreads() {
-		return threadBalance;
-	}
-	
+	    return threadBalance;
+	}	
+
 	/**
 	 * Return the time spent during the last call to {@link #execute()}. 
 	 * The result is undefined is that call has not yet completed. Any uncompleted
@@ -392,9 +408,12 @@ public class Orchestrator {
 	 * all tasks that are firable as a result of those new tasks added. In this way, each call to execute acts
 	 * like a synchronizer across all executable tasks. Tasks added within a nested task can but do not have
 	 * to call execute() if they add tasks, as there is an implicit call done automatically in this case.
+	 * <p>
+	 * Consistency checks are performed prior to any task being started, and if a violation is found a subclass
+	 * of InvalidGraph is thrown.
 	 * @param maxExecutionTimeMillis to timeout
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
-	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no {@literal @}Work
+	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no mathcing {@literal @}Work dependents
 	 * @throws InvalidGraph.Circular if a circular reference between two tasks is detected
 	 * @throws InvalidGraph.MultiMethod if a task has more than one callable method and is not marked multiMethodOk()
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
@@ -434,7 +453,7 @@ public class Orchestrator {
 		if (taskInstances != null) {
 			int currentTaskCount = allTasks.size();
 			List<Call.Instance> roots = linkGraph(taskInstances);
-			if (roots != null) {
+			if (roots.size() > 0) {
 				if (LOG.isDebugEnabled()) {
 					LOG.debug("firing {} with {}->{} tasks / {} roots\n{}",context,currentTaskCount,allTasks.size(),roots.size(),getGraphState());
 				}
@@ -460,6 +479,7 @@ public class Orchestrator {
 	 * of that parameter's type. Also verifies that all tasks are callable, by ensuring that they have at least one 
 	 * such call that has all parameters available.
 	 * @throws InvalidGraph if any task is un-callable, and if so include list of all such tasks (if more than one)
+	 * @return non-null but possibly empty list of instances ready to fire
 	 */
 	private List<Call.Instance> linkGraph(List<Task.Instance> taskInstances) {
 		// First establish all references from the orchestrator to taskInstances.
@@ -729,9 +749,16 @@ public class Orchestrator {
 	private void waitForCompletion() {
 		outer: while (true) {
 			while (invocationPickup != null) {
-				Invocation inv = invocationPickup;
-				invocationPickup = null;
-				invokeAndFinish(inv,"redirect",true);
+			    Invocation inv = null;
+			    synchronized (this) {
+			        if (invocationPickup != null) {
+			            inv = invocationPickup;
+			            invocationPickup = null;
+			        }
+			    }
+			    if (inv != null) {
+			        invokeAndFinish(inv,"redirect",true);    
+			    }
 			}
 			synchronized (this) {
 				do {
@@ -767,7 +794,7 @@ public class Orchestrator {
 		if (waiting && invocationPickup == null) {
 			LOG.debug("Pushing to main thread: {}",inv);
 			invocationPickup = inv;
-			notify();
+			notifyAll();
 			return true;
 		}
 		return false;
@@ -864,7 +891,7 @@ public class Orchestrator {
 								// zero more than once during an execution
 								lock.lastThreadCompleteTime = System.currentTimeMillis();
 							}
-							lock.notify();
+							lock.notifyAll();
 						}
 						if (LOG.isDebugEnabled()) {
 							String how = err==null? "normally" : "with exception";
@@ -895,7 +922,7 @@ public class Orchestrator {
 		List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
 		Invocation inv = null;
 		if (newTaskInstances != null) {
-			inv = executeTasks(newTaskInstances,"nested",inv);
+			inv = executeTasks(newTaskInstances,"nested",null);
 		}
 		List<Call.Param.Instance> backList = taskOfCallInstance.backList;
 		String cmsg = complete?"":"in";
