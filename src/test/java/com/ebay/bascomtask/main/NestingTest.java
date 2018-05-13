@@ -29,7 +29,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * @author brendanmccarthy
  */
 @SuppressWarnings("unused")
-@SuppressFBWarnings("UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS")
+@SuppressFBWarnings("UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS") // Simplistic rule misses valid usage
 public class NestingTest extends PathTaskTestBase {
 	
 	@Test

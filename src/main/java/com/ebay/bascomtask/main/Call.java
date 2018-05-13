@@ -345,7 +345,6 @@ class Call {
 		 * @param args for target call
 		 * @return false iff the java method returned a boolean false indicating that the method should not fire
 		 */
-		@SuppressFBWarnings("IS2_INCONSISTENT_SYNC")
 		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
 			boolean returnValue = true;
 			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";

@@ -23,7 +23,7 @@ import com.ebay.bascomtask.main.Orchestrator;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-@SuppressFBWarnings("UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS")
+@SuppressFBWarnings("UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS") // Simplistic rule misses valid usage
 public class LoadTest {
 	
 	public static void main(String[] args) {
