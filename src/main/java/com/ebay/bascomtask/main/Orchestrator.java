@@ -172,8 +172,6 @@ public class Orchestrator {
 	 * For tracking execution time
 	 */
 	private long startTime = 0;
-	private long exitExecutionTime= 0;
-	private long lastThreadCompleteTime = 0;
 	
 	@Override
 	public String toString() {
@@ -204,6 +202,105 @@ public class Orchestrator {
 		this.id = String.valueOf(hashCode());
 	}
 	
+	private ExecutionStats waitStats = new ExecutionStats();
+	private ExecutionStats noWaitStats = new ExecutionStats();
+
+	public class ExecutionStats {
+	    /**
+	     * Each invocation of a task method increments this field by 1
+	     */
+	    private int taskInvocationCount;
+	    
+	    /**
+	     * Each invocation of a task method adds to this field
+	     */
+	    private long accumulatedTaskTime;
+	    
+	    /**
+	     * Absolute time when processing completes
+	     */
+	    private long endTime;
+	    
+	    ExecutionStats() {}
+	    ExecutionStats(ExecutionStats that) {
+	        this.taskInvocationCount = that.taskInvocationCount;
+	        this.accumulatedTaskTime = that.accumulatedTaskTime;
+	        this.endTime = that.endTime;
+	    }
+	    
+	    @Override
+	    public boolean equals(Object o) {
+	        if (this==o) return true;
+	        if (o instanceof ExecutionStats) {
+	            ExecutionStats that = (ExecutionStats)o;
+	            if (this.getOrchestrator() != that.getOrchestrator()) return false;
+	            if (this.taskInvocationCount != that.taskInvocationCount) return false;
+	            if (this.accumulatedTaskTime != that.accumulatedTaskTime) return false;
+	            if (this.endTime != that.endTime) return false;
+	        }
+	        else {
+	            return false;
+	        }
+	        return true;
+	    }
+	    
+	    private Orchestrator getOrchestrator() {
+	        return Orchestrator.this;
+	    }
+
+	    private void update(long incrementalTime) {
+	        this.accumulatedTaskTime += incrementalTime;
+	        this.taskInvocationCount++;
+	    }
+	    
+	    /**
+	     * Returns the number of task method calls made.
+	     * @return
+	     */
+	    public int getNumberOfTasksExecuted() {
+	        return taskInvocationCount;
+	    }
+	    
+	    /**
+	     * Returns the time saved by executing tasks in parallel rather than sequentially.
+	     * Note that if all tasks were sequential (due to ordering), then this value would
+	     * be slightly negative, accounting for the overhead of the orchestrator itself.
+	     * @return time saved in ms
+	     */
+	    public long getParallelizationSaving() {
+	        return accumulatedTaskTime - getExecutionTime();
+	    }
+	    
+	    /**
+	     * Returns the time spent during the last call to {@link #execute()}. 
+	     * The result is undefined is that call has not yet completed. Any uncompleted
+	     * nowait tasks are not accounted for.
+	     * @return execution time in ms
+	     */
+	    public long getExecutionTime() {
+	        return endTime - startTime;
+	    }
+	}
+	
+	/**
+	 * Returns a snapshot of execution statistics resulting from a previous execution, excluding any nowait tasks.
+	 * This method is guaranteed to return the same result once the outermost execute() has completed.
+	 * @return
+	 */
+	public ExecutionStats getStats() {
+	    return new ExecutionStats(waitStats);
+	}
+
+	/**
+	 * Returns a snapshot of execution statistics resulting from a previous execution, including any nowait tasks.
+	 * This method is guaranteed to return the same result once the outermost execute() has completed
+	 * <i>and</i> all nowait tasks have completed.
+	 * @return
+	 */
+	public ExecutionStats getNoWaitStats() {
+	    return new ExecutionStats(noWaitStats);
+	}
+	
 	/**
 	 * Sets the id of any thread spawned during execution by this orchestrator.
 	 * Publicly exposed to allow for different configuration strategies.
@@ -231,66 +328,8 @@ public class Orchestrator {
 	 */
 	public int getNumberOfOpenThreads() {
 	    return threadBalance;
-	}	
-
-	public class ExecutionStats {
-	    /**
-	     * Returns the number of task method calls made.
-	     * @return
-	     */
-	    public int getNumberOfTasksExecuted() {
-	        return taskInvocationCount;
-	    }
-	    
-	    /**
-	     * Returns the time saved by executing tasks in parallel rather than sequentially.
-	     * Note that if all tasks were sequential (due to ordering), then this value would
-	     * be negative, accounting for the overhead of the orchestrator itself.
-	     * @return time saved in ms
-	     */
-	    public long getParallelizationSavingWaitTasks() {
-	        return accumulatedTaskTime - getExecutionTimeWaitTasks();
-	    }
-	    
-	    /**
-	     * Like {@linke #getParallelizationSavingWait()} but in addition accounts for any
-	     * nowait tasks; this result can change up until the time all nowait tasks
-	     * are completed ({@link #getNumberOfOpenThreads()==0}).
-	     * @return time saved in ms
-	     */
-	    public long getParallelizationSavingNoWaitTasks() {
-	        return accumulatedTaskTime - getExecutionTimeNoWaitTasks();
-	    }
-	    
-	    /**
-	     * Returns the time spent during the last call to {@link #execute()}. 
-	     * The result is undefined is that call has not yet completed. Any uncompleted
-	     * nowait tasks are not accounted for.
-	     * @return execution time in ms
-	     */
-	    public long getExecutionTimeWaitTasks() {
-	        return exitExecutionTime - startTime;
-	    }
-
-	    /**
-	     * Like {@link #getExecutionTimeWait()} but in addition accounts for any
-	     * nowait tasks; this result can change up until the time all nowait tasks
-	     * are completed ({@link #getNumberOfOpenThreads()==0}).
-	     * @return execution time in ms
-	     */
-	    public long getExecutionTimeNoWaitTasks() {
-	        return lastThreadCompleteTime - startTime;
-	    }
 	}
 	
-	/**
-	 * Return execution statistics resulting from a previous execution.
-	 * @return
-	 */
-	public ExecutionStats getStats() {
-	    return new ExecutionStats();
-	}
-
 	/**
 	 * A convenience method, adds a task with a default name that is either
 	 * active or passive depending on the given condition. 
@@ -473,11 +512,10 @@ public class Orchestrator {
 				checkForExceptions();
 			}
 			finally {
-				callingThread = null;
-				exitExecutionTime = System.currentTimeMillis();
-				if (lastThreadCompleteTime < exitExecutionTime) {
-					lastThreadCompleteTime = exitExecutionTime;
-				}
+			    synchronized (this) {
+			        callingThread = null;
+			        waitStats.endTime = noWaitStats.endTime = System.currentTimeMillis();
+			    }
 			}
 		}
 	}
@@ -503,7 +541,7 @@ public class Orchestrator {
 
 	
 	/**
-	 * Thread which calls begin()
+	 * Thread which calls begin(), is non-null only when outermost execute() is active
 	 */
 	private Thread callingThread = null;
 	boolean isCallingThread() {
@@ -512,16 +550,6 @@ public class Orchestrator {
 	
 	int linkLevel = 0;
 
-    /**
-     * Each invocation of a task method adds to this field
-     */
-    private long accumulatedTaskTime = 0;
-    
-    /**
-     * Each invocation of a task method increments this field by 1
-     */
-    private int taskInvocationCount = 0;
-	
 	/**
 	 * Adds the given tasks and links each parameter of each applicable (@Work or @PassThru) call with each instance 
 	 * of that parameter's type. Also verifies that all tasks are callable, by ensuring that they have at least one 
@@ -840,10 +868,12 @@ public class Orchestrator {
 
 	synchronized boolean requestMainThreadComplete(Invocation inv) {
 		if (waiting && invocationPickup == null) {
-			LOG.debug("Pushing to main thread: {}",inv);
-			invocationPickup = inv;
-			notifyAll();
-			return true;
+		    if (inv.getCallInstance().taskInstance.wait) { // Don't put nowait tasks on calling thread
+		        LOG.debug("Pushing to main thread: {}",inv);
+		        invocationPickup = inv;
+		        notifyAll();
+		        return true;
+		    }
 		}
 		return false;
 	}
@@ -936,7 +966,7 @@ public class Orchestrator {
 							if (tb==0) {
 								// This could possibly be overwritten if threadBalance is driven to 
 								// zero more than once during an execution
-								lock.lastThreadCompleteTime = System.currentTimeMillis();
+								lock.noWaitStats.endTime = System.currentTimeMillis();
 							}
 							lock.notifyAll();
 						}
@@ -960,8 +990,10 @@ public class Orchestrator {
 	 * @param completed
 	 */
 	private synchronized Invocation processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, Call.Instance.Firing firing) {
-	    accumulatedTaskTime += firing.executionTime;
-	    taskInvocationCount++;
+	    noWaitStats.update(firing.executionTime); 
+	    if (callingThread != null) {
+	        waitStats.update(firing.executionTime);
+	    }
 		boolean complete = false;
 		rec.fired.add(firing);
 		if (taskOfCallInstance.completeOneCall()) {

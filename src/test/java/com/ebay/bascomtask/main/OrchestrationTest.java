@@ -428,6 +428,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 	
 	@Test
 	public void testParexStats() {
+	    final int SLEEP_MAX = 100;
 		class A extends PathTask {
 			@Work public void exec() {got();sleep(50);}
 		}
@@ -435,7 +436,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 			@Work public void exec() {got();sleep(50);}
 		}
 		class C extends PathTask {
-			@Work public void exec(A a, B b) {got(a,b);sleep(50);}
+			@Work public void exec(A a, B b) {got(a,b);sleep(SLEEP_MAX);} // nowait below
 		}
 		class D extends PathTask {
 			@Work public void exec(A a, B b) {got(a,b);sleep(50);}
@@ -447,13 +448,24 @@ public class OrchestrationTest extends PathTaskTestBase {
 		D d = new D();
 		PathTask taskA = track.work(a);
 		PathTask taskB = track.work(b);
-		PathTask taskC = track.work(c).exp(a,b);
+		PathTask taskC = track.work(c).exp(a,b).noWait().fork();
 		PathTask taskD = track.work(d).exp(a,b);
-		verify(2);
+		verify(1,2,false);
 		Orchestrator.ExecutionStats stats = track.orc.getStats();
-		assertEquals(4,stats.getNumberOfTasksExecuted());
-		assertTrue(stats.getExecutionTimeWaitTasks() > 80);
-		assertTrue(stats.getExecutionTimeWaitTasks() == stats.getExecutionTimeNoWaitTasks()); 
+		Orchestrator.ExecutionStats noWaitStats = track.orc.getNoWaitStats();
+		assertEquals(3,stats.getNumberOfTasksExecuted());
+		assertEquals(stats,noWaitStats);
+		long sav = stats.getParallelizationSaving();
+		assertTrue("got-stats-before " + sav,sav > 20 && sav < 80);
+		sleep(SLEEP_MAX);
+		stats = track.orc.getStats();
+		noWaitStats = track.orc.getNoWaitStats();
+		assertEquals(3,stats.getNumberOfTasksExecuted());
+		assertEquals(4,noWaitStats.getNumberOfTasksExecuted());
+		assertTrue("got-stats-after " + sav,sav > 20 && sav < 80);
+		long nws = noWaitStats.getParallelizationSaving();
+		assertTrue(noWaitStats.getParallelizationSaving() > stats.getParallelizationSaving());
+		assertTrue(noWaitStats.getExecutionTime() > stats.getExecutionTime());
 	}
 	
 	@Test
@@ -678,7 +690,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		PathTask taskA1 = track.work(a1);
 		PathTask taskA2 = track.work(a2);
 		PathTask taskB = track.work(b).exp(a1).exp(a2);
-		// Because ParTask sleeps, both A thread should have fired and executed at same time
+		// Because ParTask sleeps, both A threads should have fired and executed at same time
 		verify(1);
 		assertEquals(2,b.maxNesting);
 	}

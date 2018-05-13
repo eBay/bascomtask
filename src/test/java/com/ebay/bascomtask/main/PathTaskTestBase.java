@@ -88,7 +88,7 @@ public abstract class PathTaskTestBase {
 		verify(expectThreadsMin,expectThreadsMax,true);
 	}
 	
-	private void verify(int expectThreadsMin, int expectThreadsMax, boolean testNoThreads) {
+	protected void verify(int expectThreadsMin, int expectThreadsMax, boolean testNoThreads) {
 		//track.orc.execute(TimeUnit.SECONDS.toMillis(1L));
 		track.orc.execute(TimeUnit.SECONDS.toMillis(99999L));
 		track.check();
