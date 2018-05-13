@@ -233,24 +233,62 @@ public class Orchestrator {
 	    return threadBalance;
 	}	
 
-	/**
-	 * Return the time spent during the last call to {@link #execute()}. 
-	 * The result is undefined is that call has not yet completed. Any uncompleted
-	 * nowait tasks are not accounted for.
-	 * @return
-	 */
-	public long getExecutionTimeWait() {
-		return exitExecutionTime - startTime;
-	}
+	public class ExecutionStats {
+	    /**
+	     * Returns the number of task method calls made.
+	     * @return
+	     */
+	    public int getNumberOfTasksExecuted() {
+	        return taskInvocationCount;
+	    }
+	    
+	    /**
+	     * Returns the time saved by executing tasks in parallel rather than sequentially.
+	     * Note that if all tasks were sequential (due to ordering), then this value would
+	     * be negative, accounting for the overhead of the orchestrator itself.
+	     * @return time saved in ms
+	     */
+	    public long getParallelizationSavingWaitTasks() {
+	        return accumulatedTaskTime - getExecutionTimeWaitTasks();
+	    }
+	    
+	    /**
+	     * Like {@linke #getParallelizationSavingWait()} but in addition accounts for any
+	     * nowait tasks; this result can change up until the time all nowait tasks
+	     * are completed ({@link #getNumberOfOpenThreads()==0}).
+	     * @return time saved in ms
+	     */
+	    public long getParallelizationSavingNoWaitTasks() {
+	        return accumulatedTaskTime - getExecutionTimeNoWaitTasks();
+	    }
+	    
+	    /**
+	     * Returns the time spent during the last call to {@link #execute()}. 
+	     * The result is undefined is that call has not yet completed. Any uncompleted
+	     * nowait tasks are not accounted for.
+	     * @return execution time in ms
+	     */
+	    public long getExecutionTimeWaitTasks() {
+	        return exitExecutionTime - startTime;
+	    }
 
+	    /**
+	     * Like {@link #getExecutionTimeWait()} but in addition accounts for any
+	     * nowait tasks; this result can change up until the time all nowait tasks
+	     * are completed ({@link #getNumberOfOpenThreads()==0}).
+	     * @return execution time in ms
+	     */
+	    public long getExecutionTimeNoWaitTasks() {
+	        return lastThreadCompleteTime - startTime;
+	    }
+	}
+	
 	/**
-	 * Like {@link #getExecutionTimeWait()} but in addition accounts for any
-	 * nowait tasks; this result can change up until the time all nowait tasks
-	 * are completed ({@link #getNumberOfOpenThreads()==0}).
+	 * Return execution statistics resulting from a previous execution.
 	 * @return
 	 */
-	public long getExecutionTimeNoWait() {
-		return lastThreadCompleteTime - startTime;
+	public ExecutionStats getStats() {
+	    return new ExecutionStats();
 	}
 
 	/**
@@ -473,6 +511,16 @@ public class Orchestrator {
 	}
 	
 	int linkLevel = 0;
+
+    /**
+     * Each invocation of a task method adds to this field
+     */
+    private long accumulatedTaskTime = 0;
+    
+    /**
+     * Each invocation of a task method increments this field by 1
+     */
+    private int taskInvocationCount = 0;
 	
 	/**
 	 * Adds the given tasks and links each parameter of each applicable (@Work or @PassThru) call with each instance 
@@ -841,13 +889,12 @@ public class Orchestrator {
 			Call.Instance callInstance = inv.getCallInstance();
 			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
 			taskOfCallInstance.startOneCall();
-			//boolean complete = false;
 			Call.Instance.Firing firing = inv.invoke(this,context,fire);
 			Task task = taskOfCallInstance.getTask();
 			TaskRec rec = taskMapByType.get(task);
 
 			inv = processPostExecution(rec,callInstance,taskOfCallInstance,firing);
-			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fire
+			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fired
 			Object[] followArgs = callInstance.popSequential();
 			if (followArgs != null) {
 				inv = new Invocation(callInstance,followArgs);
@@ -913,6 +960,8 @@ public class Orchestrator {
 	 * @param completed
 	 */
 	private synchronized Invocation processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, Call.Instance.Firing firing) {
+	    accumulatedTaskTime += firing.executionTime;
+	    taskInvocationCount++;
 		boolean complete = false;
 		rec.fired.add(firing);
 		if (taskOfCallInstance.completeOneCall()) {

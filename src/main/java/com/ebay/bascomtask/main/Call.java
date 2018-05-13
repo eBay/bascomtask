@@ -349,6 +349,7 @@ class Call {
 			boolean returnValue = true;
 			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
 			long start = 0;
+			long duration;
 			String msg = null;
 			try {
 				start = System.currentTimeMillis();
@@ -381,14 +382,14 @@ class Call {
 			}
 			finally {
 				long end = System.currentTimeMillis();
-				long dur = end - start;
+				duration = end - start;
 				if (LOG.isDebugEnabled()) {
 					String rez = msg==null ? "success" : msg;
 					LOG.debug("Completed {} {} {} in {}ms result: {}",
-							context,kind,this,dur,rez);
+							context,kind,this,duration,rez);
 				}
 			}
-			return new Firing(taskInstance.targetPojo,returnValue);
+			return new Firing(taskInstance.targetPojo,duration,returnValue);
 		}
 		
 		@SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")
@@ -416,9 +417,12 @@ class Call {
 			 * The value returned by the task method applied to that pojoCalled
 			 */
 			final boolean taskMethodReturnValue;
+			
+			final long executionTime;
 
-			Firing(Object pojo, boolean returnValue) {
+			Firing(Object pojo, long duration, boolean returnValue) {
 				this.pojoCalled = pojo;
+				this.executionTime = duration;
 				this.taskMethodReturnValue = returnValue;
 			}
 		}

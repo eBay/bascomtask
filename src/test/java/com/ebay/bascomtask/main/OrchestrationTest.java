@@ -426,6 +426,35 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(0);
 	}
 	
+	@Test
+	public void testParexStats() {
+		class A extends PathTask {
+			@Work public void exec() {got();sleep(50);}
+		}
+		class B extends PathTask {
+			@Work public void exec() {got();sleep(50);}
+		}
+		class C extends PathTask {
+			@Work public void exec(A a, B b) {got(a,b);sleep(50);}
+		}
+		class D extends PathTask {
+			@Work public void exec(A a, B b) {got(a,b);sleep(50);}
+		}
+
+		A a = new A();
+		B b = new B();
+		C c = new C();
+		D d = new D();
+		PathTask taskA = track.work(a);
+		PathTask taskB = track.work(b);
+		PathTask taskC = track.work(c).exp(a,b);
+		PathTask taskD = track.work(d).exp(a,b);
+		verify(2);
+		Orchestrator.ExecutionStats stats = track.orc.getStats();
+		assertEquals(4,stats.getNumberOfTasksExecuted());
+		assertTrue(stats.getExecutionTimeWaitTasks() > 80);
+		assertTrue(stats.getExecutionTimeWaitTasks() == stats.getExecutionTimeNoWaitTasks()); 
+	}
 	
 	@Test
 	public void testComplex() {
