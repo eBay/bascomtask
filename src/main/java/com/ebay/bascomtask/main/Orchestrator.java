@@ -56,7 +56,6 @@ import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
  * matches based on available inputs will fire (execute). 
  * <p>
  * An example pojo invoked with BascomTask might be as follows:
- * <p> 
  * <pre>
  * class MyTask {
  *   {@literal @}Work void exec(MyOtherTask x, SomeOtherTask y) {...}
@@ -78,7 +77,7 @@ import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
  * The default behavior for a task that receives multiple calls is simply to allow them to proceed
  * independently each firing in turn to any downstream tasks. This assumes that the task (MyTask
  * in the above example) is thread-safe. There are several options for varying this behavior by
- * adding a scope argument to {@literal @}Work, see {@link Scope} for a description of options. Even simpler
+ * adding a scope argument to {@literal @}Work, see {@link com.ebay.bascomtask.annotations.Scope} for a description of options. Even simpler
  * is to simply change a task argument to a list, in which case all instances of that type will be
  * received at once.
  *  
@@ -266,7 +265,7 @@ public class Orchestrator {
 	    
 	    /**
 	     * Returns the number of task method calls made.
-	     * @return
+	     * @return count of number of tasks executed
 	     */
 	    public int getNumberOfTasksExecuted() {
 	        return taskInvocationCount;
@@ -296,7 +295,7 @@ public class Orchestrator {
 	/**
 	 * Returns a snapshot of execution statistics resulting from a previous execution, excluding any nowait tasks.
 	 * This method is guaranteed to return the same result once the outermost execute() has completed.
-	 * @return
+	 * @return stats snapshot
 	 */
 	public ExecutionStats getStats() {
 	    return new ExecutionStats(waitStats);
@@ -306,7 +305,7 @@ public class Orchestrator {
 	 * Returns a snapshot of execution statistics resulting from a previous execution, including any nowait tasks.
 	 * This method is guaranteed to return the same result once the outermost execute() has completed
 	 * <i>and</i> all nowait tasks have completed.
-	 * @return
+	 * @return stats snapshot
 	 */
 	public ExecutionStats getNoWaitStats() {
 	    return new ExecutionStats(noWaitStats);
@@ -333,9 +332,9 @@ public class Orchestrator {
 
 	/**
 	 * Returns the number of threads that have been spawned but not yet completed.
-	 * The returned value may only be > 0 after a call to {@link #execute()} if
+	 * The returned value may only be &gt; 0 after a call to {@link #execute()} if
 	 * there are nowait tasks.
-	 * @return
+	 * @return number of open threads
 	 */
 	public int getNumberOfOpenThreads() {
 	    return threadBalance;
@@ -344,7 +343,7 @@ public class Orchestrator {
 	/**
 	 * A convenience method, adds a task with a default name that is either
 	 * active or passive depending on the given condition. 
-	 * @param any java object
+	 * @param task java POJO to add as task 
 	 * @param cond if true then add as active else add as passive
 	 */
 	public ITask addConditionally(Object task, boolean cond) {
@@ -386,8 +385,8 @@ public class Orchestrator {
 	 * but instead any false-returning tasks will be excluded from the list (which means that a list parameter 
 	 * may be empty).
 	 * 
-	 * @param any java object
-	 * @returns a 'shadow' task object which allows for various customization
+     * @param task java POJO to add as task 
+	 * @return a 'shadow' task object which allows for various customization
 	 */
 	public ITask addWork(Object task) {
 		return add(task,TaskMethodBehavior.WORK);
@@ -399,7 +398,7 @@ public class Orchestrator {
  	 * be invoked, always in the calling thread -- no separate thread is created to execute a {@literal @}PassThru
  	 * method since it assumed to perform simple actions like providing a default or passing-through its arguments
  	 * with no or little change. Otherwise behaves the same as {@link #addWork(Object)}.
-	 * @param any java object
+	 * @param task java POJO to add as task 
 	 */
 	public ITask addPassThru(Object task) {
 		return add(task,Task.TaskMethodBehavior.PASSTHRU);
@@ -423,7 +422,7 @@ public class Orchestrator {
 	 * or implied as a result of a nested inline call. We don't add right away because of the possibility
 	 * of other active threads. The actual addition is only performed when we can synchronize the 
 	 * orchestrator and perform the additions atomically without impacting running threads.
-	 * @param targetTask
+	 * @param targetTask java POJO to add as simple task 
 	 * @param workElsePassThru
 	 * @return
 	 */
@@ -891,7 +890,7 @@ public class Orchestrator {
 	
 	/**
 	 * Returns a newline-separated list of all calls of all tasks.
-	 * @return
+	 * @return multi-line graph state summary
 	 */
 	public String getGraphState() {
 		StringBuilder sb = new StringBuilder();

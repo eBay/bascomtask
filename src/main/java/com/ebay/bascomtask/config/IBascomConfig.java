@@ -29,7 +29,7 @@ public interface IBascomConfig {
 	
 	/**
 	 * The pool from which threads are drawn as needed for parallel execution.
-	 * @return
+	 * @return service
 	 */
 	ExecutorService getExecutor();
 	
@@ -41,7 +41,7 @@ public interface IBascomConfig {
 	
 	/**
 	 * Provides an opportunity for bookkeeping after a thread is drawn from a pool.
-	 * @param orc
+	 * @param orc Orchestrator associated with threads
 	 * @param parent thread which identified opportunity for parallel call
 	 * @param child thread drawn from pool
 	 */
@@ -49,7 +49,7 @@ public interface IBascomConfig {
 	
 	/**
 	 * Provides an opportunity for bookkeeping before thread is returned to pool.
-	 * @param orc
+	 * @param orc Orchestrator associated with threads
 	 * @param parent thread which identified opportunity for parallel call
 	 * @param child thread drawn from pool
 	 */

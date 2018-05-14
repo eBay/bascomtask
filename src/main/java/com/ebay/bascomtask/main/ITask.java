@@ -33,6 +33,7 @@ public interface ITask {
 	/**
 	 * Each task has a name that defaults to its type name followed by a unique integer 
 	 * for that type, unless overridden here.
+	 * @param name new name for task, any previous name
 	 * @return task name
 	 * @throws InvalidTask.NameConflict if a task with this name already exists
 	 */
@@ -40,8 +41,8 @@ public interface ITask {
 	
 	/**
 	 * Should the orchestrator wait for this task to finish before completing
-	 * an invocation of the {@link Orchestrator.execute()} method?
-	 * @return
+	 * an invocation of the {@link Orchestrator#execute()} method?
+	 * @return true iff this task should be treated as a 'nowait' task
 	 */
 	public boolean isWait();
 	
@@ -51,28 +52,29 @@ public interface ITask {
 	 * The default is true. Even if this value is set to false, the orchestrator
 	 * may still wait for another task that is dependent on this task, and that
 	 * task has {@link #isWait()}==true.
-	 * @param wait
-	 * @return
+	 * @param wait behavior on orchestrator execute() exit
+	 * @see Orchestrator#execute()
+	 * @return this task
 	 */
 	public ITask wait(boolean wait);
 	
 	/**
 	 * Convenience method for setWait(false);
-	 * @return
+	 * @return this task
 	 */
 	public ITask noWait();
 	
 	/**
 	 * Indicates that it is ok if the task has more than one method which can fire.
 	 * By default, this would be flagged as an error.
-	 * @return
+	 * @return this task
 	 */
 	public ITask multiMethodOk();
 	
 	/**
 	 * Should an exception be thrown when a task has more than one method each
 	 * of which has all parameters added to the graph?
-	 * @return
+	 * @return true iff this task should <i>not</i> reject multiple matching methods
 	 */
 	public boolean isMultiMethodOk();
 	
@@ -80,13 +82,13 @@ public interface ITask {
 	 * Prevents this task from being run by the calling thread, spawning a new thread if
 	 * needed. Usually only needed if there is work needed to be done by the calling thread
 	 * and it is desirable to get to that work without waiting for this task to complete.
-	 * @return
+	 * @return this task
 	 */
 	public ITask fork();
 	
 	/**
 	 * Should this task not be run in the calling thread?
-	 * @return
+	 * @return true iff this task should never be run in the main orchestrator thread
 	 */
 	public boolean isFork();
 	
@@ -99,16 +101,16 @@ public interface ITask {
 	 * would depend on both instances of A. If on the other hand an explicitly wired dependency was set
 	 * up along the lines of <code>a1.before(b)</code>, then the B instance b would only depend on that
 	 * singular A instances a1.
-	 * @param task
-	 * @return
+	 * @param task which should run before this one is started
+	 * @return this task
 	 */
 	public ITask before(ITask task);
 	
 	/**
 	 * The inverse of {@link #before(ITask)}, achieving the same effect while allowing the arguments to
 	 * be reversed.
-	 * @param task
-	 * @return
+	 * @param task which should only run after this one
+	 * @return this task
 	 */
 	public ITask after(ITask task);
 }

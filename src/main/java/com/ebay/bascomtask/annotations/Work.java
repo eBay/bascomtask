@@ -25,8 +25,8 @@ import java.lang.annotation.Target;
 
 /**
  * Marks a task method that may be executed when a task is added through
- * {@link com.ebay.bascomtask.main.Orchestrator.addWork(Object)}} rather 
- * than {@link com.ebay.bascomtask.main.Orchestrator.addPassThru(Object)}}.
+ * {@link com.ebay.bascomtask.main.Orchestrator#addWork(Object)} rather 
+ * than {@link com.ebay.bascomtask.main.Orchestrator#addPassThru(Object)}.
  * A {@literal @}Work method implements the primary functionality of a task.
  * @author brendanmccarthy
  */
@@ -39,14 +39,14 @@ public @interface Work {
 	 * parallel execution arises. Override that here to specify that task method is
 	 * sufficiently fast that it would be quicker to execute directly rather than
 	 * spawning it in a new thread.
-	 * @return
+	 * @return true iff the associated method is 'light'
 	 */
 	public boolean light() default false;
 	
 	/**
 	 * Specifies alternative behavior when a method is invoked more than once, e.g.
 	 * because there are multiple instances of one or more parameters.
-	 * @return
+	 * @return the scope for the associated method
 	 */
 	public Scope scope() default Scope.FREE;
 }

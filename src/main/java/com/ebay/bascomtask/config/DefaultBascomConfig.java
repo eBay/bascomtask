@@ -41,6 +41,7 @@ public class DefaultBascomConfig implements IBascomConfig {
 	 * Standard way to shutdown an executor as defined in 
 	 * <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html">ExecutorService shutdown</a>,
 	 * used by this class and also made public here for convenience.
+	 * @param pool to shutdown
 	 */
 	public static void shutdownAndAwaitTermination(ExecutorService pool) {
 		pool.shutdown(); // Disable new tasks from being submitted
