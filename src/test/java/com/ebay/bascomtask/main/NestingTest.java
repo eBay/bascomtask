@@ -21,6 +21,7 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 
 import com.ebay.bascomtask.annotations.Work;
+import com.ebay.bascomtask.exceptions.InvalidTask;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -213,6 +214,6 @@ public class NestingTest extends PathTaskTestBase {
 		sleep(LONG_WAIT+15);
 		assertTrue(record.taskLongWait.followed(record.taskShortWait));
 	}
-}
+    }
 
 

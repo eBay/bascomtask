@@ -468,6 +468,26 @@ public class OrchestrationTest extends PathTaskTestBase {
 		assertTrue(noWaitStats.getExecutionTime() > stats.getExecutionTime());
 	}
 	
+	@Test public void testStatsEqualityAgainstAddMethods() {
+	    Orchestrator orc = Orchestrator.create();
+	    assertNotNull(orc.toString());
+	    Orchestrator.ExecutionStats stats1 = orc.getStats();
+	    assertEquals(stats1,stats1);
+	    Orchestrator.ExecutionStats stats2 = orc.getStats();
+	    orc.addWork(new Object() {@Work public void exec() {}});
+	    orc.execute();
+	    Orchestrator.ExecutionStats stats3 = orc.getStats();
+	    assertNotEquals(stats1,stats3);
+	    orc.addPassThru(new Object() {@Work public void exec() {}});
+	    orc.execute();
+	    Orchestrator.ExecutionStats stats4 = orc.getStats();
+	    assertNotEquals(stats1,stats4);
+	    orc.addIgnoreTaskMethods(new Object() {@Work public void exec() {}});
+	    orc.execute();
+	    Orchestrator.ExecutionStats stats5 = orc.getStats();
+	    assertNotEquals(stats1,stats5);
+	}
+	
 	@Test
 	public void testComplex() {
 		class A extends PathTask {

@@ -17,7 +17,9 @@ limitations under the License.
 package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -230,11 +232,28 @@ class Task {
 		Call.Instance genNoCall() {
 			return no_call.genInstance(this);
 		}
-	}	
+	}
+	
+	/**
+	 * Name anonymous classes with a unique integer because an empty string
+	 * might result in name conflicts.
+	 */
+	private static int anon_counter = 0;
+	private static final Map<Class<?>,String> ANON_MAP = new HashMap<>();
 	
 	Task(Class<?> clazz) {
 		this.taskClass = clazz;
-		this.taskName = clazz.getSimpleName();
+		String nm = clazz.getSimpleName();
+		if ("".equals(nm)) {
+		    synchronized (ANON_MAP) {
+		        nm = ANON_MAP.get(clazz);
+		        if (nm == null) {
+		            nm = String.valueOf(anon_counter++);
+		            ANON_MAP.put(clazz,nm);
+		        }
+		    }
+		}
+		this.taskName = nm;
 	}
 
 	String getName() {

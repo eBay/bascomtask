@@ -933,9 +933,11 @@ public class Orchestrator {
 		}
 	}
 	
+	/*
 	void removeFromWaitingList(Task.Instance taskInstance) {
 		waitForTasks.remove(taskInstance);
 	}
+	*/
 
 	synchronized void spawn(final Invocation invocation) {
 		if (!requestMainThreadComplete(invocation)) {
