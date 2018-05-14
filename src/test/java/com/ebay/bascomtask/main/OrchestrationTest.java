@@ -486,6 +486,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 	    orc.execute();
 	    Orchestrator.ExecutionStats stats5 = orc.getStats();
 	    assertNotEquals(stats1,stats5);
+	    System.out.println("Final stats="+stats5);
 	}
 	
 	@Test

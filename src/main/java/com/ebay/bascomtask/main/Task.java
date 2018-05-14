@@ -222,8 +222,18 @@ class Task {
 		public boolean isFork() {
 			return fork;
 		}
-
 		
+        @Override
+        public ITask before(ITask task) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        @Override
+        public ITask after(ITask task) {
+            // TODO Auto-generated method stub
+            return null;
+        }
 
 		public Task getTask() {
 			return Task.this;

@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -244,6 +245,16 @@ public class Orchestrator {
 	        return true;
 	    }
 	    
+	    @Override
+	    public int hashCode() {
+	        return Objects.hash(Orchestrator.this,taskInvocationCount,accumulatedTaskTime,endTime);
+	    }
+	    
+	    @Override
+	    public String toString() {
+	        return ("Ex(tasks="+taskInvocationCount+",par="+getParallelizationSaving()+",acc="+accumulatedTaskTime+",time="+getExecutionTime());
+	    }
+	    
 	    private Orchestrator getOrchestrator() {
 	        return Orchestrator.this;
 	    }
@@ -336,12 +347,12 @@ public class Orchestrator {
 	 * @param any java object
 	 * @param cond if true then add as active else add as passive
 	 */
-	public void addConditionally(Object task, boolean cond) {
+	public ITask addConditionally(Object task, boolean cond) {
 		if (cond) {
-			addWork(task);
+			return addWork(task);
 		}
 		else {
-			addPassThru(task);
+			return addPassThru(task);
 		}
 	}
 	

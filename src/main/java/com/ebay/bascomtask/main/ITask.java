@@ -89,4 +89,26 @@ public interface ITask {
 	 * @return
 	 */
 	public boolean isFork();
+	
+	/**
+	 * Ensures this task completes before the given task. Useful when BascomTask's autowiring needs fine
+	 * tuning, for example when there is a hidden dependency between tasks that is not otherwise exposed
+	 * through the task dependency tree. If applied between two tasks that already have an autowired
+	 * dependency, will limit the cardinality of the dependency to only those exposed explicitly in this
+	 * way. Consider this case: if B depends on A and there are two instances of A, then by default autowiring B
+	 * would depend on both instances of A. If on the other hand an explicitly wired dependency was set
+	 * up along the lines of <code>a1.before(b)</code>, then the B instance b would only depend on that
+	 * singular A instances a1.
+	 * @param task
+	 * @return
+	 */
+	public ITask before(ITask task);
+	
+	/**
+	 * The inverse of {@link #before(ITask)}, achieving the same effect while allowing the arguments to
+	 * be reversed.
+	 * @param task
+	 * @return
+	 */
+	public ITask after(ITask task);
 }
