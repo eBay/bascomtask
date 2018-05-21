@@ -1,0 +1,10 @@
+target
+
+.project
+.metadata
+.settings/
+.classpath
+
+no-compile-bucket
+*~
+
