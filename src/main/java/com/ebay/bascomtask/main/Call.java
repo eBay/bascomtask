@@ -19,7 +19,9 @@ package com.ebay.bascomtask.main;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.slf4j.Logger;
@@ -64,6 +66,8 @@ class Call {
 	 */
 	private List<Param> params = new ArrayList<>();
 	
+	private Map<Task,Param> hiddenParamMap = null;
+	
 	Task getTask() {
 		return task;
 	}
@@ -104,6 +108,8 @@ class Call {
 		 * Parameter instances that correspond to param list in outer call
 		 */
 		final Param.Instance[] paramInstances = new Param.Instance[params.size()];
+		
+		List<Param.Instance> hiddenParameters = null;
 		
 		/**
 		 * The positions of active parameters at the time of creation of this instance. This allows for task 
@@ -181,7 +187,21 @@ class Call {
 			sb.append(completionSay());
 			return sb.toString();
 		}
-
+		
+        public Param.Instance addHiddenParameter(Task task, List<Task.Instance> befores) {
+            if (hiddenParamMap==null) {
+                hiddenParamMap = new HashMap<>();
+            }
+            Param param = hiddenParamMap.get(task);
+            if (param==null) {
+                param = new Param(task,-1,true);
+                hiddenParamMap.put(task,param);
+            }
+            Param.Instance paramInstance = param.new Instance(this);
+            hiddenParameters.add(paramInstance);
+            return paramInstance;
+        }
+        
 		/**
 		 * Adds a binding for a parameter, possibly resulting in POJO task methods being invoked if all
 		 * parameters for any dependent method are available. The sequencing here is non-trivial due to
@@ -216,8 +236,13 @@ class Call {
 					firingParemeter.bindings.add(firing);
 					for (Param.Instance next: paramInstances) {
 						if (!next.ready()) {
-							return inv; // If not all parameters have at least one binding, not ready to execute call
+							return inv; // If not all parameters ready (non-list params must have at least one binding), not ready to execute call
 						}
+					}
+					for (Param.Instance next: hiddenParameters) {
+					    if (!next.ready()) {
+					        return inv; // If not all hidden parameters ready, not ready to execute call
+					    }
 					}
 					freeze = new int[paramInstances.length];
 					for (int i=0; i< paramInstances.length; i++) {
@@ -296,7 +321,7 @@ class Call {
 		}
 		
 		/**
-		 * Assigns a parameter value and proceeds to the next parameter position.
+		 * Assigns an actual parameter value to the accumulating args array and proceeds to the next parameter position to the right.
 		 * @param px
 		 * @param args
 		 * @param fire

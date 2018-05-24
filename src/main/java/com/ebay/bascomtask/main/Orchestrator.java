@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -36,6 +37,7 @@ import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
 import com.ebay.bascomtask.main.Call.Param;
+import com.ebay.bascomtask.main.Task.Instance;
 import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
 
 /**
@@ -101,6 +103,11 @@ public class Orchestrator {
 	 * For performance we also maintain the list directly
 	 */
 	private final List<Task.Instance> allTasks = new ArrayList<>();
+	
+	/**
+	 * Associates each user pojo task with its Task.Instance
+	 */
+	private final Map<Object,Task.Instance> pojoMap = new HashMap<>();
 
 	/**
 	 * To check for name conflicts
@@ -573,6 +580,11 @@ public class Orchestrator {
 		for (Task.Instance taskInstance: taskInstances) {
 			addActual(taskInstance);
 		}
+		// Ensure explicitBeforeDependencies are set on all taskInstances so that we
+		// can update thresholds in the next step
+		for (Task.Instance taskInstance: taskInstances) {
+		    taskInstance.updateExplicitDependencies(pojoMap);
+		}
 		List<Call.Instance> roots = new ArrayList<>();
 		// Now the taskInstances themselves can be linked
 		for (Task.Instance taskInstance: taskInstances) {
@@ -580,6 +592,9 @@ public class Orchestrator {
 				// If no calls at all, the task is trivially available to all who depend on it.
 				// We create a dummy call so the task can then be processed like any other root.
 				roots.add(taskInstance.genNoCall());
+				// Since this task is already available as a parameter, no point in having any
+				// explicit dependencies on it, should there be any
+				taskInstance.explicitBeforeDependencies = null;
 			}
 			else {
 				linkAll(taskInstance,roots);
@@ -593,8 +608,9 @@ public class Orchestrator {
 		return roots;
 	}
 
-	private void addActual(Task.Instance taskInstance) {
+    private void addActual(Task.Instance taskInstance) {
 		allTasks.add(taskInstance);
+		pojoMap.put(taskInstance.targetPojo,taskInstance);
 		recordCallsAndParameterInstances(taskInstance);
 		Task task = taskInstance.getTask();
 		TaskRec rec = taskMapByType.get(task);
@@ -670,13 +686,13 @@ public class Orchestrator {
 	 */
 	private void linkAll(Task.Instance taskInstance, List<Call.Instance> roots) {
 		int matchableCallCount = 0;
+		Map<Task,List<Task.Instance>> explicitsBefore = taskInstance.groupBeforeDependencies();
 		for (Call.Instance callInstance: taskInstance.calls) {
 			boolean match = true;
 			boolean root = true;
 			for (int i=0; i < callInstance.paramInstances.length; i++) {
 				Call.Param.Instance paramInstance = callInstance.paramInstances[i];
-				Task task = paramInstance.getTask();
-				TaskRec rec = taskMapByType.get(task);
+				TaskRec rec = enumerateDependentTaskParameters(paramInstance,explicitsBefore);
 				if (rec==null) {
 					match = root = false;
 				}
@@ -697,6 +713,9 @@ public class Orchestrator {
 						paramInstance.bindings.add(fired);
 					}
 				}
+			}
+			if (explicitsBefore != null) {
+			    root &= addExplicitNonParameters(taskInstance,explicitsBefore);
 			}
 			if (root) {
 				roots.add(callInstance);
@@ -720,6 +739,123 @@ public class Orchestrator {
 			}
 		}
 	}
+
+    private boolean addExplicitNonParameters(Task.Instance taskInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
+        boolean root = true;
+        for (Entry<Task, List<Instance>> next: explicitsBefore.entrySet()) {
+            Task task = next.getKey();
+            List<Task.Instance> befores = next.getValue();
+        	TaskRec rec = taskMapByType.get(task);
+            Call.Param.Instance paramInstance = taskInstance.explicitPredecessorsFauxCall.addHiddenParameter(task,befores);
+            int sz = 0;
+        	for (Task.Instance before: befores) {
+        		backLink(before,paramInstance);
+        		for (Call.Instance.Firing fired: rec.fired) {
+        		    if (fired.pojoCalled == before.targetPojo) {
+        		        paramInstance.bindings.add(fired);
+        		        sz++;
+        		    }
+        		}
+        	}
+        	if (sz < paramInstance.getThreshold()) {
+        	    root = false;
+        	}
+        }
+        return root;
+    }
+
+	private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task, List<Instance>> explicitsBefore) {
+        Task.Instance taskInstanceOfParam = paramInstance.callInstance.taskInstance;
+        Task task = taskInstanceOfParam.getTask();
+        final TaskRec rec = taskMapByType.get(task);
+        if (explicitsBefore != null) {
+            List<Task.Instance> befores = explicitsBefore.get(task);
+            if (befores != null) {
+                TaskRec alt = new TaskRec();
+                for (Task.Instance next: befores) {
+                    alt.added.add(next);
+                    for (Call.Instance.Firing firing: rec.fired) {
+                        if (firing.pojoCalled == next.targetPojo) {
+                            alt.fired.add(firing);
+                        }
+                    }
+                }
+            }
+        }
+        return rec;
+    }
+
+	/*
+    private boolean xxx(TaskRec rec, Call.Param.Instance paramInstance) {
+	    boolean root = true;
+	    for (Task.Instance supplierTaskInstance: rec.added) {
+	        backLink(supplierTaskInstance,paramInstance);
+	    }
+	    int numberAlreadyFired = rec.fired.size();
+	    if (numberAlreadyFired==0) {
+	        root = false;
+	    }
+	    else if (paramInstance.getParam().isList && numberAlreadyFired < paramInstance.getThreshold()) {
+	        root = false;
+	    }
+	    // Add all tasks that have already fired
+	    callInstance.startingFreeze[i] = numberAlreadyFired;
+	    for (Call.Instance.Firing fired: rec.fired) {
+	        paramInstance.bindings.add(fired);
+	    }
+	    return root;
+	}
+	*/
+
+
+       /*    
+    private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task.Instance,List<Task.Instance>> explicitsBefore) {
+        Task.Instance taskInstanceOfParam = paramInstance.callInstance.taskInstance;
+        Task task = taskInstanceOfParam.getTask();
+        final TaskRec rec = taskMapByType.get(task); 
+        List<Task.Instance> befores = explicitsBefore.get(taskInstanceOfParam);
+        if (befores != null) {
+            TaskRec alt = new TaskRec();
+            for (Task.Instance next: befores) {
+                alt.added.add(next);
+                for (Call.Instance.Firing firing: rec.fired) {
+                    if (firing.pojoCalled == next.targetPojo) {
+                        alt.fired.add(firing);
+                    }
+                }
+            }
+        }
+        return rec;
+    }
+
+    }
+    private TaskRec enumerateDependentTaskParameters(List<Task.Instance> explicitsBefore, Call.Param.Instance paramInstance) {        
+        Task task = paramInstance.getTask();
+        
+        TaskRec autosBefore = taskMapByType.get(task); 
+        TaskRec rec = autosBefore;
+
+        if (explicitsBefore != null) {
+            ListIterator<Instance> beforeItr = explicitsBefore.listIterator();
+            while (beforeItr.hasNext()) {
+                Task.Instance taskInstanceBefore = beforeItr.next();
+                if (taskInstanceBefore.getTask() == task) {
+                    if (rec == autosBefore) {
+                        rec = new TaskRec();
+                    }
+                    rec.added.add(taskInstanceBefore);
+                    for (Call.Instance.Firing firing: autosBefore.fired) {
+                        if (firing.pojoCalled == taskInstanceBefore.targetPojo) {
+                            rec.fired.add(firing);
+                        }
+                    }
+                    beforeItr.remove();
+                }
+            }
+        }
+        return rec;
+    }
+    */
 	
 	/**
 	 * If there is any task that lacks at least one resolvable call, generate an error
