@@ -19,6 +19,7 @@ package com.ebay.bascomtask.main;
 import static org.junit.Assert.*;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
@@ -931,8 +932,114 @@ public class OrchestrationTest extends PathTaskTestBase {
 		PathTask taskB1 = track.work(b1);
 		PathTask taskB2 = track.work(b2);
 		PathTask taskC = track.work(c).exp(list(a1,a2),b1).exp(list(a1,a2),b2);
-		verify(2,3);
+		verify(2,4);
 	}
+	
+	@Test
+	public void testExplicitDependency() {
+	    class A extends PathTask {
+	        @Work public void exec() {
+	            got();
+	        }
+	    }
+	    class B extends PathTask {
+	        @Work public void exec() {got(); sleep(25);}
+	    }
+	    class C extends PathTask {
+	        @Work public void exec() {got(); sleep(50);}
+	    }
+	    
+		A a = new A();
+		B b = new B();
+		C c = new C();
+		PathTask taskA = track.work(a).after(b);
+		PathTask taskB = track.work(b).after(c);
+		PathTask taskC = track.work(c);
+		verify(0);
+		assertTrue(taskA.followed(taskB));
+		assertTrue(taskA.followed(taskC));
+		assertTrue(taskB.followed(taskC));
+	}
+	
+	/*
+	@Test
+	public void testExplicitSubsetDependency() {
+	    final AtomicBoolean b_done = new AtomicBoolean(false);
+	    
+	    class A extends PathTask {
+	        boolean after_b;
+	        @Work public void exec() {got(); after_b = b_done.get();}
+	    }
+	    class B extends PathTask {
+	        @Work public void exec() {got(); sleep(50); b_done.set(true);}
+	    }
+	    
+		A a1 = new A();
+		A a2 = new A();
+		A a3 = new A();
+		B b = new B();
+		PathTask taskA1 = track.work(a1).after(b);
+		PathTask taskA2 = track.work(a2);
+		PathTask taskA3 = track.work(a3);
+		PathTask taskB = track.work(b).before(a3);
+		verify(2);
+		assertTrue(a1.after_b);
+		assertFalse(a2.after_b);
+		assertTrue(a3.after_b);
+	}
+	*/
+	
+	@Test
+	public void testExplicitSubsetDependency() {
+	    
+	    class A extends PathTask {
+	        @Work public void exec() {got();}
+	    }
+	    class B extends PathTask {
+	        @Work public void exec() {got(); sleep(50);}
+	    }
+	    
+		A a1 = new A();
+		A a2 = new A();
+		A a3 = new A();
+		B b = new B();
+		PathTask taskA1 = track.work(a1).after(b);
+		PathTask taskA2 = track.work(a2);
+		PathTask taskA3 = track.work(a3);
+		PathTask taskB = track.work(b).before(a3);
+		verify(2);
+		assertTrue(taskA1.followed(taskB));
+		assertTrue(taskB.followed(taskA2));
+		assertTrue(taskA3.followed(taskB));
+	}
+	
+	@Test
+	public void testExplicitOverAuto() {
+	    
+	    class A extends PathTask {
+	        boolean hit = false;
+	        @Work public void exec() {got();}
+	    }
+	    class B extends PathTask {
+	        @Work public void exec(A a) {got(a); a.hit = true;}
+	    }
+	    
+		A a1 = new A();
+		A a2 = new A();
+		A a3 = new A();
+		B b = new B();
+		PathTask taskA1 = track.work(a1).name("a1").before(b);
+		PathTask taskA2 = track.work(a2).name("a2");
+		PathTask taskA3 = track.work(a3).name("a3");
+		PathTask taskB = track.work(b).after(a3).exp(a1).exp(a3);
+		verify(2);
+		assertTrue(a1.hit);
+		assertFalse(a2.hit);
+		assertTrue(a3.hit);
+	}
+	
+	// TODO circ explicit
+
 }
 
 

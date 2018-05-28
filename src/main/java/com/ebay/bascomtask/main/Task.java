@@ -129,10 +129,19 @@ class Task {
 		 */
 		final List<Call.Instance> calls = new ArrayList<>();
 		
+		//final Call.Instance explicitPredecessorsFauxCall = no_call.genInstance(this);
+		
 		/**
 		 * All parameters of all calls that have the type of our targetTask 
 		 */
 		final List<Param.Instance> backList = new ArrayList<>();
+		
+		/**
+		 * All explicitly-added tasks that must complete before this one
+		 */
+		List<Instance> explicitBeforeDependencies = null;
+		List<Object> pendingBeforeDependencies = null;
+		List<Object> pendingAfterDependencies = null;
 		
 		Instance(Orchestrator orc, Object targetTask, TaskMethodBehavior taskMethodBehavior) {
 			this.orc = orc;
@@ -223,16 +232,36 @@ class Task {
 			return fork;
 		}
 		
+		/**
+		 * The before/after methods accept ITasks as well as POJOs,
+		 * ensure here that we're always operating on the POJO
+		 * @param x
+		 * @return
+		 */
+		private Object pojoFrom(Object x) {
+		    if (x instanceof Instance) {
+		        Instance task = (Instance)x;
+		        return task.targetPojo;
+		    }
+		    return x;
+		}
+		
         @Override
-        public ITask before(ITask task) {
-            // TODO Auto-generated method stub
-            return null;
+        public ITask before(Object pojoTask) {
+            if (pendingAfterDependencies==null) {
+                pendingAfterDependencies = new ArrayList<>();
+            }
+            pendingAfterDependencies.add(pojoFrom(pojoTask));
+            return this;
         }
 
         @Override
-        public ITask after(ITask task) {
-            // TODO Auto-generated method stub
-            return null;
+        public ITask after(Object pojoTask) {
+            if (pendingBeforeDependencies==null) {
+                pendingBeforeDependencies = new ArrayList<>();
+            }
+            pendingBeforeDependencies.add(pojoFrom(pojoTask));
+            return this;
         }
 
 		public Task getTask() {
@@ -242,6 +271,54 @@ class Task {
 		Call.Instance genNoCall() {
 			return no_call.genInstance(this);
 		}
+
+        void updateExplicitDependencies(Map<Object,Instance> pojoMap) {
+            if (pendingBeforeDependencies != null) {
+                for (Object next: pendingBeforeDependencies) {
+                    Instance matchingInstance = pojoMap.get(next);
+                    addExplicitDependency(matchingInstance);;
+                }
+            }
+            if (pendingAfterDependencies != null) {
+                for (Object next: pendingAfterDependencies) {
+                    Instance matchingInstance = pojoMap.get(next);
+                    matchingInstance.addExplicitDependency(this);
+                }
+            }
+        }
+        
+        void addExplicitDependency(Instance other) {
+            if (explicitBeforeDependencies == null) {
+                explicitBeforeDependencies = new ArrayList<>();
+            }
+            explicitBeforeDependencies.add(other);
+            for (Call.Instance nextCall: this.calls) {
+                for (Param.Instance nextParam: nextCall.paramInstances) {
+                    if (nextParam.getTask() == other.getTask()) {
+                        nextParam.setExplicitlyWired();
+                    }
+                }
+            }
+        }
+
+        public Map<Task,List<Instance>> groupBeforeDependencies() {
+            if (explicitBeforeDependencies == null) {
+                return null;
+            }
+            else {
+                Map<Task,List<Instance>> map = new HashMap<>();
+                for (Instance taskBeforeInstance: explicitBeforeDependencies) {
+                    Task task = taskBeforeInstance.getTask();
+                    List<Instance> instances = map.get(task);
+                    if (instances == null) {
+                        instances = new ArrayList<>();
+                        map.put(task,instances);
+                    }
+                    instances.add(taskBeforeInstance);    
+                }
+                return map;
+            }
+        }
 	}
 	
 	/**

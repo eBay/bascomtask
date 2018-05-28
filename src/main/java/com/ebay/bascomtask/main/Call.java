@@ -19,7 +19,9 @@ package com.ebay.bascomtask.main;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.slf4j.Logger;
@@ -64,6 +66,8 @@ class Call {
 	 */
 	private List<Param> params = new ArrayList<>();
 	
+	private Map<Task,Param> hiddenParamMap = null;
+	
 	Task getTask() {
 		return task;
 	}
@@ -104,6 +108,8 @@ class Call {
 		 * Parameter instances that correspond to param list in outer call
 		 */
 		final Param.Instance[] paramInstances = new Param.Instance[params.size()];
+		
+		List<Param.Instance> hiddenParameters = null;
 		
 		/**
 		 * The positions of active parameters at the time of creation of this instance. This allows for task 
@@ -181,7 +187,24 @@ class Call {
 			sb.append(completionSay());
 			return sb.toString();
 		}
-
+		
+        public Param.Instance addHiddenParameter(Task task, List<Task.Instance> befores) {
+            if (hiddenParamMap==null) {
+                hiddenParamMap = new HashMap<>();
+            }
+            Param param = hiddenParamMap.get(task);
+            if (param==null) {
+                param = new Param(task,-1,true);
+                hiddenParamMap.put(task,param);
+            }
+            Param.Instance paramInstance = param.new Instance(this);
+            if (hiddenParameters == null) {
+                hiddenParameters = new ArrayList<>();
+            }
+            hiddenParameters.add(paramInstance);
+            return paramInstance;
+        }
+        
 		/**
 		 * Adds a binding for a parameter, possibly resulting in POJO task methods being invoked if all
 		 * parameters for any dependent method are available. The sequencing here is non-trivial due to
@@ -207,17 +230,24 @@ class Call {
 				ordinalOfFiringParameter = -1;
 			}
 			else {
-				final Param.Instance firingParemeter = paramInstances[parameterIndex];
+				final Param.Instance firingParameter = paramInstances[parameterIndex];
 				// Obtain a unique set of parameter indexes within the synchronized block such that no
 				// other thread would get the same set. Once these are set, the actual execution can 
 				// safely proceed outside the synchronized block.
 				synchronized (this) {
-					ordinalOfFiringParameter = firingParemeter.bindings.size();
-					firingParemeter.bindings.add(firing);
+					ordinalOfFiringParameter = firingParameter.bindings.size();
+					firingParameter.bindings.add(firing);
 					for (Param.Instance next: paramInstances) {
 						if (!next.ready()) {
-							return inv; // If not all parameters have at least one binding, not ready to execute call
+							return inv; // If not all parameters ready (non-list params must have at least one binding), not ready to execute call
 						}
+					}
+					if (hiddenParameters != null) {
+					    for (Param.Instance next: hiddenParameters) {
+					        if (!next.ready()) {
+					            return inv; // If not all hidden parameters ready, not ready to execute call
+					        }
+					    }
 					}
 					freeze = new int[paramInstances.length];
 					for (int i=0; i< paramInstances.length; i++) {
@@ -287,6 +317,9 @@ class Call {
 					inv = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
 				}
 				else {
+				    if (px >= freeze.length) {
+				        System.out.println("...");
+				    }
 					for (int i=0; i<freeze[px]; i++) {
 						inv = crossInvokeNext(px,args,fire,i,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
 					}
@@ -296,7 +329,7 @@ class Call {
 		}
 		
 		/**
-		 * Assigns a parameter value and proceeds to the next parameter position.
+		 * Assigns an actual parameter value to the accumulating args array and proceeds to the next parameter position to the right.
 		 * @param px
 		 * @param args
 		 * @param fire
@@ -495,6 +528,11 @@ class Call {
 			 */
 			private int threshold = 0;
 			
+			/**
+			 * Marks a parameter for which at least one explicit wiring has been set. 
+			 */
+			private boolean explicitlyWired = false;
+			
 			Instance(Call.Instance callInstance) {
 				this.callInstance = callInstance;
 			}
@@ -531,11 +569,19 @@ class Call {
 			Call.Instance getCall() {return callInstance;}
 			Param getParam() {return Param.this;}
 			String getTypeName() {return Param.this.getTypeName();}
+
+			boolean isExplicitlyWired() {
+			    return explicitlyWired;
+			}
+			
+            void setExplicitlyWired() {
+                explicitlyWired = true;
+            }
 		}
 
-		Param(Task task, int paramterPosition, boolean isList) {
+		Param(Task task, int parameterPosition, boolean isList) {
 			this.taskParam = task;
-			this.paramaterPosition = paramterPosition;
+			this.paramaterPosition = parameterPosition;
 			this.isList = isList;
 		}
 		

@@ -101,16 +101,16 @@ public interface ITask {
 	 * would depend on both instances of A. If on the other hand an explicitly wired dependency was set
 	 * up along the lines of <code>a1.before(b)</code>, then the B instance b would only depend on that
 	 * singular A instances a1.
-	 * @param task which should run before this one is started
+	 * @param pojoTask or ITask which should run before this one is started
 	 * @return this task
 	 */
-	public ITask before(ITask task);
+	public ITask before(Object pojoTask);
 	
 	/**
 	 * The inverse of {@link #before(ITask)}, achieving the same effect while allowing the arguments to
 	 * be reversed.
-	 * @param task which should only run after this one
+	 * @param pojoTask or ITask which should only run after this one
 	 * @return this task
 	 */
-	public ITask after(ITask task);
+	public ITask after(Object pojoTask);
 }

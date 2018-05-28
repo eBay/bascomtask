@@ -114,6 +114,17 @@ abstract class PathTask {
 		return this;
 	}
 	
+	PathTask before(Object x) {
+		taskInstance.before(x);
+		return this;
+	}
+	
+	PathTask after(Object x) {
+		taskInstance.after(x);
+		return this;
+	}
+	
+	
 	/**
 	 * Sleeps for given number of ms when {@link #got} is called, in order to
 	 * simulate taskInstance-specific delay.
@@ -137,6 +148,12 @@ abstract class PathTask {
 		return args;
 	}
 	
+	/**
+	 * Sets an expectation of the given actual parameter list, which should match the formal parameter list of the 
+	 * method signature. This method should be invoked once for each call expected.
+	 * @param tasks
+	 * @return
+	 */
 	PathTask exp(PathTask...tasks) {
 		if (tasks.length > 0) {
 			List<PathTask.Arg> args = toArgs(tasks); 
