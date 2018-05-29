@@ -996,16 +996,16 @@ public class OrchestrationTest extends PathTaskTestBase {
 	        @Work public void exec() {got();}
 	    }
 	    class B extends PathTask {
-	        @Work public void exec() {got(); sleep(50);}
+	        @Work public void exec() {sleep(50);got();}
 	    }
 	    
 		A a1 = new A();
 		A a2 = new A();
 		A a3 = new A();
 		B b = new B();
-		PathTask taskA1 = track.work(a1).after(b);
-		PathTask taskA2 = track.work(a2);
-		PathTask taskA3 = track.work(a3);
+		PathTask taskA1 = track.work(a1).name("a1").after(b);
+		PathTask taskA2 = track.work(a2).name("a2");
+		PathTask taskA3 = track.work(a3).name("a3");
 		PathTask taskB = track.work(b).before(a3);
 		verify(2);
 		assertTrue(taskA1.followed(taskB));
@@ -1038,8 +1038,46 @@ public class OrchestrationTest extends PathTaskTestBase {
 		assertTrue(a3.hit);
 	}
 	
-	// TODO circ explicit
-
+	@Test
+	public void testExplicitBeforeRoot() {
+	    
+	    class A extends PathTask {
+	        @Work public void exec() {got();}
+	    }
+	    class B extends PathTask {
+	        @Work public void exec() {got();}
+	    }
+	    
+		A a = new A();
+		B b = new B();
+		PathTask taskA = track.work(a).after(b);
+		PathTask taskB = track.work(b);
+		verify(0);
+		assertTrue(taskA.followed(taskB));
+	}
+	
+	@Test(expected=InvalidGraph.Circular.class)
+	public void testExplicitCircular() {
+	    
+	    class A extends PathTask {
+	        @Work public void exec() {got();}
+	    }
+	    class B extends PathTask {
+	        @Work public void exec(A a) {got(a);}
+	    }
+	    
+	    class C extends PathTask {
+	        @Work public void exec(B b) {got(b);}
+	    }
+	    
+		A a = new A();
+		B b = new B();
+		C c = new C();
+		PathTask taskA = track.work(a).after(c);
+		PathTask taskB = track.work(b).exp(a);
+		PathTask taskC = track.work(c).exp(b);
+		verify(0);
+	}
 }
 
 

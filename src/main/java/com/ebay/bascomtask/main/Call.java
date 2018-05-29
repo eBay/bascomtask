@@ -168,10 +168,6 @@ class Call {
 		}
 		
 		String formatState() {
-			return formatState(null);
-		}
-
-		private String formatState(Param.Instance p) {
 			StringBuilder sb = new StringBuilder();
 			sb.append(taskInstance.getName());
 			sb.append('.');
@@ -183,7 +179,18 @@ class Call {
 				first = false;
 				sb.append(next.toString());
 			}
-			sb.append(") ");
+			sb.append(')');
+			if (hiddenParameters != null) {
+			    sb.append("&[");
+			    first = true;
+			    for (Param.Instance next: hiddenParameters) {
+			        if (!first) sb.append(',');
+			        first = false;
+			        sb.append(next.toString());
+			    }
+			    sb.append("]");
+			}
+			sb.append(' ');
 			sb.append(completionSay());
 			return sb.toString();
 		}
@@ -222,15 +229,15 @@ class Call {
 		 * @param inv current invocation, null if none
 		 * @return same or possibly new invocation for the calling thread to invoke
 		 */
-		Invocation bind(Orchestrator orc, String context, Object userTaskInstance, Firing firing, int parameterIndex, Invocation inv) {
+		Invocation bind(Orchestrator orc, String context, Object userTaskInstance, Firing firing, Param.Instance firingParameter, Invocation inv) {
 			int[] freeze;
 			int ordinalOfFiringParameter;
-			if (parameterIndex < 0) {  // A root task call, i.e. one with no task parameters? 
+			if (firingParameter == null) {  // A root task call, i.e. one with no task parameters? 
 				freeze = EMPTY_FREEZE;
 				ordinalOfFiringParameter = -1;
 			}
 			else {
-				final Param.Instance firingParameter = paramInstances[parameterIndex];
+				//final Param.Instance firingParameter = paramInstances[parameterIndex];
 				// Obtain a unique set of parameter indexes within the synchronized block such that no
 				// other thread would get the same set. Once these are set, the actual execution can 
 				// safely proceed outside the synchronized block.
@@ -256,7 +263,7 @@ class Call {
 				}
 			}
 
-			return crossInvoke(inv,freeze,parameterIndex,ordinalOfFiringParameter,orc,context);
+			return crossInvoke(inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 		
 		/**
@@ -270,16 +277,16 @@ class Call {
 		 * @param context descriptive text for logging
 		 * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
 		 */
-		Invocation crossInvoke(Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		Invocation crossInvoke(Invocation inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			Object[] args = new Object[paramInstances.length];			
-			return crossInvoke(0,args,true,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+			return crossInvoke(0,args,true,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 		
 		/**
 		 * Invoked recursively for each parameter position, accumulating parameter assignments in args, and performing the invocation 
 		 * when (and if) all args are assigned.
 		 */
-		private Invocation crossInvoke(int px, Object[]args, boolean fire, Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		private Invocation crossInvoke(int px, Object[]args, boolean fire, Invocation inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			if (px == args.length) {
 				Invocation newInvocation = new Invocation(this,args);  // makes a copy of args!
 				if (!fire) {
@@ -311,17 +318,17 @@ class Call {
 					}
 					args[px] = paramAtIndex.asListArg();
 					// Don't change 'fire' value -- args only contains values that have fired; may even be empty but fire anyway
-					inv = crossInvoke(px+1,args,fire,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+					inv = crossInvoke(px+1,args,fire,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 				}
-				else if (px==firingParameterIndex) {
-					inv = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+				else if (paramAtIndex==firingParameter) {
+					inv = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 				}
 				else {
 				    if (px >= freeze.length) {
 				        System.out.println("...");
 				    }
 					for (int i=0; i<freeze[px]; i++) {
-						inv = crossInvokeNext(px,args,fire,i,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+						inv = crossInvokeNext(px,args,fire,i,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 					}
 				}
 			}
@@ -342,12 +349,12 @@ class Call {
 		 * @param context
 		 * @return
 		 */
-		private Invocation crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, Invocation inv, int[] freeze, int firingParameterIndex, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		private Invocation crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, Invocation inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			Param.Instance paramAtIndex = paramInstances[px];
 			Call.Instance.Firing firing = paramAtIndex.bindings.get(bindingIndex);
 			args[px] = firing.pojoCalled;
 			boolean fireAtLevel = fire && firing.taskMethodReturnValue;
-			return crossInvoke(px+1,args,fireAtLevel,inv,freeze,firingParameterIndex,ordinalOfFiringParameter,orc,context);
+			return crossInvoke(px+1,args,fireAtLevel,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 
 		/**
@@ -513,15 +520,21 @@ class Call {
 		
 		class Instance {
 			/**
+			 * The call which contains this parameter 
+			 */
+			final Call.Instance callInstance;
+			
+			/**
 			 * The actual arguments in proper order, all of which will be POJOs added 
 			 * to the orchestrator as tasks
 			 */
 			final List<Call.Instance.Firing> bindings = new ArrayList<>();
 			
 			/**
-			 * The call which contains this parameter 
+			 * All tasks, auto-wired and explicit/hidden, that backlist to this param instance.
+			 * Can be null if there are no incoming tasks.
 			 */
-			final Call.Instance callInstance;
+			List<Task.Instance> incoming = null;
 			
 			/**
 			 * How we know, for list arguments, when all parameters are ready 
@@ -556,7 +569,7 @@ class Call {
 				int bc = bindings.size();
 				return isList ? bc >= threshold : bc > 0;
 			}
-			
+
 			void bumpThreshold() {
 				this.threshold += 1;
 			}

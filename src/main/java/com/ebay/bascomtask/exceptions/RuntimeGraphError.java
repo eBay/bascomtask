@@ -37,4 +37,14 @@ public class RuntimeGraphError extends RuntimeException {
 			super("Timed out after " + ms + "ms");
 		}
 	}
+	
+	/**
+	 * An internal error when the main thread is waiting yet there are no
+	 * other active threads to complete the task(s) being waited on.
+	 */
+	public static class Stall extends InvalidTask {
+		public Stall(String msg) {
+			super(msg);
+		}
+	}
 }

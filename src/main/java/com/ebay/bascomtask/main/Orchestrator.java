@@ -17,6 +17,7 @@ limitations under the License.
 package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -37,7 +38,6 @@ import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
 import com.ebay.bascomtask.main.Call.Param;
-import com.ebay.bascomtask.main.Task.Instance;
 import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
 
 /**
@@ -589,7 +589,6 @@ public class Orchestrator {
 		// Now the taskInstances themselves can be linked
 		for (Task.Instance taskInstance: taskInstances) {
 			if (taskInstance.calls.size()==0) {
-			    // TODO explicit on root
 				// If no calls at all, the task is trivially available to all who depend on it.
 				// We create a dummy call so the task can then be processed like any other root.
 				roots.add(taskInstance.genNoCall());
@@ -748,7 +747,7 @@ public class Orchestrator {
 
     private boolean addExplicitNonParameters(Task.Instance taskInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
         boolean root = true;
-        for (Entry<Task, List<Instance>> next: explicitsBefore.entrySet()) {
+        for (Entry<Task, List<Task.Instance>> next: explicitsBefore.entrySet()) {
             Task task = next.getKey();
             List<Task.Instance> befores = next.getValue();
         	TaskRec rec = taskMapByType.get(task);
@@ -772,17 +771,22 @@ public class Orchestrator {
         return root;
     }
 
-	private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task, List<Instance>> explicitsBefore) {
+	/**
+	 * Produces a record of all the tasks upon which the given call parameter must wait, accounting for auto and explicit wiring.
+	 * @param paramInstance of target call
+	 * @param explicitsBefore containing explicitly-declared dependencies, and from which formal param matches will be removed
+	 * @return
+	 */
+	private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
 	    Task task = paramInstance.getTask();	    
-        //Task.Instance taskInstanceOfParam = paramInstance.callInstance.taskInstance;
-        //Task task = taskInstanceOfParam.getTask();
         TaskRec rec = taskMapByType.get(task);
-        if (explicitsBefore != null) {
+        if (explicitsBefore != null) {  // If no explicit parameters than all known instances are auto-wired
             List<Task.Instance> befores = explicitsBefore.get(task);
             if (befores != null) {
                 TaskRec alt = new TaskRec();
                 for (Task.Instance next: befores) {
                     alt.added.add(next);
+                    explicitsBefore.remove(task);  // Not a 'hidden' param if it's an explicit formal param                    
                     for (Call.Instance.Firing firing: rec.fired) {
                         if (firing.pojoCalled == next.targetPojo) {
                             alt.fired.add(firing);
@@ -792,81 +796,10 @@ public class Orchestrator {
                 rec = alt;
             }
         }
+        paramInstance.incoming = rec==null ? null : rec.added;
         return rec;
     }
 
-	/*
-    private boolean xxx(TaskRec rec, Call.Param.Instance paramInstance) {
-	    boolean root = true;
-	    for (Task.Instance supplierTaskInstance: rec.added) {
-	        backLink(supplierTaskInstance,paramInstance);
-	    }
-	    int numberAlreadyFired = rec.fired.size();
-	    if (numberAlreadyFired==0) {
-	        root = false;
-	    }
-	    else if (paramInstance.getParam().isList && numberAlreadyFired < paramInstance.getThreshold()) {
-	        root = false;
-	    }
-	    // Add all tasks that have already fired
-	    callInstance.startingFreeze[i] = numberAlreadyFired;
-	    for (Call.Instance.Firing fired: rec.fired) {
-	        paramInstance.bindings.add(fired);
-	    }
-	    return root;
-	}
-	*/
-
-
-       /*    
-    private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task.Instance,List<Task.Instance>> explicitsBefore) {
-        Task.Instance taskInstanceOfParam = paramInstance.callInstance.taskInstance;
-        Task task = taskInstanceOfParam.getTask();
-        final TaskRec rec = taskMapByType.get(task); 
-        List<Task.Instance> befores = explicitsBefore.get(taskInstanceOfParam);
-        if (befores != null) {
-            TaskRec alt = new TaskRec();
-            for (Task.Instance next: befores) {
-                alt.added.add(next);
-                for (Call.Instance.Firing firing: rec.fired) {
-                    if (firing.pojoCalled == next.targetPojo) {
-                        alt.fired.add(firing);
-                    }
-                }
-            }
-        }
-        return rec;
-    }
-
-    }
-    private TaskRec enumerateDependentTaskParameters(List<Task.Instance> explicitsBefore, Call.Param.Instance paramInstance) {        
-        Task task = paramInstance.getTask();
-        
-        TaskRec autosBefore = taskMapByType.get(task); 
-        TaskRec rec = autosBefore;
-
-        if (explicitsBefore != null) {
-            ListIterator<Instance> beforeItr = explicitsBefore.listIterator();
-            while (beforeItr.hasNext()) {
-                Task.Instance taskInstanceBefore = beforeItr.next();
-                if (taskInstanceBefore.getTask() == task) {
-                    if (rec == autosBefore) {
-                        rec = new TaskRec();
-                    }
-                    rec.added.add(taskInstanceBefore);
-                    for (Call.Instance.Firing firing: autosBefore.fired) {
-                        if (firing.pojoCalled == taskInstanceBefore.targetPojo) {
-                            rec.fired.add(firing);
-                        }
-                    }
-                    beforeItr.remove();
-                }
-            }
-        }
-        return rec;
-    }
-    */
-	
 	/**
 	 * If there is any task that lacks at least one resolvable call, generate an error
 	 * and include all unresolvable parameters so the user can result them with a holistic
@@ -926,16 +859,14 @@ public class Orchestrator {
 						pc = 1;
 					}
 					else {
-						Task task = nextParam.getTask();
-						TaskRec rec = taskMapByType.get(task);
-						if (rec != null) {
-							for (Task.Instance nextTaskInstance: rec.added) {
-								if (base==nextTaskInstance) {
-									throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
-								}
-								pc += computeThreshold(base,level,nextTaskInstance);
-							}
-						}
+					    if (nextParam.incoming != null) {
+					        for (Task.Instance nextTaskInstance: nextParam.incoming) {
+					            if (base==nextTaskInstance) {
+					                throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
+					            }
+					            pc += computeThreshold(base,level,nextTaskInstance);
+					        }
+					    }
 					}
 					cc *= pc;
 				}
@@ -995,10 +926,16 @@ public class Orchestrator {
 			synchronized (this) {
 				do {
 					int wfc = waitForTasks.size();
-					LOG.debug("Waiting on {} tasks",wfc);
 					if (wfc==0) {
 						break outer;
 					}
+					if (threadBalance==0) {
+					    String msg = "this task";
+					    if (wfc != 1) msg = "these " +  wfc + " tasks";
+					    msg = "Stalled on " + msg + ": " + Arrays.toString(waitForTasks.toArray());
+					    throw new RuntimeGraphError.Stall(msg);
+					}
+					LOG.debug("Waiting on {} tasks and {} threads",wfc,threadBalance);
 					try {
 						waiting = true;
 						this.wait(maxWaitTime);
@@ -1058,7 +995,7 @@ public class Orchestrator {
 		for (Call.Instance nextBackCallInstance: roots) {
 			//inv = nextBackCallInstance.bind(this, "TBD", null, -1, inv);
 			int[] freeze = nextBackCallInstance.startingFreeze;
-			inv = nextBackCallInstance.crossInvoke(inv, freeze, -1, -1, this, "root");
+			inv = nextBackCallInstance.crossInvoke(inv, freeze, null, -1, this, "root");
 		}
 		return inv;
 	}
@@ -1176,7 +1113,7 @@ public class Orchestrator {
 			Call.Instance nextCallInstance = nextBackParam.callInstance;
 			int pos = nextBackParam.getParam().paramaterPosition;
 			Object actualParam = taskInstance.targetPojo;
-			inv = nextCallInstance.bind(this,context,actualParam,firing,pos,inv);
+			inv = nextCallInstance.bind(this,context,actualParam,firing,nextBackParam,inv);
 		}
 		return inv;
 	}
