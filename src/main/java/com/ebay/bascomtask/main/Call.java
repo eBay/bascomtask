@@ -20,6 +20,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -97,7 +98,7 @@ class Call {
 	 * it must be threadsafe.
 	 * @author brendanmccarthy
 	 */
-	class Instance extends Completable {
+	class Instance extends Completable implements Iterable<Param.Instance> {
 		
 		/**
 		 * Owner of this call 
@@ -201,7 +202,7 @@ class Call {
             }
             Param param = hiddenParamMap.get(task);
             if (param==null) {
-                param = new Param(task,-1,true);
+                param = new Param(task,-1,false);
                 hiddenParamMap.put(task,param);
             }
             Param.Instance paramInstance = param.new Instance(this);
@@ -210,6 +211,40 @@ class Call {
             }
             hiddenParameters.add(paramInstance);
             return paramInstance;
+        }
+
+        /* 
+         * Iterates over all parameters, actual and hidden
+         */
+        public Iterator<Param.Instance> iterator() {
+            return new Iterator<Param.Instance>() {
+                private boolean onHidden = false;
+                private int pos;
+                @Override
+                public boolean hasNext() {
+                    if (onHidden) {
+                        return hiddenParameters != null && pos < hiddenParameters.size();
+                    }
+                    if (pos >= paramInstances.length) {
+                        onHidden = true;
+                        pos = 0;
+                        return hasNext();
+                    }
+                    return true;
+                }
+
+                @Override
+                public Param.Instance next() {
+                    if (onHidden) {
+                        return hiddenParameters.get(pos++);
+                    }
+                    return paramInstances[pos++];
+                }
+
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException("Removing parameters");
+                }};
         }
         
 		/**
@@ -324,9 +359,6 @@ class Call {
 					inv = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 				}
 				else {
-				    if (px >= freeze.length) {
-				        System.out.println("...");
-				    }
 					for (int i=0; i<freeze[px]; i++) {
 						inv = crossInvokeNext(px,args,fire,i,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 					}
@@ -414,7 +446,11 @@ class Call {
 				reserved = false;
 			} 
 			catch (InvocationTargetException e) {
-				throw new RuntimeException(e.getTargetException());
+			    Throwable target = e.getTargetException();
+			    if (target instanceof RuntimeException) {
+			        throw (RuntimeException)target;
+			    }
+				throw new RuntimeException(target);
 			}
 			catch (Exception e) {
 				msg = "Could not invoke " + context + " task " + kind + " " + signature() + " : " + e.getMessage();
@@ -449,7 +485,7 @@ class Call {
 		 */
 		class Firing {
 			/**
-			 * The actual POJO added to the orchestrator, or a clone of that object for SCOPE.request TODO 
+			 * The actual POJO added to the orchestrator, or a clone of that object for (TODO) SCOPE.request
 			 */
 			final Object pojoCalled;
 
@@ -532,9 +568,8 @@ class Call {
 			
 			/**
 			 * All tasks, auto-wired and explicit/hidden, that backlist to this param instance.
-			 * Can be null if there are no incoming tasks.
 			 */
-			List<Task.Instance> incoming = null;
+			final List<Task.Instance> incoming = new ArrayList<>();
 			
 			/**
 			 * How we know, for list arguments, when all parameters are ready 

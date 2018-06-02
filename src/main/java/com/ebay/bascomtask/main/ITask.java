@@ -101,13 +101,17 @@ public interface ITask {
 	 * would depend on both instances of A. If on the other hand an explicitly wired dependency was set
 	 * up along the lines of <code>a1.before(b)</code>, then the B instance b would only depend on that
 	 * singular A instances a1.
+	 * <p>
+	 * This method can safely be called before <code>pojoTask</code> is added to the graph, but will
+	 * result in an error on the next {@link com.ebay.bascomtask.Orchestrator#execute()} if <code>pojoTask</code> has not been added
+	 * by that time.
 	 * @param pojoTask or ITask which should run before this one is started
 	 * @return this task
 	 */
 	public ITask before(Object pojoTask);
 	
 	/**
-	 * The inverse of {@link #before(ITask)}, achieving the same effect while allowing the arguments to
+	 * The inverse of {@link #before(Object)}, achieving the same effect while allowing the arguments to
 	 * be reversed.
 	 * @param pojoTask or ITask which should only run after this one
 	 * @return this task

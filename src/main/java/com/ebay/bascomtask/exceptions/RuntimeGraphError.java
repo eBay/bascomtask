@@ -40,7 +40,8 @@ public class RuntimeGraphError extends RuntimeException {
 	
 	/**
 	 * An internal error when the main thread is waiting yet there are no
-	 * other active threads to complete the task(s) being waited on.
+	 * other active threads to complete the task(s) being waited on. This
+	 * is an internal error and should not happen.
 	 */
 	public static class Stall extends InvalidTask {
 		public Stall(String msg) {

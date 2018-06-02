@@ -58,7 +58,7 @@
                     <serverId>ossrh</serverId>
                     <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                     <!-- see notes on this setting in https://central.sonatype.org/pages/apache-maven.html -->
-                    <autoReleaseAfterClose>false</autoReleaseAfterClose>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
                 </configuration>
             </plugin>
             <plugin>
@@ -108,7 +108,7 @@
 
     <profiles>
         <profile>
-            <id>release</id>
+            <id>sign</id>
             <build>
                 <plugins>
                     <!-- Requires gpg command installed, see https://central.sonatype.org/pages/apache-maven.html -->
@@ -127,7 +127,6 @@
                         </executions>
                     </plugin>
                 </plugins>
-
             </build>
         </profile>
     </profiles>

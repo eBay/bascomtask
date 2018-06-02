@@ -324,7 +324,7 @@ public class Orchestrator {
 	 * Must be invoked once thread is pulled from its pool.
 	 */
 	public void setThreadId() {
-		Thread.currentThread().setName(":"+id+'#'+threadsCreated.incrementAndGet());
+		Thread.currentThread().setName("BT:"+id+'#'+threadsCreated.incrementAndGet());
 	}
 
 	/**
@@ -352,6 +352,7 @@ public class Orchestrator {
 	 * active or passive depending on the given condition. 
 	 * @param task java POJO to add as task 
 	 * @param cond if true then add as active else add as passive
+	 * @return a 'shadow' task object which allows for various customizations
 	 */
 	public ITask addConditionally(Object task, boolean cond) {
 		if (cond) {
@@ -393,7 +394,7 @@ public class Orchestrator {
 	 * may be empty).
 	 * 
      * @param task java POJO to add as task 
-	 * @return a 'shadow' task object which allows for various customization
+	 * @return a 'shadow' task object which allows for various customizations
 	 */
 	public ITask addWork(Object task) {
 		return add(task,TaskMethodBehavior.WORK);
@@ -406,6 +407,7 @@ public class Orchestrator {
  	 * method since it assumed to perform simple actions like providing a default or passing-through its arguments
  	 * with no or little change. Otherwise behaves the same as {@link #addWork(Object)}.
 	 * @param task java POJO to add as task 
+	 * @return a 'shadow' task object which allows for various customizations
 	 */
 	public ITask addPassThru(Object task) {
 		return add(task,Task.TaskMethodBehavior.PASSTHRU);
@@ -417,8 +419,8 @@ public class Orchestrator {
 	 * make available as a parameter to other task methods without the object's task methods firing. Usage of 
 	 * this method is relatively uncommon, but does provide another way to handle variant situations be 
 	 * allowing a task object to be exposed but have its behavior managed outside the scope of an orchestrator.
-	 * @param task
-	 * @return
+	 * @param task to add
+	 * @return a 'shadow' task object which allows for various customizations
 	 */
 	public ITask addIgnoreTaskMethods(Object task) {
 		return add(task,Task.TaskMethodBehavior.NONE);
@@ -505,7 +507,13 @@ public class Orchestrator {
 	 * <p>
 	 * Consistency checks are performed prior to any task being started, and if a violation is found a subclass
 	 * of InvalidGraph is thrown.
+	 * <p>
+	 * If any task throws an exception, which would have to be a non-checked exception, it will be propagated 
+	 * from this call. Once such an exception is thrown, the orchestrator ceases to start new tasks and instead
+	 * waits for all open threads to finish before returning (by throwing the exception in question). Currently,
+	 * only the first exception is thrown if there happens to be more than one.
 	 * @param maxExecutionTimeMillis to timeout
+	 * @throws RuntimeException generated from a task
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
 	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no mathcing {@literal @}Work dependents
 	 * @throws InvalidGraph.Circular if a circular reference between two tasks is detected
@@ -594,7 +602,7 @@ public class Orchestrator {
 				roots.add(taskInstance.genNoCall());
 				// Since this task is already available as a parameter, no point in having any
 				// explicit dependencies on it, should there be any
-				// TODO thread-safe
+				// TODO thread-safe dynamic explicits
 				taskInstance.explicitBeforeDependencies = null;
 			}
 			else {
@@ -796,7 +804,6 @@ public class Orchestrator {
                 rec = alt;
             }
         }
-        paramInstance.incoming = rec==null ? null : rec.added;
         return rec;
     }
 
@@ -830,6 +837,7 @@ public class Orchestrator {
 		// called twice but should only be counted once.
 		if (!taskInstance.backList.contains(paramInstance)) {
 			taskInstance.backList.add(paramInstance);
+			paramInstance.incoming.add(taskInstance);
 			paramInstance.bumpThreshold();
 			Task.Instance backTaskInstance = paramInstance.getCall().taskInstance;
 			if (backTaskInstance.wait) {
@@ -853,19 +861,17 @@ public class Orchestrator {
 			int tc = 0;
 			for (Call.Instance nextCall: taskInstance.calls) {
 				int cc = 1;
-				for (Call.Param.Instance nextParam: nextCall.paramInstances) {
+				for (Call.Param.Instance nextParam: nextCall) {
 					int pc = 0;
 					if (nextParam.getParam().isList) {
 						pc = 1;
 					}
 					else {
-					    if (nextParam.incoming != null) {
-					        for (Task.Instance nextTaskInstance: nextParam.incoming) {
-					            if (base==nextTaskInstance) {
-					                throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
-					            }
-					            pc += computeThreshold(base,level,nextTaskInstance);
+					    for (Task.Instance nextTaskInstance: nextParam.incoming) {
+					        if (base==nextTaskInstance) {
+					            throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
 					        }
+					        pc += computeThreshold(base,level,nextTaskInstance);
 					    }
 					}
 					cc *= pc;
@@ -899,6 +905,9 @@ public class Orchestrator {
 		if (exceptions.size() > 0) {
 			// TODO collect if more than one
 			Exception e = exceptions.get(0);
+			if (e instanceof RuntimeException) {
+			    throw (RuntimeException)e;
+			}
 			throw new RuntimeException(e);
 		}
 	}
@@ -929,7 +938,13 @@ public class Orchestrator {
 					if (wfc==0) {
 						break outer;
 					}
-					if (threadBalance==0) {
+					int exs = exceptions.size();
+					if (exs > 0) {
+					    if (threadBalance==0) {
+					        break outer;
+					    }
+					}
+					else if (threadBalance==0) { // No other active threads? 
 					    String msg = "this task";
 					    if (wfc != 1) msg = "these " +  wfc + " tasks";
 					    msg = "Stalled on " + msg + ": " + Arrays.toString(waitForTasks.toArray());
@@ -1111,7 +1126,6 @@ public class Orchestrator {
 		List<Call.Param.Instance> backList = taskInstance.backList;
 		for (Call.Param.Instance nextBackParam: backList) {
 			Call.Instance nextCallInstance = nextBackParam.callInstance;
-			int pos = nextBackParam.getParam().paramaterPosition;
 			Object actualParam = taskInstance.targetPojo;
 			inv = nextCallInstance.bind(this,context,actualParam,firing,nextBackParam,inv);
 		}

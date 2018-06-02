@@ -216,21 +216,65 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(1);
 	}
 	
-	@Test(expected=RuntimeException.class)
-	public void test1ParException() {
+	private void test1ParException(boolean forkAElseForkB) {
 		class A extends PathTask {
 			@Work public void exec() {got();}
 		}
 		class B extends PathTask {
-			@Work public void exec() {throw new RuntimeException("no good!");}
+			@Work public void exec() {throw new OnlyATestException();}
 		}
 		A a = new A();
 		B b = new B();
 		PathTask taskA = track.work(a);
 		PathTask taskB = track.work(b);
+		PathTask taskToFork = forkAElseForkB ? taskA : taskB;
+		taskToFork.fork();
 		verify(1);
 	}
 	
+	@Test(expected=OnlyATestException.class)
+	public void test1ParExceptionForkThrower() {
+	    test1ParException(false);
+	}
+	
+	@Test(expected=OnlyATestException.class)
+	public void test1ParExceptionForkNonThrower() {
+	    test1ParException(true);
+	}
+	
+	private void testMultiException(boolean forkA1, boolean forkA2, boolean forkB) {
+		class A extends PathTask {
+			@Work public void exec() {sleep(10); throw new OnlyATestException();}
+		}
+		class B extends PathTask {
+			@Work public void exec() {got(); sleep(50);}
+		}
+		A a1 = new A();
+		A a2 = new A();
+		B b = new B();
+		PathTask taskA1 = track.work(a1);
+		PathTask taskA2 = track.work(a2);
+		PathTask taskB = track.work(b);
+		if (forkA1) taskA1.fork();
+		if (forkA2) taskA2.fork();
+		if (forkB) taskB.fork();
+		verify(3);
+	}
+	
+	@Test(expected=OnlyATestException.class)
+	public void testMultiExceptionKeepA1() {
+	    testMultiException(false,true,true);
+	}
+	
+	@Test(expected=OnlyATestException.class)
+	public void testMultiExceptionKeepB() {
+	    testMultiException(true,true,false);
+	}
+	
+	@Test(expected=OnlyATestException.class)
+	public void testMultiExceptionKeepNone() {
+	    testMultiException(true,true,true);
+	}
 
 	@Test
 	public void test3LinearDup() {
@@ -960,34 +1004,6 @@ public class OrchestrationTest extends PathTaskTestBase {
 		assertTrue(taskA.followed(taskC));
 		assertTrue(taskB.followed(taskC));
 	}
-	
-	/*
-	@Test
-	public void testExplicitSubsetDependency() {
-	    final AtomicBoolean b_done = new AtomicBoolean(false);
-	    
-	    class A extends PathTask {
-	        boolean after_b;
-	        @Work public void exec() {got(); after_b = b_done.get();}
-	    }
-	    class B extends PathTask {
-	        @Work public void exec() {got(); sleep(50); b_done.set(true);}
-	    }
-	    
-		A a1 = new A();
-		A a2 = new A();
-		A a3 = new A();
-		B b = new B();
-		PathTask taskA1 = track.work(a1).after(b);
-		PathTask taskA2 = track.work(a2);
-		PathTask taskA3 = track.work(a3);
-		PathTask taskB = track.work(b).before(a3);
-		verify(2);
-		assertTrue(a1.after_b);
-		assertFalse(a2.after_b);
-		assertTrue(a3.after_b);
-	}
-	*/
 	
 	@Test
 	public void testExplicitSubsetDependency() {

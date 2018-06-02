@@ -106,4 +106,12 @@ public abstract class PathTaskTestBase {
 	public void init() {
 		track = new TaskTestWrapper();
 	}
+	
+	/**
+	 * Utility exception for generating in a task in order to verify that
+	 * it gets thrown.
+	 */
+	static class OnlyATestException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+	}
 }
