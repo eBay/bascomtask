@@ -45,7 +45,7 @@ More usefully, several tasks would be involved, and @Work methods can take other
      private String msg;
      String getMessage() {
        return msg;
-     "
+     }
      @Work public void exec() {
   	   this.msg = "World";
      }

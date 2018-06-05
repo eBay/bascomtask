@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -179,6 +180,11 @@ public class Orchestrator {
 	 * For tracking execution time
 	 */
 	private long startTime = 0;
+	
+	/**
+	 * For determining when to log debug messages while waiting 
+	 */
+	private int waitLoopDebugCounter = 0;
 	
 	@Override
 	public String toString() {
@@ -950,7 +956,17 @@ public class Orchestrator {
 					    msg = "Stalled on " + msg + ": " + Arrays.toString(waitForTasks.toArray());
 					    throw new RuntimeGraphError.Stall(msg);
 					}
-					LOG.debug("Waiting on {} tasks and {} threads",wfc,threadBalance);
+					if (++waitLoopDebugCounter > 10) {
+					    waitLoopDebugCounter = 0;
+					    String taskPlural = wfc>1 ? "s" : "";
+					    String threadPlural = threadBalance>1 ? "s" : "";
+					    String singleTask = "";
+					    if (LOG.isDebugEnabled() && wfc==1) {
+					        Iterator<Task.Instance> itr = waitForTasks.iterator();
+					        singleTask = ": " + itr.next().toString();
+					    }
+					    LOG.debug("Waiting on {} task{} and {} thread{}{}",wfc,taskPlural,threadBalance,threadPlural,singleTask);
+					}
 					try {
 						waiting = true;
 						this.wait(maxWaitTime);
