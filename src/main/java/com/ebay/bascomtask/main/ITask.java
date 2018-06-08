@@ -103,7 +103,7 @@ public interface ITask {
 	 * singular A instances a1.
 	 * <p>
 	 * This method can safely be called before <code>pojoTask</code> is added to the graph, but will
-	 * result in an error on the next {@link com.ebay.bascomtask.Orchestrator#execute()} if <code>pojoTask</code> has not been added
+	 * result in an error on the next {@link com.ebay.bascomtask.main.Orchestrator#execute()} if <code>pojoTask</code> has not been added
 	 * by that time.
 	 * @param pojoTask or ITask which should run before this one is started
 	 * @return this task

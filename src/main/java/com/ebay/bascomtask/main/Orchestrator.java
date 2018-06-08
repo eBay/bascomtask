@@ -348,9 +348,10 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * Sets a name used on some debugging statements, useful for identify which orchestrator is being
-	 * invoked when there are many involved.
-	 * @param name
+	 * Sets a name used on entry and exit debugging statements, useful for identify which 
+	 * orchestrator is being invoked when there are many involved.
+	 * @param name to include in debug statements
+	 * @return this instance for fluent-style chaining
 	 */
 	public Orchestrator name(String name) {
 	    this.name = name;
