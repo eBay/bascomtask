@@ -182,6 +182,20 @@ public class Orchestrator {
 	private long startTime = 0;
 	
 	/**
+	 * For debugging
+	 */
+	private String name = null;
+	
+	/**
+	 * A monotonically increasing counter used for debug messages
+	 */
+	private int invocationCount = 0;
+	/**
+	 * Set to true after first invocation
+	 */
+	private boolean hasBeenInvokedYet = false;
+	
+	/**
 	 * For determining when to log debug messages while waiting 
 	 */
 	private int waitLoopDebugCounter = 0;
@@ -331,6 +345,16 @@ public class Orchestrator {
 	 */
 	public void setThreadId() {
 		Thread.currentThread().setName("BT:"+id+'#'+threadsCreated.incrementAndGet());
+	}
+	
+	/**
+	 * Sets a name used on some debugging statements, useful for identify which orchestrator is being
+	 * invoked when there are many involved.
+	 * @param name
+	 */
+	public Orchestrator name(String name) {
+	    this.name = name;
+	    return this;
 	}
 
 	/**
@@ -556,15 +580,46 @@ public class Orchestrator {
 		invokeAndFinish(inv,"own",true);
 	}
 	
+	private class OrcRun {
+	    final String pfx;
+	    final int numberTasks;
+	    final String tasksPlural;
+	    final int numberRoots;
+	    final String rootsPlural;
+	    final String id;
+	    final int currentTaskCount;
+	    final String context;
+	    
+	    OrcRun(List<Call.Instance> roots, String context) {
+	        this.pfx = hasBeenInvokedYet ? "" : "first ";
+	        this.numberTasks = allTasks.size();
+	        this.tasksPlural = numberTasks==1 ? "" : "s";
+	        this.numberRoots = roots.size();
+	        this.rootsPlural = numberRoots==1 ? "" : "s";
+	        this.id = name==null ? "" : ("\"" + name + "\"");
+			this.currentTaskCount = allTasks.size();
+			this.context = context;
+	    }
+	    
+	    void report(String where) {
+	        LOG.debug("{} {}{} {} with {}->{} tasks / {} roots\n{}",where,pfx,context,id,currentTaskCount,numberTasks,tasksPlural,numberRoots,rootsPlural,getGraphState());
+	    }
+	}
+	
 	private synchronized Invocation executeTasks(List<Task.Instance> taskInstances, String context, Invocation inv) {
 		if (taskInstances != null) {
-			int currentTaskCount = allTasks.size();
+
 			List<Call.Instance> roots = linkGraph(taskInstances);
 			if (roots.size() > 0) {
+			    OrcRun run = null; 
 				if (LOG.isDebugEnabled()) {
-					LOG.debug("firing {} with {}->{} tasks / {} roots\n{}",context,currentTaskCount,allTasks.size(),roots.size(),getGraphState());
+				    run = new OrcRun(roots,context);
+				    run.report("firing");
 				}
 				inv = fireRoots(roots,inv);
+				if (run != null) {
+				    run.report("exiting");
+				}
 			}
 		}
 		return inv;
