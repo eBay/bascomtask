@@ -18,7 +18,7 @@ package com.ebay.bascomtask.config;
 
 import java.util.concurrent.ExecutorService;
 
-import com.ebay.bascomtask.main.Orchestrator;
+import com.ebay.bascomtask.main.TaskThreadStat;
 
 /**
  * BascomTask configuration. A standard {@link DefaultBascomConfig} implementation
@@ -42,20 +42,19 @@ public interface IBascomConfig {
 	void notifyTerminate();
 	
 	/**
-	 * Provides an opportunity for bookkeeping after a thread is drawn from a pool.
-	 * @param orc Orchestrator associated with threads
-	 * @param parent thread which identified opportunity for parallel call
-	 * @param child thread drawn from pool
+	 * Called after a thread is pulled from the pool and before it starts executing
+	 * any task. Provides an opportunity to set the thread name, or any other related
+	 * function.
+	 * @param threadStat metadata for thread
 	 */
-	void linkParentChildThread(Orchestrator orc, Thread parent, Thread child);
+	void notifyThreadStart(TaskThreadStat threadStat);
 	
 	/**
-	 * Provides an opportunity for bookkeeping before thread is returned to pool.
-	 * @param orc Orchestrator associated with threads
-	 * @param parent thread which identified opportunity for parallel call
-	 * @param child thread drawn from pool
+	 * Called after a thread is has finished executing a task and there are no other
+	 * tasks ready to execute. Provides an opportunity to clear any thread state. 
+	 * @param threadStat metadata for thread
 	 */
-	void unlinkParentChildThread(Orchestrator orc, Thread parent, Thread child);
+	void notifyThreadEnd(TaskThreadStat threadStat);
 	
 	/**
 	 * Provides the default interceptor used by an orchestrator,

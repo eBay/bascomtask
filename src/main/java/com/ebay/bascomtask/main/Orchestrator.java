@@ -144,9 +144,9 @@ public class Orchestrator {
 	private List<Exception> exceptions = new ArrayList<>();
 
 	/**
-	 * A monotonically increasing counter
+	 * A monotonically increasing counter. 
 	 */
-	private final AtomicInteger threadsCreated = new AtomicInteger(0);
+	final AtomicInteger threadsCreated = new AtomicInteger(0);
 	
 	/**
 	 * Number of spawned threads that have not yet terminated
@@ -202,7 +202,7 @@ public class Orchestrator {
 	/**
 	 * A monotonically increasing counter used for debug messages
 	 */
-	private int invocationCount = 0;
+	//private int invocationCount = 0;
 	
 	/**
 	 * Set to true after first invocation
@@ -213,6 +213,8 @@ public class Orchestrator {
 	 * For determining when to log debug messages while waiting 
 	 */
 	private int waitLoopDebugCounter = 0;
+	
+	private Map<Thread,TaskThreadStat> threadMap = new HashMap<>();
 	
 	@Override
 	public String toString() {
@@ -353,15 +355,6 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * Sets the id of any thread spawned during execution by this orchestrator.
-	 * Publicly exposed to allow for different configuration strategies.
-	 * Must be invoked once thread is pulled from its pool.
-	 */
-	public void setThreadId() {
-		Thread.currentThread().setName("BT:"+id+'#'+threadsCreated.incrementAndGet());
-	}
-	
-	/**
 	 * Sets a name used on entry and exit debugging statements, useful for identify which 
 	 * orchestrator is being invoked when there are many involved.
 	 * @param name to include in debug statements
@@ -370,6 +363,22 @@ public class Orchestrator {
 	public Orchestrator name(String name) {
 	    this.name = name;
 	    return this;
+	}
+	
+	/**
+	 * The name previously set by {@link #name(String)}
+	 * @return the name or null if not previously set
+	 */
+	public String getName() {
+	    return name;
+	}
+	
+	/**
+	 * Returns an id for this instance which has very low probability of clashing with other ids.
+	 * @return
+	 */
+	public String getId() {
+	    return id;
 	}
 	
 	/**
@@ -390,6 +399,10 @@ public class Orchestrator {
 	    }
 	    return taskInterceptor;
 	}
+	
+    public TaskThreadStat getThreadStatForCurrentThread() {
+        return threadMap.get(Thread.currentThread());
+    }
 
 	/**
 	 * Returns the number of additional threads (not including the starting thread)
@@ -591,6 +604,10 @@ public class Orchestrator {
 			executeTasks(taskInstances,"nested");
 		}
 		else {
+		    // Set root TaskThreadStat to current thread
+		    threadMap.clear();
+		    threadMap.put(Thread.currentThread(),new TaskThreadStat(this,0,0,null));
+		    
 			this.maxExecutionTimeMillis = maxExecutionTimeMillis;
 			this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
 			startTime = System.currentTimeMillis();
@@ -1146,12 +1163,6 @@ public class Orchestrator {
 		}
 	}
 	
-	/*
-	void removeFromWaitingList(Task.Instance taskInstance) {
-		waitForTasks.remove(taskInstance);
-	}
-	*/
-
 	synchronized void spawn(final Invocation invocation) {
 		if (!requestMainThreadComplete(invocation)) {
 			LOG.debug("Spawning \"{}\"",invocation);
@@ -1159,10 +1170,18 @@ public class Orchestrator {
 			threadBalance++;
 			ExecutorService executor = config.getExecutor();
 			final Thread parent = Thread.currentThread();
+			final TaskThreadStat parentStat = threadMap.get(parent);
+			// Offsetting by 1 ensures that 0 is left to refer to thread that invokes execute()
+			final int globalThreadIndex = threadsCreated.incrementAndGet() + 1;
 			executor.execute(new Runnable() {
 				@Override
 				public void run() {
-					config.linkParentChildThread(lock,parent,Thread.currentThread());
+				    Thread currentThread = Thread.currentThread();
+				    int localThreadIndex = threadMap.size();
+				    
+				    TaskThreadStat threadStat = new TaskThreadStat(lock,localThreadIndex,globalThreadIndex,parentStat);
+				    lock.threadMap.put(currentThread,threadStat);
+				    config.notifyThreadStart(threadStat);
 					Exception err = null;
 					try {
 						invokeAndFinish(invocation,"spawned",true);
@@ -1188,7 +1207,8 @@ public class Orchestrator {
 							String how = err==null? "normally" : "with exception";
 							LOG.debug("Thread completed {} {} and returning to pool, {} open threads remaining",invocation,how,tb);
 						}
-						config.unlinkParentChildThread(lock,parent,Thread.currentThread());
+						lock.threadMap.remove(currentThread);
+						config.notifyThreadEnd(threadStat);
 					}
 				}
 			});
