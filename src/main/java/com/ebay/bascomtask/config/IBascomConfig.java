@@ -54,4 +54,15 @@ public interface IBascomConfig {
 	 * @param child thread drawn from pool
 	 */
 	void unlinkParentChildThread(Orchestrator orc, Thread parent, Thread child);
+	
+	/**
+	 * Provides the default interceptor used by an orchestrator,
+	 * unless explicitly overridden for that orchestrator.
+	 * @return
+	 * @see com.ebay.bascomtask.main.Orchestrator#interceptor(ITaskInterceptor)
+	 */
+	ITaskInterceptor getDefaultInterceptor();
 }
+
+
+

@@ -24,7 +24,8 @@ import com.ebay.bascomtask.main.Orchestrator;
 
 public class DefaultBascomConfig implements IBascomConfig {
 	
-	private ExecutorService pool = Executors.newFixedThreadPool(30); 
+	private ExecutorService pool = Executors.newFixedThreadPool(30);
+	private ITaskInterceptor taskInterceptor = new DefaultTaskInterceptor();
 
 	@Override
 	public ExecutorService getExecutor() {
@@ -71,4 +72,9 @@ public class DefaultBascomConfig implements IBascomConfig {
 	public void unlinkParentChildThread(Orchestrator orc, Thread parent, Thread child) {
 
 	}
+	
+    @Override
+    public ITaskInterceptor getDefaultInterceptor() {
+        return taskInterceptor;
+    }
 }

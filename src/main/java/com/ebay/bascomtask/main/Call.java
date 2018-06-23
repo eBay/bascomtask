@@ -16,7 +16,6 @@ limitations under the License.
 **************************************************************************/
 package com.ebay.bascomtask.main;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -420,51 +419,25 @@ class Call {
 		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
 			boolean returnValue = true;
 			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
-			long start = 0;
-			long duration;
-			String msg = null;
-			try {
-				start = System.currentTimeMillis();
-				synchronized (this) {
-					startOneCall();
-				}
-				if (method != null) {
-					if (fire) {
-						LOG.debug("Invoking {} {} {}",context,kind,this);
-						Object methodResult = method.invoke(taskInstance.targetPojo, (Object[])args);
-						if (Boolean.FALSE.equals(methodResult)) {
-							returnValue = false;
-						}
-					}
-					else {
-						LOG.debug("Skipping {} {} {}",context,kind,this);
-						returnValue = false;
-					}
-				}
-				// For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
-				// for all threads to just reset this to false.
-				reserved = false;
-			} 
-			catch (InvocationTargetException e) {
-			    Throwable target = e.getTargetException();
-			    if (target instanceof RuntimeException) {
-			        throw (RuntimeException)target;
+			ReflectionClosure closure = null;
+			
+			synchronized (this) {
+			    startOneCall();
+			}
+			if (method != null) {
+			    if (fire) {
+			        closure = new ReflectionClosure(this,method,args,context,kind);
+			        returnValue = orc.getInterceptor().invokeTaskMethod(closure);
 			    }
-				throw new RuntimeException(target);
+			    else {
+			        LOG.debug("Skipping {} {} {}",context,kind,this);
+			        returnValue = false;
+			    }
 			}
-			catch (Exception e) {
-				msg = "Could not invoke " + context + " task " + kind + " " + signature() + " : " + e.getMessage();
-				throw new RuntimeException(msg);
-			}
-			finally {
-				long end = System.currentTimeMillis();
-				duration = end - start;
-				if (LOG.isDebugEnabled()) {
-					String rez = msg==null ? "success" : msg;
-					LOG.debug("Completed {} {} {} in {}ms result: {}",
-							context,kind,this,duration,rez);
-				}
-			}
+			// For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
+			// for all threads to just reset this to false.
+			reserved = false;
+			long duration = closure==null ? 0 : closure.getDurationMs();
 			return new Firing(taskInstance.targetPojo,duration,returnValue);
 		}
 		
@@ -475,13 +448,12 @@ class Call {
 			}
 			return null;
 		}
-		
+
 		/**
 		 * Associates a return value with the specific pojoCalled instance whose task method was invoked.
 		 * This is necessary because even when a pojoCalled task method returns false (it doesn't 'fire'), 
 		 * the result of completion is still propagated throughout the graph so that the termination 
 		 * logic can be applied.
-		 * @author bremccarthy
 		 */
 		class Firing {
 			/**
@@ -517,7 +489,7 @@ class Call {
 		return "Call " + sig;
 	}
 	
-	private String format(Method method) {
+	static String format(Method method) {
 		return method==null ? "<<no-method>>" : method.getName();
 	}
 	

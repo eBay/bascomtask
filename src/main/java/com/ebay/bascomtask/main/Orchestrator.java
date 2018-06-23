@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import com.ebay.bascomtask.config.BascomConfigFactory;
 import com.ebay.bascomtask.config.IBascomConfig;
+import com.ebay.bascomtask.config.ITaskInterceptor;
 import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
@@ -94,6 +95,18 @@ public class Orchestrator {
 		final List<Task.Instance> added = new ArrayList<>();  // Unique elements
 		final List<Call.Instance.Firing> fired = new ArrayList<>();  // May have dups
 	}
+	
+	/**
+	 * The config that will be used during any executions of this orchestrator.
+	 */
+	final IBascomConfig config = BascomConfigFactory.getConfig();
+	
+	/**
+	 * The interceptor used for making POJO task method calls. If this remains null (because the
+	 * caller has not set it, which will usually be the case), then the default interceptor
+	 * will be retrieved from <code>config</code>.
+	 */
+	ITaskInterceptor taskInterceptor = null;
 
 	/**
 	 * How we know which task instances are active for a given Task, relative to this orchestrator
@@ -190,6 +203,7 @@ public class Orchestrator {
 	 * A monotonically increasing counter used for debug messages
 	 */
 	private int invocationCount = 0;
+	
 	/**
 	 * Set to true after first invocation
 	 */
@@ -356,6 +370,25 @@ public class Orchestrator {
 	public Orchestrator name(String name) {
 	    this.name = name;
 	    return this;
+	}
+	
+	/**
+	 * Sets an interceptor to use for this orchestrator, rather than the default which
+	 * is retrieved from whichever IBascomConfig is active.
+	 * @param interceptor
+	 * @return this instance for fluent-style chaining
+	 * @see com.ebay.bascomtask.config.IBascomConfig#getDefaultInterceptor()
+	 */
+	public Orchestrator interceptor(ITaskInterceptor interceptor) {
+	    this.taskInterceptor = interceptor;
+	    return this;
+	}
+	
+	ITaskInterceptor getInterceptor() {
+	    if (taskInterceptor==null) {
+	        return config.getDefaultInterceptor();
+	    }
+	    return taskInterceptor;
 	}
 
 	/**
@@ -1124,7 +1157,6 @@ public class Orchestrator {
 			LOG.debug("Spawning \"{}\"",invocation);
 			final Orchestrator lock = this;
 			threadBalance++;
-			final IBascomConfig config = BascomConfigFactory.getConfig();
 			ExecutorService executor = config.getExecutor();
 			final Thread parent = Thread.currentThread();
 			executor.execute(new Runnable() {
