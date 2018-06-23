@@ -201,7 +201,34 @@ Now, for example, DependsOnB can execute even if C has not yet completed.
 
 ## Configuration
 
-There are relatively few ways needed to globally configure BascomTask, but where needed can be done with a custom implementation of IBascomConfig. A default singleton implementation of IBascomConfig is provided, but users can provide their own alternative implementation through BascomConfigFactory.
+Users can subclass IBascomConfig to effect various configuration and customizations within BascomTask. The easiest way to do that is to extend the existing DefaultBascomConfig implementation and selectively override any desired methods. Here is a simple example way to do that in Spring:
+
+```java
+@Component
+public class MyBascomConfig extends DefaultBascomConfig {
+	@PostConstruct
+    public void init() {
+        BascomConfigFactory.setConfig(this);
+    }
+	// override other methods as desired
+}
+```
+
+Among other things, interceptors can be set on on task method calls. For example, add to the above MyBascomConfig the following method to log start and end messages on all task method invocations:
+
+```java
+    @Override
+	public boolean invokeTaskMethod(ITaskMethodClosure closure) {
+	System.out.println("Start " + closure.getMethodFormalSignature());
+    	  try {
+    		return super.invokeTaskMethod(closure);
+    	  }
+    	  finally {
+    		System.out.println("End " + closure.getMethodFormalSignature());
+    	  }
+	}
+```
+
 
 ## Comparison to Alternatives
 BascomTask does not maintain persistent state and therefore is unlikely to be suitable for long-running and/or indeterminate-duration tasks (e.g. when human approval is required). It provides no GUI for state inspection, only Java libraries for programmers. It is intra- and not inter-process: it provides a framework for making remote calls but is not aware of how those calls are made or managed within tasks. There are options such as [Netflix Conductor](https://netflix.github.io/conductor/) or other third-party business process management tools for persistent, long running tasks. While there is no particular BascomTask limit on orchestration or task duration, the longer the duration the more the more important becomes the ability to persist state between failures. A BascomTask-driven result can be fit within a larger long-running process orchestrated by one of these other tools, each offering their respective strengths at different levels of granularity.

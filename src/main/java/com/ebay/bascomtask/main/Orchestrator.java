@@ -1210,10 +1210,15 @@ public class Orchestrator {
 	    }
 		boolean complete = false;
 		rec.fired.add(firing);
+
+		// Both taskInstance and callInstance need to be marked as completable,
+		// but here we're only interested in whether the task has completed
 		if (taskOfCallInstance.completeOneCall()) {
 			complete = true;
 			waitForTasks.remove(taskOfCallInstance);
 		}
+		callInstance.completeOneCall();
+		
 		List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
 		Invocation inv = null;
 		if (newTaskInstances != null) {
@@ -1221,7 +1226,9 @@ public class Orchestrator {
 		}
 		List<Call.Param.Instance> backList = taskOfCallInstance.backList;
 		String cmsg = complete?"":"in";
-		LOG.debug("On {}complete exit from {} eval {} backLinks ",cmsg,callInstance,backList.size());
+		int sz = backList.size();
+		String plural = sz != 1 ? "s" : "";
+		LOG.debug("On {}complete exit from {} eval {} backLink{} ",cmsg,callInstance,backList.size(),plural);
 		inv = continueOrSpawn(taskOfCallInstance,firing,"back",inv);
 		return inv;
 	}

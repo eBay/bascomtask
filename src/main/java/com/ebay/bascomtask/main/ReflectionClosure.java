@@ -71,9 +71,9 @@ public class ReflectionClosure implements ITaskMethodClosure {
         long startMs = System.currentTimeMillis();
         long startNs = System.nanoTime();
         String msg = null;
+        Object targetPojo = getTargetPojoTask();
         try {
-            LOG.debug("Invoking {} {} {}",context,kind,this);
-            Object targetPojo = getTargetPojoTask();
+            LOG.debug("Invoking {} {} on {}",context,kind,targetPojo);
             Object methodResult = method.invoke(targetPojo, (Object[])args);
             if (Boolean.FALSE.equals(methodResult)) {
                 returnValue = false;
@@ -95,8 +95,8 @@ public class ReflectionClosure implements ITaskMethodClosure {
             durationNs = System.nanoTime() - startNs;
             if (LOG.isDebugEnabled()) {
                 String rez = msg==null ? "success" : msg;
-                LOG.debug("Completed {} {} {} in {}ms result: {}",
-                        context,kind,this,durationMs,rez);
+                LOG.debug("Completed {} {} on {} in {}ms result: {}",
+                        context,kind,targetPojo,durationMs,rez);
             }
         }
         return returnValue;

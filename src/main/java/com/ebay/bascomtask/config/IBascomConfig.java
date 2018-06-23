@@ -22,8 +22,10 @@ import com.ebay.bascomtask.main.Orchestrator;
 
 /**
  * BascomTask configuration. A standard {@link DefaultBascomConfig} implementation
- * is provided, which may be overridden in {@link BascomConfigFactory}.
+ * is provided, which may be overridden and then set to replaced whatever config
+ * is currently in place.
  * @author brendanmccarthy
+ * @see com.ebay.bascomtask.config.BascomConfigFactory#setConfig(IBascomConfig)
  */
 public interface IBascomConfig {
 	

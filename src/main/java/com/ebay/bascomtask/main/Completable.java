@@ -83,9 +83,16 @@ class Completable {
 	}
 
 	String completionSay() {
-		Completable oc = containingCompletable();
-		String outerText = oc==null ? "" : " of " + oc.completionSay();
-		return "s" + String.valueOf(started) + "/c" + completed + "/t" + completionThresholdCount + outerText;
+	    String status = "s" + String.valueOf(started) + "/c" + completed + "/t" + completionThresholdCount;
+	    Completable oc = containingCompletable();
+	    String outerText = oc==null ? "" : oc.completionSay();
+	    
+	    // Avoid repeating task and call status which in will usually be the same since
+	    // most POJO tasks will usually have only one method to invoke.
+	    if (!status.endsWith(outerText)) {
+	        status += " of " + outerText;
+	    }
+		return status;
 	}
 	
 	Completable containingCompletable() {
