@@ -59,7 +59,7 @@ public interface IBascomConfig {
 	/**
 	 * Provides the default interceptor used by an orchestrator,
 	 * unless explicitly overridden for that orchestrator.
-	 * @return
+	 * @return the interceptor that an orchestrator will use by default
 	 * @see com.ebay.bascomtask.main.Orchestrator#interceptor(ITaskInterceptor)
 	 */
 	ITaskInterceptor getDefaultInterceptor();

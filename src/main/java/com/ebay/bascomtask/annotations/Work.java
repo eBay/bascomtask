@@ -24,10 +24,25 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /**
- * Marks a task method that may be executed when a task is added through
- * {@link com.ebay.bascomtask.main.Orchestrator#addWork(Object)} rather 
- * than {@link com.ebay.bascomtask.main.Orchestrator#addPassThru(Object)}.
- * A {@literal @}Work method implements the primary functionality of a task.
+ * Marks a method as a "task method" to be executed when a task is added by calling
+ * {@link com.ebay.bascomtask.main.Orchestrator#addWork(Object)} rather than 
+ * {@link com.ebay.bascomtask.main.Orchestrator#addPassThru(Object)}. A {@literal @}Work 
+ * method implements the primary functionality of a task.
+ * <p>
+ * Arguments to a task method can be any non-primitive Object, though each of those 
+ * objects should also have been added to the orchestrator prior to its execution.
+ * Upon execution of a task method, each of its arguments will have already been 
+ * invoked. An exception to this is any parameter of type {@link com.ebay.bascomtask.main.ITask}
+ * which are not 'executed' separately in this sense, but simply injected with the
+ * <code>ITask</code> wrapper for the POJO itself. A task method can also have no arguments, 
+ * in which case it is invoked immediately upon orchestrator execution.
+ * <p>
+ * A task method can return a boolean result or simply be void, which equates to returning {@code true}.
+ * A return value of {@code false} indicates that downstream tasks should not fire: any task fires only if
+ * all of its inputs have fired, except for {@link java.util.List} parameters, which never prevent firing
+ * but instead any false-returning tasks will be excluded from the list (which means that a list parameter 
+ * may be empty).
+ * 
  * @author brendanmccarthy
  */
 @Documented

@@ -375,7 +375,7 @@ public class Orchestrator {
 	
 	/**
 	 * Returns an id for this instance which has very low probability of clashing with other ids.
-	 * @return
+	 * @return id of this object
 	 */
 	public String getId() {
 	    return id;
@@ -384,7 +384,7 @@ public class Orchestrator {
 	/**
 	 * Sets an interceptor to use for this orchestrator, rather than the default which
 	 * is retrieved from whichever IBascomConfig is active.
-	 * @param interceptor
+	 * @param interceptor to use in place of default
 	 * @return this instance for fluent-style chaining
 	 * @see com.ebay.bascomtask.config.IBascomConfig#getDefaultInterceptor()
 	 */
@@ -592,7 +592,9 @@ public class Orchestrator {
 	 * @param maxExecutionTimeMillis to timeout
 	 * @throws RuntimeException generated from a task
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
-	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no mathcing {@literal @}Work dependents
+	 * @throws InvalidTask.AlreadyAdded if the same task instance was added more than once
+	 * @throws InvalidTask.BadParam if a task method has a parameter that cannot be processed
+	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no matching {@literal @}Work dependents
 	 * @throws InvalidGraph.Circular if a circular reference between two tasks is detected
 	 * @throws InvalidGraph.MultiMethod if a task has more than one callable method and is not marked multiMethodOk()
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
@@ -653,7 +655,7 @@ public class Orchestrator {
 	    }
 	    
 	    void report(String where) {
-	        LOG.debug("{} {}{} {} with {}->{} tasks / {} roots\n{}",where,pfx,context,id,currentTaskCount,numberTasks,tasksPlural,numberRoots,rootsPlural,getGraphState());
+	        LOG.debug("{} {}{} {}with {}->{} task{} / {} root{}\n{}",where,pfx,context,id,currentTaskCount,numberTasks,tasksPlural,numberRoots,rootsPlural,getGraphState());
 	    }
 	}
 	
@@ -691,6 +693,7 @@ public class Orchestrator {
 	 * Adds the given tasks and links each parameter of each applicable (@Work or @PassThru) call with each instance 
 	 * of that parameter's type. Also verifies that all tasks are callable, by ensuring that they have at least one 
 	 * such call that has all parameters available.
+	 * @param taskInstances to be added to the graph
 	 * @throws InvalidGraph if any task is un-callable, and if so include list of all such tasks (if more than one)
 	 * @return non-null but possibly empty list of instances ready to fire
 	 */
@@ -730,8 +733,11 @@ public class Orchestrator {
 	}
 
     private void addActual(Task.Instance taskInstance) {
+        if (pojoMap.get(taskInstance.targetPojo) != null) {
+            throw new InvalidTask.AlreadyAdded("Invalid attempt to add task twice: " + taskInstance.targetPojo);
+        }
+        pojoMap.put(taskInstance.targetPojo,taskInstance);
 		allTasks.add(taskInstance);
-		pojoMap.put(taskInstance.targetPojo,taskInstance);
 		recordCallsAndParameterInstances(taskInstance);
 		Task task = taskInstance.getTask();
 		TaskRec rec = taskMapByType.get(task);
@@ -815,7 +821,14 @@ public class Orchestrator {
 				Call.Param.Instance paramInstance = callInstance.paramInstances[i];
 				TaskRec rec = enumerateDependentTaskParameters(paramInstance,explicitsBefore);
 				if (rec==null) {
-					match = root = false;
+				    if (isInjectable(paramInstance)) {
+				        // Perform the same effects as below without accounting for anything having fired
+				        paramInstance.bindings.add(callInstance.createTaskFiring());
+				        callInstance.startingFreeze[i] = 1;
+				    }
+				    else {
+				        match = root = false;
+				    }
 				}
 				else {
 					for (Task.Instance supplierTaskInstance: rec.added) {
@@ -864,6 +877,11 @@ public class Orchestrator {
 			}
 		}
 	}
+	
+	private boolean isInjectable(Param.Instance paramInstance) {
+	    return ITask.class.equals(paramInstance.getTask().taskClass);
+	}
+					    
 
     private boolean addExplicitNonParameters(Task.Instance taskInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
         boolean root = true;
@@ -898,7 +916,7 @@ public class Orchestrator {
 	 * @return
 	 */
 	private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
-	    Task task = paramInstance.getTask();	    
+	    Task task = paramInstance.getTask();  
         TaskRec rec = taskMapByType.get(task);
         if (explicitsBefore != null) {  // If no explicit parameters than all known instances are auto-wired
             List<Task.Instance> befores = explicitsBefore.get(task);
@@ -977,6 +995,9 @@ public class Orchestrator {
 					int pc = 0;
 					if (nextParam.getParam().isList) {
 						pc = 1;
+					}
+					else if (isInjectable(nextParam)) {
+					    pc = 1;
 					}
 					else {
 					    for (Task.Instance nextTaskInstance: nextParam.incoming) {

@@ -19,10 +19,21 @@ package com.ebay.bascomtask.main;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 
 /**
- * Shadow object for POJOs added to an orchestrator.
+ * Shadow object for POJO tasks added to an orchestrator.
  * @author brendanmccarthy
  */
 public interface ITask {
+    
+    /**
+     * Returns the orchestrator which created and owns this task. An ITask is created 
+     * by an orchestrator e.g. when POJO tasks are added to it.
+     * @return owning orchestrator
+     * @see com.ebay.bascomtask.main.Orchestrator#addWork(Object)
+     * @see com.ebay.bascomtask.main.Orchestrator#addPassThru(Object)
+     * @see com.ebay.bascomtask.main.Orchestrator#addConditionally(Object, boolean)
+     */
+    public Orchestrator getOrchestrator();
+    
 	/**
 	 * The name of this pojoCalled instance in an orchestrator, guaranteed to always be unique
 	 * that orchestrator.

@@ -319,6 +319,11 @@ class Task {
                 return map;
             }
         }
+
+        @Override
+        public Orchestrator getOrchestrator() {
+            return orc;
+        }
 	}
 	
 	/**

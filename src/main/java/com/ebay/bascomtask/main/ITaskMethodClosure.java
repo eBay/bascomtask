@@ -23,26 +23,26 @@ package com.ebay.bascomtask.main;
 public interface ITaskMethodClosure {
     
     /**
-     * The class name of the POJO or its overwritten name(String) value.
-     * @return
+     * Returns the class name of the POJO or its overwritten name(String) value.
+     * @return the class name of the POJO or another name if explicitly set on the task
      */
     String getTaskName();
     
     /**
-     * The java method name.
-     * @return
+     * Retrieves the method name.
+     * @return The java method name
      */
     String getMethodName();
     
     /**
      * Method name with argument types.
-     * @return
+     * @return the java signature with just the argument types
      */
     String getMethodFormalSignature();
     
     /**
      * Method name with argument values.
-     * @return
+     * @return the signature with the actual arguments values
      */
     String getMethodActualSignature();
     

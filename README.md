@@ -63,6 +63,7 @@ More usefully, several tasks would be involved, and @Work methods can take other
 ```
 In the example above, HellTask has no @Work methods. When added to the orchestrator graph it is immediately made available to downstream tasks (ConcatenatorTask in this case). WorldTask has a @Work method with no arguments and is started right away. ConcatenatorTask is started once WorldTask is completed. BascomTask processes these tasks all in the calling thread as there is no point in spawning separate threads. If HelloTask were to instead have a @Work method like WorldTask, BascomTask would spawn a thread to execute either HelloTask or WorldTask in parallel while the calling thread executes the other. BascomTask is dataflow driven and attempts to only create create threads when there is opportunity for parallelism.
 
+Though not illustrated above, each call to addWork() returns an ITask object upon which several fluent-style operations are available for additional customization. For example, each task can have a name which would then substitute for the class name in logging output. The call to Orchestrator.create() similarly has several customization options available.
 
 ## Variant and Optional Tasks
 Sometimes it is desired to modify task behavior based on certain conditions. While such logic can simply be embedded within any task, it can also be useful to preserve the benefit of distinct task responsibility and provide different classes for different variant task behavior. If two variant tasks are logically related in terms of purpose and also produce the same result, then a common base class be introduced that downstream tasks can depend on. This approach is beneficial in terms of hiding the variation from downstream tasks. When it is more natural for a downstream task to be aware of and process the variants differently, then multiple @Work methods can be provided on the downstream task, each with different parameter combinations.
@@ -143,7 +144,7 @@ orc.execute();
 ## Inline Conditional Wiring
 In the examples so far, conditional wiring (e.g. adding variant tasks, addConditionally, etc.) in BascomTask is done up front prior to execute(). However, sometimes that conditionality depends on the the outcome of executing other tasks and thus cannot therefore all be done up front. One easy approach to this problem is to simply nest a new Orchestrator inside a task method controlled by an outer Orchestrator; there is no limit on nesting in this way. 
 
-In addition, BascomTask allows dynamic extension of a single Orchestrator which can expose more potential parallelism. Consider the following example with three independent roots A, B, and C as well as two tasks that depend on B and C _but_ those dependent tasks should only run based on an outcome from A:
+In addition, BascomTask allows dynamic extension of a single Orchestrator which can expose more potential parallelism. Consider first the following example using nested Orchestrators. Three independent roots A, B, and C as well as two tasks that depend on B and C _but_ those dependent tasks should only run based on an outcome from A:
 
  ```Java
 class A {
@@ -197,11 +198,23 @@ orc.addWork(new Object() {
   }
 orc.execute();
 ```
-Now, for example, DependsOnB can execute even if C has not yet completed.
+Now, for example, DependsOnB can execute even if C has not yet completed. The same effect could still be achieved with a separate Chooser class, where the outer orchestrator can be retrieved by requesting one's own ITask instance as a parameter which is then injected for you:
+
+```java
+class Chooser {
+	@Work public void exec(A a, B b, C c, ITask task) {
+		if (a.someConditionIsTrue()) {
+			Orchestrator orc = task.getOrchestrator();
+			...
+		}
+	}
+}
+```
+
 
 ## Configuration
 
-Users can subclass IBascomConfig to effect various configuration and customizations within BascomTask. The easiest way to do that is to extend the existing DefaultBascomConfig implementation and selectively override any desired methods. Here is a simple example way to do that in Spring:
+IBascomConfig can be subclassed to effect various global configuration and customizations within BascomTask. The easiest way to do that is to extend the existing DefaultBascomConfig implementation and selectively override any desired methods. Here is a simple example way to do that in Spring:
 
 ```java
 @Component
@@ -217,16 +230,23 @@ public class MyBascomConfig extends DefaultBascomConfig {
 Among other things, interceptors can be set on on task method calls. For example, add to the above MyBascomConfig the following method to log start and end messages on all task method invocations:
 
 ```java
+    private ITaskInterceptor taskInterceptor = new ITaskInterceptor() {
+        @Override
+        public boolean invokeTaskMethod(ITaskMethodClosure closure) {
+            System.out.println("Start " + closure.getMethodFormalSignature());
+            try {
+                return closure.executeTaskMethod();
+            }
+            finally {
+                System.out.println("End " + closure.getMethodFormalSignature());
+            }
+        }
+    }
+
     @Override
-	public boolean invokeTaskMethod(ITaskMethodClosure closure) {
-	System.out.println("Start " + closure.getMethodFormalSignature());
-    	  try {
-    		return super.invokeTaskMethod(closure);
-    	  }
-    	  finally {
-    		System.out.println("End " + closure.getMethodFormalSignature());
-    	  }
-	}
+    public ITaskInterceptor getDefaultInterceptor() {
+        return taskInterceptor;
+    }
 ```
 
 

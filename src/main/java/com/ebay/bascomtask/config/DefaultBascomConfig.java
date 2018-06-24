@@ -76,10 +76,10 @@ public class DefaultBascomConfig implements IBascomConfig {
      * of any more predecessors. This is not an absolute width since the thread id and name is always included
      * as well as the thread local index. It just prevents arbitrarily long thread names for very heavily nested
      * thread spawn chains.
-     * @return
+     * @return the string width indicating when to stop including thread predecessors
      */
     public int getThreadNameWidthMax() {
-        return 20;
+        return 32;
     }
 
     /**
@@ -96,7 +96,7 @@ public class DefaultBascomConfig implements IBascomConfig {
      * Sets the name of given thread like so:
      * <p><code>
      *   BT:ID:NAME#..11.12.13.14
-     * <p></code>
+     * </code><p>
      * Where:
      * <ul>
      * <li> "BT:" is a standard prefix

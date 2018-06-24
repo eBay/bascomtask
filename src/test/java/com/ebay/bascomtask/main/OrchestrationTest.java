@@ -80,6 +80,17 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(0);
 	}
 	
+	@Test(expected=InvalidTask.AlreadyAdded.class)
+	public void testAddBothActiveAndPasive() {
+		class A extends PathTask {
+			@PassThru public void exec() {got();}
+		}
+		A a = new A();
+		track.work(a);
+		track.work(a);
+		verify(0);
+	}
+	
 	@Test(expected=InvalidTask.NotPublic.class)
 	public void testNonPublicMethod() {
 		class A extends PathTask {
@@ -100,14 +111,38 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(0);
 	}
 
+	/**
+	 * Can't do anything with primitives as parameters
+	 */
 	@Test(expected=InvalidTask.BadParam.class)
-	public void testNonTaskParam() {
+	public void testPrimitiveTaskParam() {
 		class A extends PathTask {
 			@Work public void exec(int x) {got();}
 		}
 		A a = new A();
 		PathTask taskA = track.work(a);
 		verify(0);
+	}
+	
+	/**
+	 * Any object can be added which is trivially made available to other task methods as a parameter
+	 */
+	@Test
+	public void testNonTaskParam() {
+	    class A {}
+	    class Holder {
+	        A a;
+	    }
+	    final Holder holder = new Holder();
+		class B extends PathTask {
+			@Work public void exec(A a) {got(); holder.a = a;}
+		}
+		A a = new A();
+		B b = new B();
+		track.orc.addWork(a);
+		PathTask taskB = track.work(b);
+		verify(0);
+		assertSame(a,holder.a);
 	}
 	
 	@Test(expected=InvalidGraph.MissingDependents.class)
@@ -1094,6 +1129,39 @@ public class OrchestrationTest extends PathTaskTestBase {
 		PathTask taskB = track.work(b).exp(a);
 		PathTask taskC = track.work(c).exp(b);
 		verify(0);
+	}
+	
+	@Test
+	public void testTaskInjection() {
+	    
+	    class Holder {
+	        ITask aTask;
+	        ITask bTask;
+	        ITask cTask;
+	    }
+	    
+	    final Holder holder = new Holder();
+	    
+	    class A extends PathTask {
+	        @Work public void exec(ITask task) {got(); holder.aTask = task;}
+	    }
+	    class B extends PathTask {
+	        @Work public void exec(A a, ITask task) {got(a); holder.bTask = task;}
+	    }
+	    class C extends PathTask {
+	        @Work public void exec(ITask task, A a) {got(a); holder.cTask = task;}
+	    }
+	    
+		A a = new A();
+		B b = new B();
+		C c = new C();
+		PathTask taskA = track.work(a);
+		PathTask taskB = track.work(b).exp(a);
+		PathTask taskC = track.work(c).exp(a);
+		verify(1);
+		assertSame(taskA.taskInstance,holder.aTask);
+		assertSame(taskB.taskInstance,holder.bTask);
+		assertSame(taskC.taskInstance,holder.cTask);
 	}
 }
 

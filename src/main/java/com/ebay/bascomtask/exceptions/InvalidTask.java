@@ -27,6 +27,16 @@ public class InvalidTask extends RuntimeException {
 		super(message);
 	}
 
+	/**
+	 * Attempts to add the same POJO task more than once are rejected else 
+	 * the results would be ambiguous.
+	 */
+	public static class AlreadyAdded extends InvalidTask {
+		public AlreadyAdded(String message) {
+			super(message);
+		}
+	}
+	
 	public static class BadParam extends InvalidTask {
 		public BadParam(String message) {
 			super(message);

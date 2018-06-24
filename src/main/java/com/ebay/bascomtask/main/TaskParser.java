@@ -94,10 +94,10 @@ class TaskParser {
 							nextMethodParamClass = (Class<?>)typeArg;
 						}
 					}
-					Task paramTask = parse2(nextMethodParamClass);
-					if (paramTask.workCalls.size()==0 && paramTask.passThruCalls.size()==0) {  // TODO Orc param
-						throw new InvalidTask.BadParam("Task method " + mn(method) + " has non-Task parameter of type " + nextMethodParamClass.getSimpleName());
+					if (nextMethodParamClass.isPrimitive()) {
+					    throw new InvalidTask.BadParam("Task method " + mn(method) + " has non-Object parameter of type " + nextMethodParamClass.getSimpleName());
 					}
+					Task paramTask = parse2(nextMethodParamClass);
 					Call.Param param = call.new Param(paramTask,index,isList);
 					call.add(param);
 					paramTask.backLink(param);

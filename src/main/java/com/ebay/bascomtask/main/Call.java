@@ -474,6 +474,10 @@ class Call {
 				this.taskMethodReturnValue = returnValue;
 			}
 		}
+		
+		Firing createTaskFiring() {
+		    return new Firing(taskInstance,0,true);
+		}
 	}
 	
 	Call(Task task, Method method, Scope scope, boolean light) {
