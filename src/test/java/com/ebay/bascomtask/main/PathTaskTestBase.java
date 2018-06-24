@@ -112,6 +112,8 @@ public abstract class PathTaskTestBase {
 	 * it gets thrown.
 	 */
 	static class OnlyATestException extends RuntimeException {
+	    OnlyATestException() {super();}
+	    OnlyATestException(String msg) {super(msg);}
         private static final long serialVersionUID = 1L;
 	}
 }

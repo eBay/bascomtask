@@ -29,6 +29,7 @@ import com.ebay.bascomtask.annotations.Scope;
 import com.ebay.bascomtask.annotations.Work;
 import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
+import com.ebay.bascomtask.exceptions.RuntimeGraphError;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -250,6 +251,43 @@ public class OrchestrationTest extends PathTaskTestBase {
 		PathTask taskC = track.work(c).exp(a,b);
 		verify(1);
 	}
+
+	@Test
+	public void testOneException() {
+		class A extends PathTask {
+			@Work public void exec() {throw new OnlyATestException("foo");}
+		}
+		A a = new A();
+		PathTask taskA = track.work(a);
+		try {
+		    verify(0);
+		}
+		catch (OnlyATestException e) {
+		    String gs = track.orc.getGraphState();
+		    assertTrue(gs.contains(OnlyATestException.class.getSimpleName()));
+		}
+	}
+	
+	@Test
+	public void testTwoExceptions() {
+		class A extends PathTask {
+			@Work public void exec() {throw new OnlyATestException();}
+		}
+		A a1 = new A();
+		A a2 = new A();
+		PathTask taskA1 = track.work(a1).fork();
+		PathTask taskA2 = track.work(a2).fork();
+		try {
+		    verify(0);
+		}
+		catch (RuntimeGraphError.Multi e) {
+		    assertEquals(2,e.getExceptions().size());
+		    String gs = track.orc.getGraphState();
+		    System.out.println("-->\n"+gs);
+		    assertTrue(gs.contains(OnlyATestException.class.getSimpleName()));
+		}
+	}
+	
 	
 	private void test1ParException(boolean forkAElseForkB) {
 		class A extends PathTask {
@@ -301,12 +339,12 @@ public class OrchestrationTest extends PathTaskTestBase {
 	    testMultiException(false,true,true);
 	}
 	
-	@Test(expected=OnlyATestException.class)
+	@Test(expected=RuntimeGraphError.Multi.class)
 	public void testMultiExceptionKeepB() {
 	    testMultiException(true,true,false);
 	}
 	
-	@Test(expected=OnlyATestException.class)
+	@Test(expected=RuntimeGraphError.Multi.class)
 	public void testMultiExceptionKeepNone() {
 	    testMultiException(true,true,true);
 	}

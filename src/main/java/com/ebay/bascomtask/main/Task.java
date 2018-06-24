@@ -143,6 +143,11 @@ class Task {
 		List<Object> pendingBeforeDependencies = null;
 		List<Object> pendingAfterDependencies = null;
 		
+		/**
+		 * Any exception that occurs when a targetPojo task method is invoked is recorded here
+		 */
+		private List<Exception> executionExceptions = null;
+		
 		Instance(Orchestrator orc, Object targetTask, TaskMethodBehavior taskMethodBehavior) {
 			this.orc = orc;
 			this.targetPojo = targetTask;
@@ -323,6 +328,17 @@ class Task {
         @Override
         public Orchestrator getOrchestrator() {
             return orc;
+        }
+
+        void addException(Exception err) {
+            if (executionExceptions == null) {
+                executionExceptions = new ArrayList<>();
+            }
+            executionExceptions.add(err);
+        }
+        
+        List<Exception> getExecutionExceptions() {
+            return executionExceptions;
         }
 	}
 	

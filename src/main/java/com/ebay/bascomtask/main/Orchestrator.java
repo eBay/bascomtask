@@ -106,7 +106,7 @@ public class Orchestrator {
 	 * caller has not set it, which will usually be the case), then the default interceptor
 	 * will be retrieved from <code>config</code>.
 	 */
-	ITaskInterceptor taskInterceptor = null;
+	private ITaskInterceptor taskInterceptor = null;
 
 	/**
 	 * How we know which task instances are active for a given Task, relative to this orchestrator
@@ -558,6 +558,12 @@ public class Orchestrator {
 			throw new InvalidTask.NameConflict("Task name\"" + name + "\" already in use");
 		}
 	}
+	
+
+    public synchronized void recordException(Call.Instance callInstance, Exception e) {
+        exceptions.add(e);
+        callInstance.taskInstance.addException(e);
+    }
 	
 	
 	/**
@@ -1035,9 +1041,12 @@ public class Orchestrator {
 	 * or spawned threads. Pick them up here and propagate.
 	 */
 	private void checkForExceptions() {
-		if (exceptions.size() > 0) {
-			// TODO collect if more than one
+	    int nx = exceptions.size();
+		if (nx > 0) {
 			Exception e = exceptions.get(0);
+			if (nx > 1) {
+			    throw new RuntimeGraphError.Multi(e,exceptions);
+			}
 			if (e instanceof RuntimeException) {
 			    throw (RuntimeException)e;
 			}
@@ -1144,6 +1153,20 @@ public class Orchestrator {
 				sb.append(callInstance.hasCompleted() ? ' ' : '!');
 				sb.append("  ");
 				sb.append(callInstance.formatState());
+				List<Exception> xs = taskInstance.getExecutionExceptions();
+				if (xs != null) {
+				    sb.append(" ");
+				    for (Exception next: xs) {
+				        sb.append(" FAILED: ");
+				        sb.append(next.getClass().getSimpleName());
+				        String msg = next.getMessage();
+				        if (msg != null) {
+				            sb.append("(\"");
+				            sb.append(msg);
+				            sb.append("\")");
+				        }
+				    }
+				}
 			}
 		}
 		return sb.toString();
@@ -1213,9 +1236,6 @@ public class Orchestrator {
 					finally {
 						int tb;
 						synchronized(lock) {
-							if (err != null) {
-								lock.exceptions.add(err);
-							}
 							tb = --lock.threadBalance;
 							if (tb==0) {
 								// This could possibly be overwritten if threadBalance is driven to 

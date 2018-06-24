@@ -74,7 +74,7 @@ public class TaskThreadStat {
     
     /**
      * True iff the associated thread is actively executing a task.
-     * @return
+     * @return true iff active
      */
     public boolean isActive() {
         return active;

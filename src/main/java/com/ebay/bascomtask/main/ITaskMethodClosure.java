@@ -67,13 +67,13 @@ public interface ITaskMethodClosure {
     
     /**
      * Returns millisecond duration of executeTaskMethod call, valid even if exception thrown.
-     * @return
+     * @return duration
      */
     long getDurationMs();
     
     /**
      * Returns nanosecond duration of executeTaskMethod call, valid even if exception thrown.
-     * @return
+     * @return duration
      */
     long getDurationNs();
 }

@@ -16,6 +16,8 @@ limitations under the License.
 **************************************************************************/
 package com.ebay.bascomtask.exceptions;
 
+import java.util.List;
+
 /**
  * Generated during Orchestrator execution. Some tasks may have completed
  * and some may still be in progress.
@@ -43,9 +45,23 @@ public class RuntimeGraphError extends RuntimeException {
 	 * other active threads to complete the task(s) being waited on. This
 	 * is an internal error and should not happen.
 	 */
-	public static class Stall extends InvalidTask {
+	public static class Stall extends RuntimeGraphError {
 		public Stall(String msg) {
 			super(msg);
+		}
+	}
+	
+	/**
+	 * When multiple errors occur.
+	 */
+	public static class Multi extends RuntimeGraphError {
+	    private final List<Exception> exceptions;
+		public Multi(Exception e, List<Exception> all) {
+			super("Multiple exceptions, first is: " + e.getMessage(),e);
+			this.exceptions = all;
+		}
+		public List<Exception> getExceptions() {
+		    return exceptions;
 		}
 	}
 }

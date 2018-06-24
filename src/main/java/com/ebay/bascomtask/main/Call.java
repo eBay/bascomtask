@@ -427,7 +427,13 @@ class Call {
 			if (method != null) {
 			    if (fire) {
 			        closure = new ReflectionClosure(this,method,args,context,kind);
-			        returnValue = orc.getInterceptor().invokeTaskMethod(closure);
+			        try {
+			            returnValue = orc.getInterceptor().invokeTaskMethod(closure);
+			        }
+			        catch (Exception e) {
+			            orc.recordException(this,e);
+			            throw e;
+			        }
 			    }
 			    else {
 			        LOG.debug("Skipping {} {} {}",context,kind,this);
