@@ -92,10 +92,10 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(0);
 	}
 	
-	@Test(expected=InvalidTask.NotPublic.class)
+	@Test
 	public void testNonPublicMethod() {
 		class A extends PathTask {
-			@Work void exec() {got();}
+			@Work /*not public */ void exec() {got();}
 		}
 		A a = new A();
 		PathTask taskA = track.work(a);
@@ -283,7 +283,6 @@ public class OrchestrationTest extends PathTaskTestBase {
 		catch (RuntimeGraphError.Multi e) {
 		    assertEquals(2,e.getExceptions().size());
 		    String gs = track.orc.getGraphState();
-		    System.out.println("-->\n"+gs);
 		    assertTrue(gs.contains(OnlyATestException.class.getSimpleName()));
 		}
 	}
@@ -1201,6 +1200,83 @@ public class OrchestrationTest extends PathTaskTestBase {
 		assertSame(taskB.taskInstance,holder.bTask);
 		assertSame(taskC.taskInstance,holder.cTask);
 	}
+	
+	@Test
+	public void testOneSubclassOfTask() {
+	    
+	    final AtomicInteger count = new AtomicInteger(0);
+
+	    class A extends PathTask {
+	        @Work public void exec() {got(); count.incrementAndGet();}
+	    }
+	    class B extends A {
+	    }
+	    class C extends PathTask {
+	        @Work public void exec(A a) {got(a);} 
+	    }
+	    class D extends PathTask {
+	        @Work public void exec(B b) {got(b);} 
+	    }
+	    
+	    B b = new B();
+	    A a = b;
+		C c = new C();
+		D d = new D();
+		PathTask taskB = track.work(b);
+		PathTask taskC = track.work(c).exp(a);
+		PathTask taskD = track.work(d).exp(b);		
+		verify(1);
+		assertEquals(1,count.get());
+	}
+	
+	@Test
+	public void testTwoSubclassesOfTask() {
+	    final AtomicInteger count = new AtomicInteger(0);
+	    
+	    class A extends PathTask {
+	        @Work public void exec() {got(); count.incrementAndGet();}
+	    }
+	    class B extends A {}
+	    class C extends A {}
+	    class D extends PathTask {
+	        @Work public void exec(A a) {got(a);} 
+	    }
+	    
+		B b = new B();
+		C c = new C();
+		D d = new D();
+		PathTask taskB = track.work(b);
+		PathTask taskC = track.work(c);
+		PathTask taskD = track.work(d).exp(b).exp(c);		
+		verify(1);
+		assertEquals(2,count.get());
+	}
+	
+	@Test
+	public void testMethodOnSubclass() {
+	    
+	    final AtomicInteger count = new AtomicInteger(0);
+	    
+	    class A extends PathTask {
+	        
+	    }
+	    class B extends A {
+	        @Work public void exec() {got(); count.incrementAndGet();} 
+	    }
+	    class C extends PathTask {
+	        @Work public void exec(A a) {got(a);} 
+	    }
+	    
+		A a = new B();
+		C c = new C();
+		PathTask taskB = track.work(a);
+		PathTask taskC = track.work(c).exp(a);		
+		verify(0);
+		assertEquals(1,count.get());
+	}
 }
+
+
+
 
 

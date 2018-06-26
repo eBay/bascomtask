@@ -62,7 +62,7 @@ class TaskParser {
 	}
 	
 	private void parse(Task task) {
-		for (Method method: task.taskClass.getDeclaredMethods()) {
+		for (Method method: task.taskClass.getMethods()) {
 			Call call = null;
 			Work work = method.getAnnotation(Work.class);
 			if (work != null) {
@@ -113,9 +113,11 @@ class TaskParser {
 	
 	private void verifyAccess(Method method) {
 		int mod = method.getModifiers();
+		/*
 		if (!Modifier.isPublic(mod)) {
 			throw new InvalidTask.NotPublic("Task method " + mn(method) + " must be public");
 		}
+		*/
 		Class<?> rt = method.getReturnType();
 		if (rt != Void.TYPE && rt != Boolean.TYPE) {
 			throw new InvalidTask.BadReturn("Task method " + mn(method) + " must return void or boolean");

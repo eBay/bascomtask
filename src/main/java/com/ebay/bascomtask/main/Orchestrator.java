@@ -109,17 +109,18 @@ public class Orchestrator {
 	private ITaskInterceptor taskInterceptor = null;
 
 	/**
-	 * How we know which task instances are active for a given Task, relative to this orchestrator
+	 * How we know which task instances are active for a given POJO task class, relative to this orchestrator.
+	 * An added instance of <Sub extends Base> will result in two entries in this map, one for each of the types. 
 	 */
-	private final Map<Task,TaskRec> taskMapByType = new HashMap<>();
+	private final Map<Class<?>,TaskRec> taskMapByType = new HashMap<>();
 	
-	/*
-	 * For performance we also maintain the list directly
+	/**
+	 * For performance we also maintain the list directly.
 	 */
 	private final List<Task.Instance> allTasks = new ArrayList<>();
 	
 	/**
-	 * Associates each user pojo task with its Task.Instance
+	 * Associates each POJO task with its Task.Instance.
 	 */
 	private final Map<Object,Task.Instance> pojoMap = new HashMap<>();
 
@@ -129,17 +130,18 @@ public class Orchestrator {
 	private final Map<String,Task.Instance> taskMapByName = new HashMap<>();
 	
 	/**
-	 * All Calls of all Task.Instances in this orchestrator
+	 * All Call.Instances of all Task.Instances in this orchestrator.
 	 */
 	private final Map<Call,List<Call.Instance>> callMap = new HashMap<>();
 	
 	/**
-	 * All Parameters of all such calls in this orchestrator
+	 * All Param.Instances of all such calls in this orchestrator.
 	 */
 	private final Map<Param,List<Param.Instance>> paramMap = new HashMap<>();
 	
 	/**
-	 * Aggregates exceptions from sub-threads to roll-up to the main thread
+	 * Aggregates exceptions, which may be more than one when sub-threads 
+	 * independently generate exceptions.
 	 */
 	private List<Exception> exceptions = new ArrayList<>();
 
@@ -149,17 +151,20 @@ public class Orchestrator {
 	final AtomicInteger threadsCreated = new AtomicInteger(0);
 	
 	/**
-	 * Number of spawned threads that have not yet terminated
+	 * Number of spawned threads that have not yet terminated, increased
+	 * when a thread is pulled from the pool, and decreased when returned.
 	 */
 	private int threadBalance = 0;
 	
 	/**
-	 * How {@link #execute()} knows to exit: when this list is empty
+	 * How {@link #execute()} knows to exit: when this list is empty. NoWait
+	 * tasks are never added to this list.
 	 */
 	private final Set<Task.Instance> waitForTasks = new HashSet<>();
 	
 	/**
-	 * Pending call set by a different thread, waiting for main thread to pick it up
+	 * Set before spawning a new thread, when it is detected that the main thread
+	 * is idle and may as well do the work itself.
 	 */
 	private Invocation invocationPickup = null;
 	
@@ -195,14 +200,9 @@ public class Orchestrator {
 	private long startTime = 0;
 	
 	/**
-	 * For debugging
+	 * For debugging, callers can optionally set a name
 	 */
 	private String name = null;
-	
-	/**
-	 * A monotonically increasing counter used for debug messages
-	 */
-	//private int invocationCount = 0;
 	
 	/**
 	 * Set to true after first invocation
@@ -214,6 +214,10 @@ public class Orchestrator {
 	 */
 	private int waitLoopDebugCounter = 0;
 	
+	/**
+	 * Records thread-specific metadata as a map rather than thread-local,
+	 * so that it can be retrieved in any context.
+	 */
 	private Map<Thread,TaskThreadStat> threadMap = new HashMap<>();
 	
 	@Override
@@ -746,16 +750,24 @@ public class Orchestrator {
 		allTasks.add(taskInstance);
 		recordCallsAndParameterInstances(taskInstance);
 		Task task = taskInstance.getTask();
-		TaskRec rec = taskMapByType.get(task);
-		if (rec==null) {
-			rec = new TaskRec();
-			taskMapByType.put(task,rec);
+		Class<?> taskClass = task.taskClass;
+		do {
+		    TaskRec rec = taskMapByType.get(taskClass);
+		    if (rec==null) {
+		        rec = new TaskRec();
+		        taskMapByType.put(taskClass,rec);
+		    }
+		    if (taskClass==task.taskClass) {
+		        // Set index and name only for the direct type
+		        taskInstance.setIndexInType(rec.added.size());
+		        String tn = taskInstance.getName();
+		        checkUniqueTaskInstanceName(tn);
+		        taskMapByName.put(tn,taskInstance);
+		    }
+		    rec.added.add(taskInstance);
+		    taskClass = taskClass.getSuperclass();
 		}
-		taskInstance.setIndexInType(rec.added.size());
-		String tn = taskInstance.getName();
-		checkUniqueTaskInstanceName(tn);
-		taskMapByName.put(tn,taskInstance);
-		rec.added.add(taskInstance);
+		while (taskClass != null && Object.class != taskClass);
 	}
 	
 	private void recordCallsAndParameterInstances(Task.Instance task) {
@@ -894,7 +906,7 @@ public class Orchestrator {
         for (Entry<Task, List<Task.Instance>> next: explicitsBefore.entrySet()) {
             Task task = next.getKey();
             List<Task.Instance> befores = next.getValue();
-        	TaskRec rec = taskMapByType.get(task);
+        	TaskRec rec = taskMapByType.get(task.taskClass);
         	for (Call.Instance call: taskInstance.calls) {
         	    Call.Param.Instance paramInstance = call.addHiddenParameter(task,befores);
         	    int sz = 0;
@@ -923,7 +935,7 @@ public class Orchestrator {
 	 */
 	private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
 	    Task task = paramInstance.getTask();  
-        TaskRec rec = taskMapByType.get(task);
+        TaskRec rec = taskMapByType.get(task.taskClass);
         if (explicitsBefore != null) {  // If no explicit parameters than all known instances are auto-wired
             List<Task.Instance> befores = explicitsBefore.get(task);
             if (befores != null) {
@@ -1195,7 +1207,7 @@ public class Orchestrator {
 			taskOfCallInstance.startOneCall();
 			Call.Instance.Firing firing = inv.invoke(this,context,fire);
 			Task task = taskOfCallInstance.getTask();
-			TaskRec rec = taskMapByType.get(task);
+			TaskRec rec = taskMapByType.get(task.taskClass);
 
 			inv = processPostExecution(rec,callInstance,taskOfCallInstance,firing);
 			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fired
