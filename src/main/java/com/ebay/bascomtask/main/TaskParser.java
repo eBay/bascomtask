@@ -18,7 +18,6 @@ package com.ebay.bascomtask.main;
 
 import java.util.List;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -112,12 +111,6 @@ class TaskParser {
 	}
 	
 	private void verifyAccess(Method method) {
-		int mod = method.getModifiers();
-		/*
-		if (!Modifier.isPublic(mod)) {
-			throw new InvalidTask.NotPublic("Task method " + mn(method) + " must be public");
-		}
-		*/
 		Class<?> rt = method.getReturnType();
 		if (rt != Void.TYPE && rt != Boolean.TYPE) {
 			throw new InvalidTask.BadReturn("Task method " + mn(method) + " must return void or boolean");

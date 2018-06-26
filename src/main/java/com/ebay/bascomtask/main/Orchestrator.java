@@ -143,7 +143,7 @@ public class Orchestrator {
 	 * Aggregates exceptions, which may be more than one when sub-threads 
 	 * independently generate exceptions.
 	 */
-	private List<Exception> exceptions = new ArrayList<>();
+	private List<Exception> exceptions = null;
 
 	/**
 	 * A monotonically increasing counter. 
@@ -565,6 +565,9 @@ public class Orchestrator {
 	
 
     public synchronized void recordException(Call.Instance callInstance, Exception e) {
+        if (exceptions == null) {
+            exceptions = new ArrayList<>();
+        }
         exceptions.add(e);
         callInstance.taskInstance.addException(e);
     }
@@ -1053,17 +1056,19 @@ public class Orchestrator {
 	 * or spawned threads. Pick them up here and propagate.
 	 */
 	private void checkForExceptions() {
-	    int nx = exceptions.size();
-		if (nx > 0) {
-			Exception e = exceptions.get(0);
-			if (nx > 1) {
-			    throw new RuntimeGraphError.Multi(e,exceptions);
-			}
-			if (e instanceof RuntimeException) {
-			    throw (RuntimeException)e;
-			}
-			throw new RuntimeException(e);
-		}
+	    if (exceptions != null) {
+	        int nx = exceptions.size();
+	        if (nx > 0) {
+	            Exception e = exceptions.get(0);
+	            if (nx > 1) {
+	                throw new RuntimeGraphError.Multi(e,exceptions);
+	            }
+	            if (e instanceof RuntimeException) {
+	                throw (RuntimeException)e;
+	            }
+	            throw new RuntimeException(e);
+	        }
+	    }
 	}
 	
 	/**
@@ -1092,7 +1097,7 @@ public class Orchestrator {
 					if (wfc==0) {
 						break outer;
 					}
-					int exs = exceptions.size();
+					int exs = exceptions==null ? 0 : exceptions.size();
 					if (exs > 0) {
 					    if (threadBalance==0) {
 					        break outer;
@@ -1201,7 +1206,8 @@ public class Orchestrator {
 	 * @param context descriptive term for log messages
 	 */
 	void invokeAndFinish(Invocation inv, String context, boolean fire) {
-		if (inv != null) {
+	    // Don't invoke any more tasks if there are any pending exceptions
+		if (inv != null && this.exceptions==null) {
 			Call.Instance callInstance = inv.getCallInstance();
 			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
 			taskOfCallInstance.startOneCall();

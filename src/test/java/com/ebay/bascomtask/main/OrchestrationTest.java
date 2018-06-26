@@ -347,6 +347,36 @@ public class OrchestrationTest extends PathTaskTestBase {
 	public void testMultiExceptionKeepNone() {
 	    testMultiException(true,true,true);
 	}
+	
+	@Test
+	public void testExceptionHalt() {
+		class A extends PathTask {
+			@Work public void exec() {sleep(20); throw new OnlyATestException();}
+		}
+		class B extends PathTask {
+			@Work public void exec() {sleep(40); got();}
+		}
+		class C extends PathTask {
+		    boolean hit = false;
+			@Work public void exec(B b) {got(b); hit = true;}
+		}
+		A a = new A();
+		B b = new B();
+		C c = new C();
+		PathTask taskA = track.work(a);
+		PathTask taskB = track.work(b);
+		PathTask taskC = track.work(c);
+
+		try {
+		    verify(1);
+		}
+		catch (OnlyATestException e) {
+		    sleep(80);
+		    assertFalse(c.hit);
+		}
+	}
+	
+	
 
 	@Test
 	public void test3LinearDup() {
@@ -1144,8 +1174,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		assertTrue(taskA.followed(taskB));
 	}
 	
-	// TODO verify
-	//@Test(expected=InvalidGraph.Circular.class)
+	@Test(expected=InvalidGraph.Circular.class)
 	public void testExplicitCircular() {
 	    
 	    class A extends PathTask {
