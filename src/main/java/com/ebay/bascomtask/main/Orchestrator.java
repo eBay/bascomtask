@@ -336,7 +336,9 @@ public class Orchestrator {
 	     * @return execution time in ms
 	     */
 	    public long getExecutionTime() {
-	        return endTime - startTime;
+	        synchronized (Orchestrator.this) {
+	            return endTime - startTime;
+	        }
 	    }
 	}
 	
@@ -582,9 +584,9 @@ public class Orchestrator {
 	}
 
 	/**
-	 * Begins processing of previously added tasks, spawning new threads where possible to exploit 
-	 * parallel execution. This method returns when all no-wait tasks are finished. Conversely, 
-	 * a task <i>will</i> hold up the exit of this method when all of the following apply: 
+	 * Begins processing of previously added tasks within the calling thread, spawning new threads where 
+	 * possible to exploit parallel execution and returning when all no-wait tasks are finished.
+	 * Any task <i>will</i> hold up the exit of this method when all of the following apply: 
 	 * <ol>
 	 * <li> It has <i>not</i> been flagged as no-wait
 	 * <li> It has at least one {@literal @}Work (or {@literal @}PassThru) method
@@ -595,6 +597,7 @@ public class Orchestrator {
 	 * all tasks that are firable as a result of those new tasks added. In this way, each call to execute acts
 	 * like a synchronizer across all executable tasks. Tasks added within a nested task can but do not have
 	 * to call execute() if they add tasks, as there is an implicit call done automatically in this case.
+	 * Note that tasks added by other threads will be invisible to the calling thread.
 	 * <p>
 	 * Consistency checks are performed prior to any task being started, and if a violation is found a subclass
 	 * of InvalidGraph is thrown.
@@ -615,32 +618,36 @@ public class Orchestrator {
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
 	 */
 	public void execute(long maxExecutionTimeMillis) {
-		final Thread t = Thread.currentThread();
-		List<Task.Instance> taskInstances = nestedAdds.remove(t);
-		if (callingThread != null) {
-			executeTasks(taskInstances,"nested");
-		}
-		else {
-		    // Set root TaskThreadStat to current thread
-		    threadMap.clear();
-		    threadMap.put(Thread.currentThread(),new TaskThreadStat(this,0,0,null));
-		    
-			this.maxExecutionTimeMillis = maxExecutionTimeMillis;
-			this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
-			startTime = System.currentTimeMillis();
-			callingThread = t;
-			try {
-				executeTasks(taskInstances,"top-level");
-				waitForCompletion();
-				checkForExceptions();
-			}
-			finally {
-			    synchronized (this) {
-			        callingThread = null;
-			        waitStats.endTime = noWaitStats.endTime = System.currentTimeMillis();
-			    }
-			}
-		}
+	    final Thread t = Thread.currentThread();
+	    List<Task.Instance> taskInstances = nestedAdds.remove(t);
+	    synchronized (this) {
+	        if (callingThread==null) {
+	            // Set root TaskThreadStat to current thread
+	            threadMap.clear();
+	            threadMap.put(Thread.currentThread(),new TaskThreadStat(this,0,0,null));
+
+	            this.maxExecutionTimeMillis = maxExecutionTimeMillis;
+	            this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
+	            startTime = System.currentTimeMillis();
+	            callingThread = t;
+	        }
+	    }
+	    if (callingThread==t) { // Can only happen once for top-level calling thread
+	        try {
+	            executeTasks(taskInstances,"top-level");
+	            waitForCompletion();
+	            checkForExceptions();
+	        }
+	        finally {
+	            synchronized (this) {
+	                callingThread = null;
+	                waitStats.endTime = noWaitStats.endTime = System.currentTimeMillis();
+	            }
+	        }
+	    }
+	    else { // Otherwise process taskInstances added by this thread if any
+	        executeTasks(taskInstances,"nested");
+	    }
 	}
 	
 	private void executeTasks(List<Task.Instance> taskInstances, String context) {
@@ -1093,7 +1100,7 @@ public class Orchestrator {
 	 * Exceptions are stored in member variable that may be added to by the main
 	 * or spawned threads. Pick them up here and propagate.
 	 */
-	private void checkForExceptions() {
+	private synchronized void checkForExceptions() {
 	    if (exceptions != null) {
 	        int nx = exceptions.size();
 	        if (nx > 0) {

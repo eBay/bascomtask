@@ -93,13 +93,18 @@ public class OrchestrationTest extends PathTaskTestBase {
 	}
 	
 	@Test
-	public void testNonPublicMethod() {
+	public void testNonPublicMethodNotExecuted() {
+	    class Holder {
+	        boolean hit = false;
+	    }
+	    final Holder holder = new Holder();
 		class A extends PathTask {
-			@Work /*not public */ void exec() {got();}
+			@Work /* not public */ void exec() {got(); holder.hit = true;}
 		}
 		A a = new A();
 		PathTask taskA = track.work(a);
 		verify(0);
+		assertFalse(holder.hit);
 	}
 
 	@Test(expected=InvalidTask.BadReturn.class)

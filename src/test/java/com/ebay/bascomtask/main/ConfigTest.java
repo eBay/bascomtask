@@ -22,6 +22,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+
 import com.ebay.bascomtask.annotations.Work;
 import com.ebay.bascomtask.config.BascomConfigFactory;
 import com.ebay.bascomtask.config.DefaultBascomConfig;
@@ -115,6 +118,55 @@ public class ConfigTest {
 
 		assertFalse(a.hit);
 		assertTrue(b.hit);
+	}
+	
+	@Test
+	public void testClosureMethodsValid() {
+	    class Holder {
+	        ITaskMethodClosure closure;
+	    }
+	    final Holder holder = new Holder();
+	    
+	    final long BAR_DURATION = 10;
+	    final String FOO_NAME = "Purple";
+		class Foo {@Override public String toString() {return FOO_NAME;}}
+	    
+		class Bar {
+		    @Work public void gobar(Foo foo) {
+		        try {
+                    Thread.sleep(BAR_DURATION);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                };
+		    }
+		}
+	    
+		Orchestrator orc = Orchestrator.create().interceptor(
+		        new ITaskInterceptor() {
+		            @Override
+		            public boolean invokeTaskMethod(ITaskMethodClosure closure) {
+		                holder.closure = closure;
+		                closure.executeTaskMethod();
+		                return true;
+		            } 
+		        }).name("ORK");
+
+		Foo foo = new Foo();
+		Bar bar = new Bar();
+		orc.addWork(foo);
+		final String BAR_NAME = "Green";
+		orc.addWork(bar).name(BAR_NAME);
+		orc.execute();
+		ITaskMethodClosure closure = holder.closure;
+		assertNotNull(closure);
+		assertTrue(closure.getMethodName().equals("gobar"));
+		assertThat(closure.getMethodActualSignature(),containsString(FOO_NAME));
+		assertSame(foo,closure.getMethodBindings()[0]);
+		assertThat(closure.getMethodFormalSignature(),containsString(Foo.class.getSimpleName()));
+		assertSame(bar,closure.getTargetPojoTask());
+		assertEquals(BAR_NAME,closure.getTaskName());
+		assertThat(closure.getDurationMs(),is(greaterThanOrEqualTo(BAR_DURATION)));
+		assertThat(closure.getDurationNs(),is(greaterThan(closure.getDurationMs())));
 	}
 }
 

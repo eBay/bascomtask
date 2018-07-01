@@ -227,7 +227,7 @@ public class MyBascomConfig extends DefaultBascomConfig {
 }
 ```
 
-Among other things, interceptors can be set on on task method calls. For example, add to the above MyBascomConfig the following method to log start and end messages on all task method invocations:
+Among other things, interceptors can be set on on task method calls. For example, extending the previous MyBascomConfig example with the following method will log start and end messages on all task method invocations:
 
 ```java
     private ITaskInterceptor taskInterceptor = new ITaskInterceptor() {
@@ -251,7 +251,9 @@ Among other things, interceptors can be set on on task method calls. For example
 
 
 ## Comparison to Alternatives
-BascomTask does not maintain persistent state and therefore is unlikely to be suitable for long-running and/or indeterminate-duration tasks (e.g. when human approval is required). It provides no GUI for state inspection, only Java libraries for programmers. It is intra- and not inter-process: it provides a framework for making remote calls but is not aware of how those calls are made or managed within tasks. There are options such as [Netflix Conductor](https://netflix.github.io/conductor/) or other third-party business process management tools for persistent, long running tasks. While there is no particular BascomTask limit on orchestration or task duration, the longer the duration the more the more important becomes the ability to persist state between failures. A BascomTask-driven result can be fit within a larger long-running process orchestrated by one of these other tools, each offering their respective strengths at different levels of granularity.
+BascomTask does not maintain persistent state and therefore is unlikely to be suitable for long-running and/or indeterminate-duration tasks (e.g. when human approval is required). It provides no GUI for state inspection, only Java libraries for programmers. Alternatives such as [Netflix Conductor](https://netflix.github.io/conductor/) or other third-party business process management tools for persistent, long running tasks. BascomTask is intra- and not inter-process: it provides a framework for making remote calls but is not aware of how those calls are made or managed within tasks. While there is no particular BascomTask limit on orchestration or task duration, the longer the duration the more the more important becomes the ability to persist state between failures. A BascomTask-driven result can be fit within a larger long-running process orchestrated by one of these other tools, each offering their respective strengths at different levels of granularity. 
+
+ESB-style alternatives such as [Apache Camel](http://camel.apache.org/) and [Apache Mule](https://en.wikipedia.org/wiki/Mule_(software)) are also available that provide rich Domain Specific Languages (DSLs) for Enterprise Integration Patterns (EIPs). BascomTask has no DSL, and instead focuses on offering a rich set of features around task management that best leverages the Java language directly. It aims to do simple things in the simplest possible way, while providing rich task management support, when desired, while keeping within a simple programming framework.
 
 On a smaller scale, reactive frameworks such as [RxJava](https://github.com/ReactiveX/RxJava) provide rich capabilities for managing synchronous or asynchronous streams. BascomTask in comparison is coarser grained: task A is available to task B only when it is finished. This is typical when aggregating microservices, because most services don't themselves return streaming responses. BascomTask could be selectively combined with a streaming frameworks where it makes sense, allowing the best of both worlds.
 

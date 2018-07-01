@@ -27,7 +27,8 @@ import java.lang.annotation.Target;
  * Marks a method as a "task method" to be executed when a task is added by calling
  * {@link com.ebay.bascomtask.main.Orchestrator#addWork(Object)} rather than 
  * {@link com.ebay.bascomtask.main.Orchestrator#addPassThru(Object)}. A {@literal @}Work 
- * method implements the primary functionality of a task.
+ * method implements the primary functionality of a task. It should be public or else it
+ * will be ignored.
  * <p>
  * Arguments to a task method can be any non-primitive Object, though each of those 
  * objects should also have been added to the orchestrator prior to its execution.
