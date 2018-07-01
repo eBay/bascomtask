@@ -98,8 +98,10 @@ public class ReflectionClosure implements ITaskMethodClosure {
             durationNs = System.nanoTime() - startNs;
             if (LOG.isDebugEnabled()) {
                 String rez = msg==null ? "success" : msg;
-                LOG.debug("Completed {} {} on {} in {}ms result: {}",
-                        context,kind,targetPojo,durationMs,rez);
+                int added = callInstance.getTaskInstance().getOrchestrator().getCountOfNewTasks();
+                String am = added==0 ? "" : (" + " +added+" task" +(added==1?"": "s") + " added");
+                LOG.debug("Completed {} {} on {} in {}ms result: {}{}",
+                        context,kind,targetPojo,durationMs,rez,am);
             }
         }
         return returnValue;

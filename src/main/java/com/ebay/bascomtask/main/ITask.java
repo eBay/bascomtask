@@ -128,4 +128,19 @@ public interface ITask {
 	 * @return this task
 	 */
 	public ITask after(Object pojoTask);
+	
+	/**
+	 * Indicates that a task will add to the current orchestrator a pojo task instance of the given class.
+	 * This is necessary only when (a) a task is dynamically adding to the orchestrator and (b) that task
+	 * is adding an instance upon which tasks at the outer level depend. Without invoking this method,
+	 * {@link com.ebay.bascomtask.main.Orchestrator#execute()} will fail at the outer level, asserting that
+	 * the graph is incomplete -- the orchestrator has no way to peer inside the inner task code to 
+	 * determine when/if an instance will be added.
+	 * <p>
+	 * If the nested task does not in fact add the promised instance, an exception will be throw when
+	 * it terminates.
+	 * @param pojoTaskClass for task that will be provided when this task is invoked
+	 * @return this task
+	 */
+	public ITask provides(Class<?> pojoTaskClass);
 }

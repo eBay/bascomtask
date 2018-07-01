@@ -21,6 +21,7 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 
 import com.ebay.bascomtask.annotations.Work;
+import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -117,6 +118,47 @@ public class NestingTest extends PathTaskTestBase {
 		PathTask taskA = track.work(a);
 		PathTask taskB = track.work(b);
 		verify(1);
+	}
+
+	private void addInnerDependency(boolean provides, final boolean addInner) {
+		class A extends PathTask {
+			@Work public void exec() {got();}
+		}
+		class B extends PathTask {
+			@Work public void exec(A a) {got(a);}
+		}
+		final A a = new A();
+		class C extends PathTask {
+			@Work public void exec() {
+			    if (addInner) {
+			        // Add the 'a' that 'b' is looking for
+			        PathTask taskA = track.work(a);
+			    }
+			}
+		}
+		B b = new B();
+		C c = new C();
+		PathTask taskB = track.work(b).exp(a);
+		PathTask taskC = track.work(c);
+		if (provides) {
+		    taskC = taskC.provides(A.class);
+		}
+		verify(0);
+	}
+
+	@Test(expected=InvalidGraph.MissingDependents.class)
+	public void testNestedAddWithoutProvides() {
+	    addInnerDependency(false,true);
+	}
+	
+	@Test	
+	public void testNestedAddWithProvides() {
+	    addInnerDependency(true,true);
+	}
+
+	@Test(expected=InvalidGraph.ViolatedProvides.class)
+	public void testProvidesNotSatisfied() {
+	    addInnerDependency(true,false);
 	}
 
 	private void testNestedBackwardDependency(boolean fork) {

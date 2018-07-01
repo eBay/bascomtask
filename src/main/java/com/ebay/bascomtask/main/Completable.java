@@ -33,6 +33,8 @@ class Completable {
 	
 	private int computedThresholdAtLevel = -1;
 	
+	private boolean forceCompletable = false;
+	
 	/**
 	 * Has been initalized at the given level?
 	 * @return
@@ -46,7 +48,11 @@ class Completable {
 	}
 	
 	boolean isCompletable() {
-		return completionThresholdCount > 0;
+		return completionThresholdCount > 0 || forceCompletable;
+	}
+	
+	void setForceCompletable() {
+	    forceCompletable = true;
 	}
 	
 	void startOneCall() {

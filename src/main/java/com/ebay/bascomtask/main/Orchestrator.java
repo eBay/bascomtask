@@ -40,6 +40,7 @@ import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
 import com.ebay.bascomtask.main.Call.Param;
+import com.ebay.bascomtask.main.Task.Instance;
 import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
 
 /**
@@ -610,6 +611,7 @@ public class Orchestrator {
 	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no matching {@literal @}Work dependents
 	 * @throws InvalidGraph.Circular if a circular reference between two tasks is detected
 	 * @throws InvalidGraph.MultiMethod if a task has more than one callable method and is not marked multiMethodOk()
+	 * @throws InvalidGraph.ViolatedProvides if a task was indicated to {@link com.ebay.bascomtask.main.ITask#provides(Class)} an instance but this was not done
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
 	 */
 	public void execute(long maxExecutionTimeMillis) {
@@ -667,8 +669,13 @@ public class Orchestrator {
 			this.context = context;
 	    }
 	    
-	    void report(String where) {
-	        LOG.debug("{} {}{} {}with {}->{} task{} / {} root{}\n{}",where,pfx,context,id,currentTaskCount,numberTasks,tasksPlural,numberRoots,rootsPlural,getGraphState());
+	    void report(String where) {report(where,null);}
+	    void report(String where, Invocation inv) {
+	        if (LOG.isDebugEnabled() ) {
+	            String gs = getGraphState();
+	            String last = inv==null ? ("\n"+gs) : (", pending " + inv + ("\n"+gs));
+	            LOG.debug("{} {}{} {}with {}->{} task{} / {} root{}{}",where,pfx,context,id,currentTaskCount,numberTasks,tasksPlural,numberRoots,rootsPlural,last);
+	        }
 	    }
 	}
 	
@@ -684,7 +691,7 @@ public class Orchestrator {
 				}
 				inv = fireRoots(roots,inv);
 				if (run != null) {
-				    run.report("exiting");
+				    run.report("exiting",inv);
 				}
 			}
 		}
@@ -711,10 +718,19 @@ public class Orchestrator {
 	 * @return non-null but possibly empty list of instances ready to fire
 	 */
 	private List<Call.Instance> linkGraph(List<Task.Instance> taskInstances) {
+	    Map<Class<?>, Task.Instance> toBeProvided = null;
 		// First establish all references from the orchestrator to taskInstances.
 		// Later steps depend on these references having been set.
 		for (Task.Instance taskInstance: taskInstances) {
 			addActual(taskInstance);
+			List<Class<?>> provides = taskInstance.getProvides();
+			if (provides != null && provides.size() > 0) {
+			    if (toBeProvided == null) {
+			        toBeProvided = new HashMap<>();
+			    }
+			    // Only need 1 to ensure that the dependent task gets kicked off
+			    toBeProvided.put(provides.get(0),taskInstance);
+			}
 		}
 		// Ensure explicitBeforeDependencies are set on all taskInstances so that we
 		// can update thresholds in the next step
@@ -731,14 +747,14 @@ public class Orchestrator {
 				// Since this task is already available as a parameter, no point in having any
 				// explicit dependencies on it, should there be any
 				// TODO thread-safe dynamic explicits
-				taskInstance.explicitBeforeDependencies = null;
+				taskInstance.clearExplicits();
 			}
 			else {
 				linkAll(taskInstance,roots);
 			}
 		}
 		// With all linkages in place, thresholds can be (re)computed, and final verification performed
-		List<Call.Param.Instance> badParams = recomputeAllThresholdsAndVerify();
+		List<Call.Param.Instance> badParams = recomputeAllThresholdsAndVerify(toBeProvided);
 		if (badParams != null) {
 			throwUncompletableParams(badParams);
 		}
@@ -797,11 +813,11 @@ public class Orchestrator {
 	 * Recomputes thresholds and returns bad parameters if any
 	 * @return possibly null list of bad parameters
 	 */
-	private List<Call.Param.Instance> recomputeAllThresholdsAndVerify() {
+	private List<Call.Param.Instance> recomputeAllThresholdsAndVerify(final Map<Class<?>, Task.Instance> toBeProvided) {
 		linkLevel++;
 		List<Call.Param.Instance> badParams = null;
 		for (Task.Instance nextTaskInstance: allTasks) {
-			computeThreshold(nextTaskInstance,linkLevel);
+			computeThreshold(nextTaskInstance,linkLevel,toBeProvided);
 			if (nextTaskInstance.calls.size() > 0) {  // Don't do the enclosed checks if there are no calls
 				// If at least one call for a task has all parameters, the graph is resolvable.
 				// If there is no such call, report all unbound parameters.
@@ -828,7 +844,7 @@ public class Orchestrator {
 	}
 
 	/**
-	 * Links a taskInstance together with any incoming tasks or outgoing parameters
+	 * Links a taskInstance together with any incoming tasks or outgoing parameters.
 	 * @param taskInstance to link
 	 * @param roots to add to for each call of each of the supplied taskInstances that is immediately ready to fire
 	 */
@@ -911,7 +927,7 @@ public class Orchestrator {
             List<Task.Instance> befores = next.getValue();
         	TaskRec rec = taskMapByType.get(task.taskClass);
         	for (Call.Instance call: taskInstance.calls) {
-        	    Call.Param.Instance paramInstance = call.addHiddenParameter(task,befores);
+        	    Call.Param.Instance paramInstance = call.addHiddenParameter(task);
         	    int sz = 0;
         	    for (Task.Instance before: befores) {
         	        backLink(before,paramInstance);
@@ -1002,17 +1018,24 @@ public class Orchestrator {
 	 * for each TaskInstance during initialization; although this method is invoked
 	 * recursively that recursion calculation is only done once per task instance.
 	 * @param taskInstance
+	 * @param level should be unique per call
+	 * @param toBeProvided possibly null map of pojo task classes and the tasks that will {@link com.ebay.bascomtask.main.ITask#provides(Class)} them
 	 * @return
 	 */
-	private int computeThreshold(Task.Instance taskInstance, int level) {
-		return computeThreshold(taskInstance, level, taskInstance);
+	private int computeThreshold(Task.Instance taskInstance, int level, final Map<Class<?>, Task.Instance> toBeProvided) {
+		return computeThreshold(taskInstance,level,taskInstance,toBeProvided);
 	}
-	private int computeThreshold(final Task.Instance base, final int level, final Task.Instance taskInstance) {
+	private int computeThreshold(final Task.Instance base, final int level, final Task.Instance taskInstance, final Map<Class<?>, Task.Instance> toBeProvided) {
 		if (taskInstance.recomputeForLevel(level)) {
 			int tc = 0;
 			for (Call.Instance nextCall: taskInstance.calls) {
 				int cc = 1;
-				for (Call.Param.Instance nextParam: nextCall) {
+				// Allowing for provides() tasks means we can't count on setting thresholds based on existing instances, because
+				// for a provides() task by definition we don't have an instance available. This boolean is used to recognize calls
+				// that would otherwise appear to not be completeable but in fact are if any missing instances will be provided in
+				// a nested task.
+				boolean ccComplete = true;
+				for (Call.Param.Instance nextParam: nextCall) { 
 					int pc = 0;
 					if (nextParam.getParam().isList) {
 						pc = 1;
@@ -1025,13 +1048,28 @@ public class Orchestrator {
 					        if (base==nextTaskInstance) {
 					            throw new InvalidGraph.Circular("Circular reference " + taskInstance.getName() + " and " + base.getName());
 					        }
-					        pc += computeThreshold(base,level,nextTaskInstance);
+					        pc += computeThreshold(base,level,nextTaskInstance,toBeProvided);
 					    }
 					}
 					cc *= pc;
+					if (pc == 0) {
+					    Task.Instance providingTask = toBeProvided==null ? null : toBeProvided.get(nextParam.getTask().taskClass);
+					    if (providingTask == null) {
+					        ccComplete = false;
+					    }
+					    else {
+					        Param.Instance hiddenParamInstance = nextCall.addHiddenParameter(providingTask.getTask());
+					        backLink(providingTask,hiddenParamInstance);
+					    }
+					}
 				}
 				nextCall.setCompletionThreshold(cc);
 				tc += cc;
+				if (cc==0 && ccComplete) {
+				    // When a call is not immediately completable but can be with provides(), flag this here so that task 
+				    // does not get rejected as uncompletable
+				    taskInstance.setForceCompletable();
+				}
 			}
 			if (taskInstance.setCompletionThreshold(tc)) {
 				if (taskInstance.wait) {
@@ -1070,6 +1108,30 @@ public class Orchestrator {
 	        }
 	    }
 	}
+	
+    /**
+     * Validates that for each of the provided() classes in the given task instance,
+     * a matching instance was actually provided
+     * @param taskInstance that has a possibly null provided list
+     * @throws InvalidGraph.ViolatedProvides if not
+     */
+    void validateProvided(Task.Instance taskInstance) {
+        List<Class<?>> exp = taskInstance.getProvides();
+        if (exp != null) {
+            List<Task.Instance> got = nestedAdds.get(Thread.currentThread());
+            outer: for (Class<?> nextExp: exp) {
+                if (got != null) {
+                    for (Task.Instance nextGot: got) {
+                        if (nextGot.getTask().taskClass==nextExp) {
+                            continue outer;
+                        }
+                    }
+                }
+                throw new InvalidGraph.ViolatedProvides("Task of type " + nextExp + " not provided");
+            }
+        }
+    }
+
 	
 	/**
 	 * Unlike other threads, the main task may have to wait for others
@@ -1310,6 +1372,11 @@ public class Orchestrator {
 		LOG.debug("On {}complete exit from {} eval {} backLink{} ",cmsg,callInstance,backList.size(),plural);
 		inv = continueOrSpawn(taskOfCallInstance,firing,"back",inv);
 		return inv;
+	}
+	
+	int getCountOfNewTasks() {
+	    List<Instance> nt = nestedAdds.get(Thread.currentThread());
+	    return nt==null ? 0 : nt.size();
 	}
 
 	private synchronized Invocation continueOrSpawn(Task.Instance taskInstance, Call.Instance.Firing firing, String context, Invocation inv) {

@@ -124,6 +124,10 @@ abstract class PathTask {
 		return this;
 	}
 	
+	PathTask provides(Class<?> taskClass) {
+	    taskInstance.provides(taskClass);
+	    return this;
+	}
 	
 	/**
 	 * Sleeps for given number of ms when {@link #got} is called, in order to

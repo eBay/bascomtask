@@ -129,8 +129,6 @@ class Task {
 		 */
 		final List<Call.Instance> calls = new ArrayList<>();
 		
-		//final Call.Instance explicitPredecessorsFauxCall = no_call.genInstance(this);
-		
 		/**
 		 * All parameters of all calls that have the type of our targetTask 
 		 */
@@ -139,14 +137,19 @@ class Task {
 		/**
 		 * All explicitly-added tasks that must complete before this one
 		 */
-		List<Instance> explicitBeforeDependencies = null;
-		List<Object> pendingBeforeDependencies = null;
-		List<Object> pendingAfterDependencies = null;
+		private List<Instance> explicitBeforeDependencies = null;
+		private List<Object> pendingBeforeDependencies = null;
+		private List<Object> pendingAfterDependencies = null;
 		
 		/**
 		 * Any exception that occurs when a targetPojo task method is invoked is recorded here
 		 */
 		private List<Exception> executionExceptions = null;
+		
+		/**
+		 * Accumulates classes added through {@link #provides(Class)}, prior to graph resolution.
+		 */
+		private List<Class<?>> providing = null;
 		
 		Instance(Orchestrator orc, Object targetTask, TaskMethodBehavior taskMethodBehavior) {
 			this.orc = orc;
@@ -273,6 +276,19 @@ class Task {
 			return Task.this;
 		}
 		
+        @Override
+        public ITask provides(Class<?> pojoTaskClass) {
+            if (providing==null) {
+                providing = new ArrayList<>();
+            }
+            providing.add(pojoTaskClass);
+            return this;
+        }
+        
+        List<Class<?>> getProvides() {
+            return providing;
+        }
+		
 		Call.Instance genNoCall() {
 			return no_call.genInstance(this);
 		}
@@ -306,7 +322,7 @@ class Task {
             }
         }
 
-        public Map<Task,List<Instance>> groupBeforeDependencies() {
+        Map<Task,List<Instance>> groupBeforeDependencies() {
             if (explicitBeforeDependencies == null) {
                 return null;
             }
@@ -323,6 +339,10 @@ class Task {
                 }
                 return map;
             }
+        }
+        
+        void clearExplicits() {
+            explicitBeforeDependencies = null;
         }
 
         @Override

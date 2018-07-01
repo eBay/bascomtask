@@ -159,6 +159,24 @@ public class OrchestrationTest extends PathTaskTestBase {
 		verify(0);
 	}
 	
+	@Test(expected=InvalidGraph.MissingDependents.class)
+	public void testMultiMissingDependencies() {
+		class A extends PathTask {
+			@Work public void exec() {got();}
+		}
+		class B extends PathTask {
+			@Work public void exec() {got();}
+		}
+		class C extends PathTask {
+			@Work public void exec(A a, B b) {got(a,b);}
+		}
+		B b = new B();
+		C c = new C();
+		PathTask taskB = track.work(b);
+		PathTask taskC = track.work(c);
+		verify(0);
+	}
+	
 	@Test
 	public void testJustOneMethodMissingDependenciesOk() {
 		class A extends PathTask {

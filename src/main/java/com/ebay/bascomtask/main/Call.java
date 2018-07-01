@@ -195,7 +195,13 @@ class Call {
 			return sb.toString();
 		}
 		
-        public Param.Instance addHiddenParameter(Task task, List<Task.Instance> befores) {
+        /**
+         * Adds a hidden (i.e. not part of the formal argument list) parameter.
+         * These are created as needed then cached.
+         * @param task type for new parameter
+         * @return newly-created parameter
+         */
+        Param.Instance addHiddenParameter(Task task) {
             if (hiddenParamMap==null) {
                 hiddenParamMap = new HashMap<>();
             }
@@ -212,7 +218,7 @@ class Call {
             return paramInstance;
         }
 
-        /* 
+        /**
          * Iterates over all parameters, actual and hidden
          */
         public Iterator<Param.Instance> iterator() {
@@ -429,6 +435,7 @@ class Call {
 			        closure = new ReflectionClosure(this,method,args,context,kind);
 			        try {
 			            returnValue = orc.getInterceptor().invokeTaskMethod(closure);
+			            orc.validateProvided(taskInstance);
 			        }
 			        catch (Exception e) {
 			            orc.recordException(this,e);

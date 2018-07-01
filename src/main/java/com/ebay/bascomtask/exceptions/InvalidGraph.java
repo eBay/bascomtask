@@ -29,7 +29,6 @@ public class InvalidGraph extends RuntimeException {
 
 	/**
 	 * A task cannot be executed because it has no call with all paramaters added.
-	 * @author brendanmccarthy
 	 */
 	public static class MissingDependents extends InvalidTask {
 		public MissingDependents(String message) {
@@ -38,8 +37,20 @@ public class InvalidGraph extends RuntimeException {
 	}
 
 	/**
+	 * When a promise is made that a task will provide an instance, but that task
+	 * does not actually add that instance. This is thrown rather than simply 
+	 * letting the graph stall.
+	 * 
+	 * @see com.ebay.bascomtask.main.ITask#provides(Class)
+	 */
+	public static class ViolatedProvides extends InvalidTask {
+		public ViolatedProvides(String message) {
+			super(message);
+		}
+	}
+
+	/**
 	 * A circular reference has been detected in the graph.
-	 * @author brendanmccarthy
 	 */
 	public static class Circular extends InvalidTask {
 		public Circular(String message) {
@@ -49,7 +60,6 @@ public class InvalidGraph extends RuntimeException {
 
 	/**
 	 * A task has more than one method that can fire.
-	 * @author brendanmccarthy
 	 */
 	public static class MultiMethod extends InvalidTask {
 		public MultiMethod(String message) {
