@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -577,10 +576,10 @@ public class Orchestrator {
 	
 	
 	/**
-	 * Calls {@link #execute(long)} with a default of 10 minutes.
+	 * Calls {@link #execute(long)} with a default from current {@link com.ebay.bascomtask.config.IBascomConfig#getDefaultOrchestratorTimeoutMs()}
 	 */
 	public void execute() {
-		execute(TimeUnit.MINUTES.toMillis(10L));
+		execute(config.getDefaultOrchestratorTimeoutMs());
 	}
 
 	/**
@@ -594,7 +593,7 @@ public class Orchestrator {
 	 * <li> It has at least one such fireable method that may fire again
 	 * </ol>
 	 * This method can safely be called multiple times, each time accounting for any new tasks added and firing
-	 * all tasks that are firable as a result of those new tasks added. In this way, each call to execute acts
+	 * all tasks that are fireable as a result of those new tasks added. In this way, each call to execute acts
 	 * like a synchronizer across all executable tasks. Tasks added within a nested task can but do not have
 	 * to call execute() if they add tasks, as there is an implicit call done automatically in this case.
 	 * Note that tasks added by other threads will be invisible to the calling thread.
@@ -604,11 +603,11 @@ public class Orchestrator {
 	 * <p>
 	 * If any task throws an exception, which would have to be a non-checked exception, it will be propagated 
 	 * from this call. Once such an exception is thrown, the orchestrator ceases to start new tasks and instead
-	 * waits for all open threads to finish before returning (by throwing the exception in question). Currently,
-	 * only the first exception is thrown if there happens to be more than one.
+	 * waits for all open threads to finish before returning (by throwing the exception in question). 
 	 * @param maxExecutionTimeMillis to timeout
 	 * @throws RuntimeException generated from a task
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
+	 * @throws RuntimeGraphError.Multi if more than one exception is thrown from different tasks
 	 * @throws InvalidTask.AlreadyAdded if the same task instance was added more than once
 	 * @throws InvalidTask.BadParam if a task method has a parameter that cannot be processed
 	 * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no matching {@literal @}Work dependents

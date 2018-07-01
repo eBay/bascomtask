@@ -93,7 +93,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 	}
 	
 	@Test
-	public void testNonPublicMethodNotExecuted() {
+	public void testNonPublicMethod() {
 	    class Holder {
 	        boolean hit = false;
 	    }
@@ -104,7 +104,7 @@ public class OrchestrationTest extends PathTaskTestBase {
 		A a = new A();
 		PathTask taskA = track.work(a);
 		verify(0);
-		assertFalse(holder.hit);
+		assertTrue(holder.hit);
 	}
 
 	@Test(expected=InvalidTask.BadReturn.class)

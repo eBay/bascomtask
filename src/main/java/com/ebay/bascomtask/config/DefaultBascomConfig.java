@@ -35,6 +35,15 @@ public class DefaultBascomConfig implements IBascomConfig {
 		return pool;
 	}
 	
+    /** 
+     * 30-second default timeout.
+     */
+    @Override
+    public long getDefaultOrchestratorTimeoutMs() {
+        return 1000 * 30;
+    }
+	
+	
 	@Override
 	public void notifyTerminate() {
 		shutdownAndAwaitTermination(pool);

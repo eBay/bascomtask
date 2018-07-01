@@ -37,12 +37,19 @@ public class InvalidTask extends RuntimeException {
 		}
 	}
 	
+	/**
+	 * Thrown when a task method has a parameter that cannot be processed by
+	 * the orchestrator.
+	 */
 	public static class BadParam extends InvalidTask {
 		public BadParam(String message) {
 			super(message);
 		}
 	}
 	
+	/**
+	 * Thrown when a task method has a return type that is neither void nor boolean.
+	 */
 	public static class BadReturn extends InvalidTask {
 		public BadReturn(String message) {
 			super(message);

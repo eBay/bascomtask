@@ -61,49 +61,58 @@ class TaskParser {
 	}
 	
 	private void parse(Task task) {
-		for (Method method: task.taskClass.getMethods()) {
-			Call call = null;
-			Work work = method.getAnnotation(Work.class);
-			if (work != null) {
-				call = new Call(task,method,work.scope(),work.light());
-				task.workCalls.add(call);
-			}
-			PassThru passThru = method.getAnnotation(PassThru.class);
-			if (passThru != null) {
-				// @PassThru methods are always consider 'light'
-				call = new Call(task,method,Scope.FREE,true);   
-				task.passThruCalls.add(call);
-			}
-			if (call != null) {
-				method.setAccessible(true);  // Methods need not be public, allowing for local classes
-				verifyAccess(method);
-				int index = 0;
-				Type[] genericParameterTypes = method.getGenericParameterTypes();
-				Class<?>[] pt = method.getParameterTypes();
-				for (int i=0; i<method.getParameterTypes().length; i++) {
-					boolean isList = false;
-					Type nextMethodParamType = genericParameterTypes[i];
-					Class<?> nextMethodParamClass = pt[i];
-					// If the parameter is a List<T>, treat it is a T but mark the parameter as a list 
-					if (List.class.isAssignableFrom(nextMethodParamClass)) {
-						isList = true;
-						if (nextMethodParamType instanceof ParameterizedType) {
-							ParameterizedType genericType = (ParameterizedType)nextMethodParamType;
-							Type typeArg = genericType.getActualTypeArguments()[0];
-							nextMethodParamClass = (Class<?>)typeArg;
-						}
-					}
-					if (nextMethodParamClass.isPrimitive()) {
-					    throw new InvalidTask.BadParam("Task method " + mn(method) + " has non-Object parameter of type " + nextMethodParamClass.getSimpleName());
-					}
-					Task paramTask = parse2(nextMethodParamClass);
-					Call.Param param = call.new Param(paramTask,index,isList);
-					call.add(param);
-					paramTask.backLink(param);
-					index++;  // Increment for all params whether task or not
-				}
-			}
-		}
+	    Class<?> cls = task.taskClass;
+	    do {
+	        for (Method method: cls.getDeclaredMethods()) {
+	            parse(task,method);
+	        }
+	        cls = cls.getSuperclass();
+	    }
+	    while (cls != null && cls != Object.class);
+	}
+	            
+	private void parse(Task task, Method method) {           
+	    Call call = null;
+	    Work work = method.getAnnotation(Work.class);
+	    if (work != null) {
+	        call = new Call(task,method,work.scope(),work.light());
+	        task.workCalls.add(call);
+	    }
+	    PassThru passThru = method.getAnnotation(PassThru.class);
+	    if (passThru != null) {
+	        // @PassThru methods are always consider 'light'
+	        call = new Call(task,method,Scope.FREE,true);   
+	        task.passThruCalls.add(call);
+	    }
+	    if (call != null) {
+	        method.setAccessible(true);  // Methods need not be public, allowing for local classes
+	        verifyAccess(method);
+	        int index = 0;
+	        Type[] genericParameterTypes = method.getGenericParameterTypes();
+	        Class<?>[] pt = method.getParameterTypes();
+	        for (int i=0; i<method.getParameterTypes().length; i++) {
+	            boolean isList = false;
+	            Type nextMethodParamType = genericParameterTypes[i];
+	            Class<?> nextMethodParamClass = pt[i];
+	            // If the parameter is a List<T>, treat it is a T but mark the parameter as a list 
+	            if (List.class.isAssignableFrom(nextMethodParamClass)) {
+	                isList = true;
+	                if (nextMethodParamType instanceof ParameterizedType) {
+	                    ParameterizedType genericType = (ParameterizedType)nextMethodParamType;
+	                    Type typeArg = genericType.getActualTypeArguments()[0];
+	                    nextMethodParamClass = (Class<?>)typeArg;
+	                }
+	            }
+	            if (nextMethodParamClass.isPrimitive()) {
+	                throw new InvalidTask.BadParam("Task method " + mn(method) + " has non-Object parameter of type " + nextMethodParamClass.getSimpleName());
+	            }
+	            Task paramTask = parse2(nextMethodParamClass);
+	            Call.Param param = call.new Param(paramTask,index,isList);
+	            call.add(param);
+	            paramTask.backLink(param);
+	            index++;  // Increment for all params whether task or not
+	        }
+	    }
 	}
 	
 	static String mn(Method method) {

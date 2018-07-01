@@ -52,7 +52,9 @@ public class RuntimeGraphError extends RuntimeException {
 	}
 	
 	/**
-	 * When multiple errors occur.
+	 * When multiple errors occur. The first one is provided as the 'cause',
+	 * while others are accumulated in a list for later inspection if so
+	 * desired.
 	 */
 	public static class Multi extends RuntimeGraphError {
 	    private final List<Exception> exceptions;

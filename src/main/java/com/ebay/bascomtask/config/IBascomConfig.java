@@ -36,6 +36,15 @@ public interface IBascomConfig {
 	ExecutorService getExecutor();
 	
 	/**
+	 * Returns the default value for orchestrator timeout (when {@link com.ebay.bascomtask.main.Orchestrator#execute()} is called).
+	 * Has no effect when {@link com.ebay.bascomtask.main.Orchestrator#execute(long)} is called, 
+	 * as that method provides an explicit override of the default. 
+	 * @return the default timeout in milliseconds
+	 * @see com.ebay.bascomtask.config.DefaultBascomConfig#getDefaultOrchestratorTimeoutMs() for system default value
+	 */
+	long getDefaultOrchestratorTimeoutMs();
+	
+	/**
 	 * Called on shutdown (when it is possible to do so, typically in a stand-alone
 	 * program only).
 	 */
