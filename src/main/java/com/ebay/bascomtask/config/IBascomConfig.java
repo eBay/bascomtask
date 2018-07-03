@@ -18,6 +18,7 @@ package com.ebay.bascomtask.config;
 
 import java.util.concurrent.ExecutorService;
 
+import com.ebay.bascomtask.main.TaskMethodClosure;
 import com.ebay.bascomtask.main.TaskThreadStat;
 
 /**
@@ -27,7 +28,7 @@ import com.ebay.bascomtask.main.TaskThreadStat;
  * @author brendanmccarthy
  * @see com.ebay.bascomtask.config.BascomConfigFactory#setConfig(IBascomConfig)
  */
-public interface IBascomConfig {
+public interface IBascomConfig extends ITaskClosureGenerator {
 	
 	/**
 	 * The pool from which threads are drawn as needed for parallel execution.
@@ -64,14 +65,6 @@ public interface IBascomConfig {
 	 * @param threadStat metadata for thread
 	 */
 	void notifyThreadEnd(TaskThreadStat threadStat);
-	
-	/**
-	 * Provides the default interceptor used by an orchestrator,
-	 * unless explicitly overridden for that orchestrator.
-	 * @return the interceptor that an orchestrator will use by default
-	 * @see com.ebay.bascomtask.main.Orchestrator#interceptor(ITaskInterceptor)
-	 */
-	ITaskInterceptor getDefaultInterceptor();
 }
 
 

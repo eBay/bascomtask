@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import com.ebay.bascomtask.config.BascomConfigFactory;
 import com.ebay.bascomtask.config.IBascomConfig;
-import com.ebay.bascomtask.config.ITaskInterceptor;
+import com.ebay.bascomtask.config.ITaskClosureGenerator;
 import com.ebay.bascomtask.exceptions.InvalidGraph;
 import com.ebay.bascomtask.exceptions.InvalidTask;
 import com.ebay.bascomtask.exceptions.RuntimeGraphError;
@@ -106,7 +106,7 @@ public class Orchestrator {
 	 * caller has not set it, which will usually be the case), then the default interceptor
 	 * will be retrieved from <code>config</code>.
 	 */
-	private ITaskInterceptor taskInterceptor = null;
+	private ITaskClosureGenerator closureGenerator = null;
 
 	/**
 	 * How we know which task instances are active for a given POJO task class, relative to this orchestrator.
@@ -166,7 +166,7 @@ public class Orchestrator {
 	 * Set before spawning a new thread, when it is detected that the main thread
 	 * is idle and may as well do the work itself.
 	 */
-	private Invocation invocationPickup = null;
+	private TaskMethodClosure invocationPickup = null;
 	
 	/**
 	 * How a non-main thread knows the main thread's invocationPickup can be set
@@ -392,18 +392,18 @@ public class Orchestrator {
 	 * is retrieved from whichever IBascomConfig is active.
 	 * @param interceptor to use in place of default
 	 * @return this instance for fluent-style chaining
-	 * @see com.ebay.bascomtask.config.IBascomConfig#getDefaultInterceptor()
+	 * @see com.ebay.bascomtask.config.IBascomConfig#getClosure()
 	 */
-	public Orchestrator interceptor(ITaskInterceptor interceptor) {
-	    this.taskInterceptor = interceptor;
+	public Orchestrator interceptor(ITaskClosureGenerator generator) {
+	    this.closureGenerator = generator;
 	    return this;
 	}
 	
-	ITaskInterceptor getInterceptor() {
-	    if (taskInterceptor==null) {
-	        return config.getDefaultInterceptor();
-	    }
-	    return taskInterceptor;
+	TaskMethodClosure getInterceptor(Call.Instance callInstance, Object[] args) {
+	    ITaskClosureGenerator generator = closureGenerator==null ? config : closureGenerator;
+	    TaskMethodClosure inv = generator.getClosure();
+	    inv.initCall(callInstance,args);
+	    return inv;
 	}
 	
     public TaskThreadStat getThreadStatForCurrentThread() {
@@ -515,8 +515,8 @@ public class Orchestrator {
 	 * of other active threads. The actual addition is only performed when we can synchronize the 
 	 * orchestrator and perform the additions atomically without impacting running threads.
 	 * @param targetTask java POJO to add as simple task 
-	 * @param workElsePassThru
-	 * @return
+	 * @param taskMethodBehavior describing how task was added
+	 * @return newly created ITask
 	 */
 	private ITask add(Object targetTask,  Task.TaskMethodBehavior taskMethodBehavior) {
 		Class<?> targetClass = targetTask.getClass();
@@ -650,7 +650,7 @@ public class Orchestrator {
 	}
 	
 	private void executeTasks(List<Task.Instance> taskInstances, String context) {
-		Invocation inv = executeTasks(taskInstances,context,null);
+		TaskMethodClosure inv = executeTasks(taskInstances,context,null);
 		invokeAndFinish(inv,"own",true);
 	}
 	
@@ -676,7 +676,7 @@ public class Orchestrator {
 	    }
 	    
 	    void report(String where) {report(where,null);}
-	    void report(String where, Invocation inv) {
+	    void report(String where, TaskMethodClosure inv) {
 	        if (LOG.isDebugEnabled() ) {
 	            String gs = getGraphState();
 	            String last = inv==null ? ("\n"+gs) : (", pending " + inv + ("\n"+gs));
@@ -685,7 +685,7 @@ public class Orchestrator {
 	    }
 	}
 	
-	private synchronized Invocation executeTasks(List<Task.Instance> taskInstances, String context, Invocation inv) {
+	private synchronized TaskMethodClosure executeTasks(List<Task.Instance> taskInstances, String context, TaskMethodClosure inv) {
 		if (taskInstances != null) {
 
 			List<Call.Instance> roots = linkGraph(taskInstances);
@@ -1148,7 +1148,7 @@ public class Orchestrator {
 	private void waitForCompletion() {
 		outer: while (true) {
 			while (invocationPickup != null) {
-			    Invocation inv = null;
+			    TaskMethodClosure inv = null;
 			    synchronized (this) {
 			        if (invocationPickup != null) {
 			            inv = invocationPickup;
@@ -1211,7 +1211,7 @@ public class Orchestrator {
 		};
 	}
 
-	synchronized boolean requestMainThreadComplete(Invocation inv) {
+	synchronized boolean requestMainThreadComplete(TaskMethodClosure inv) {
 		if (waiting && invocationPickup == null) {
 		    if (inv.getCallInstance().taskInstance.wait) { // Don't put nowait tasks on calling thread
 		        LOG.debug("Pushing to main thread: {}",inv);
@@ -1257,7 +1257,7 @@ public class Orchestrator {
 		return sb.toString();
 	}
 
-	private Invocation fireRoots(List<Call.Instance> roots, Invocation inv) {
+	private TaskMethodClosure fireRoots(List<Call.Instance> roots, TaskMethodClosure inv) {
 		for (Call.Instance nextBackCallInstance: roots) {
 			//inv = nextBackCallInstance.bind(this, "TBD", null, -1, inv);
 			int[] freeze = nextBackCallInstance.startingFreeze;
@@ -1273,7 +1273,7 @@ public class Orchestrator {
 	 * @param inv
 	 * @param context descriptive term for log messages
 	 */
-	void invokeAndFinish(Invocation inv, String context, boolean fire) {
+	void invokeAndFinish(TaskMethodClosure inv, String context, boolean fire) {
 	    // Don't invoke any more tasks if there are any pending exceptions
 		if (inv != null && this.exceptions==null) {
 			Call.Instance callInstance = inv.getCallInstance();
@@ -1287,13 +1287,14 @@ public class Orchestrator {
 			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fired
 			Object[] followArgs = callInstance.popSequential();
 			if (followArgs != null) {
-				inv = new Invocation(callInstance,followArgs);
+			    inv = config.getClosure();
+			    inv.initCall(callInstance,followArgs);
 				invokeAndFinish(inv,"follow",true);
 			}
 		}
 	}
 	
-	synchronized void spawn(final Invocation invocation) {
+	synchronized void spawn(final TaskMethodClosure invocation) {
 		if (!requestMainThreadComplete(invocation)) {
 			LOG.debug("Spawning \"{}\"",invocation);
 			final Orchestrator lock = this;
@@ -1303,6 +1304,7 @@ public class Orchestrator {
 			final TaskThreadStat parentStat = threadMap.get(parent);
 			// Offsetting by 1 ensures that 0 is left to refer to thread that invokes execute()
 			final int globalThreadIndex = threadsCreated.incrementAndGet() + 1;
+			invocation.prepare();
 			executor.execute(new Runnable() {
 				@Override
 				public void run() {
@@ -1350,7 +1352,7 @@ public class Orchestrator {
 	 * the lock is still held).
 	 * @param completed
 	 */
-	private synchronized Invocation processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, Call.Instance.Firing firing) {
+	private synchronized TaskMethodClosure processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, Call.Instance.Firing firing) {
 	    noWaitStats.update(firing.executionTime); 
 	    if (callingThread != null) {
 	        waitStats.update(firing.executionTime);
@@ -1367,7 +1369,7 @@ public class Orchestrator {
 		callInstance.completeOneCall();
 		
 		List<Task.Instance> newTaskInstances = nestedAdds.remove(Thread.currentThread());
-		Invocation inv = null;
+		TaskMethodClosure inv = null;
 		if (newTaskInstances != null) {
 			inv = executeTasks(newTaskInstances,"nested",null);
 		}
@@ -1385,7 +1387,7 @@ public class Orchestrator {
 	    return nt==null ? 0 : nt.size();
 	}
 
-	private synchronized Invocation continueOrSpawn(Task.Instance taskInstance, Call.Instance.Firing firing, String context, Invocation inv) {
+	private synchronized TaskMethodClosure continueOrSpawn(Task.Instance taskInstance, Call.Instance.Firing firing, String context, TaskMethodClosure inv) {
 		List<Call.Param.Instance> backList = taskInstance.backList;
 		for (Call.Param.Instance nextBackParam: backList) {
 			Call.Instance nextCallInstance = nextBackParam.callInstance;

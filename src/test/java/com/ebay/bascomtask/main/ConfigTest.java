@@ -29,7 +29,7 @@ import com.ebay.bascomtask.annotations.Work;
 import com.ebay.bascomtask.config.BascomConfigFactory;
 import com.ebay.bascomtask.config.DefaultBascomConfig;
 import com.ebay.bascomtask.config.IBascomConfig;
-import com.ebay.bascomtask.config.ITaskInterceptor;
+import com.ebay.bascomtask.config.ITaskClosureGenerator;
 
 /**
  * Tests related to BascomTask configuration.
@@ -73,17 +73,22 @@ public class ConfigTest {
 		assertTrue(b.hit);
 	}
 
-	private ITaskInterceptor createInterceptorAvoiding(final Object avoidExecutingThis) {
-	    return new ITaskInterceptor() {
-	        @Override
-	        public boolean invokeTaskMethod(ITaskMethodClosure closure) {
-	            Object target = closure.getTargetPojoTask();
-	            if (target==avoidExecutingThis) {
-	                return true; // Do not execute, but make available as parameter
-	            }
-	            return closure.executeTaskMethod();
-	        } 
-	    };
+	private ITaskClosureGenerator createInterceptorAvoiding(final Object avoidExecutingThis) {
+	    return new ITaskClosureGenerator() {
+            @Override
+            public TaskMethodClosure getClosure() {
+                return new TaskMethodClosure() {
+                    @Override
+                    public boolean executeTaskMethod() {
+                        Object target = getTargetPojoTask();
+                        if (target==avoidExecutingThis) {
+                            return true; // Do not execute, but make available as parameter
+                        }
+                        return super.executeTaskMethod();
+                    } 
+                };
+            }
+        };
 	}
 	
 	@Test
@@ -107,8 +112,8 @@ public class ConfigTest {
 	    
 		BascomConfigFactory.setConfig(new DefaultBascomConfig() {
 		    @Override
-		    public ITaskInterceptor getDefaultInterceptor() {
-		        return createInterceptorAvoiding(a);
+		    public TaskMethodClosure getClosure() {
+		        return createInterceptorAvoiding(a).getClosure();
 		    }});
 
 		Orchestrator orc = Orchestrator.create();
@@ -123,7 +128,7 @@ public class ConfigTest {
 	@Test
 	public void testClosureMethodsValid() {
 	    class Holder {
-	        ITaskMethodClosure closure;
+	        TaskMethodClosure closure;
 	    }
 	    final Holder holder = new Holder();
 	    
@@ -142,13 +147,12 @@ public class ConfigTest {
 		}
 	    
 		Orchestrator orc = Orchestrator.create().interceptor(
-		        new ITaskInterceptor() {
-		            @Override
-		            public boolean invokeTaskMethod(ITaskMethodClosure closure) {
-		                holder.closure = closure;
-		                closure.executeTaskMethod();
-		                return true;
-		            } 
+		        new ITaskClosureGenerator() {
+                    @Override
+                    public TaskMethodClosure getClosure() {
+		                holder.closure = new TaskMethodClosure();
+		                return holder.closure;
+                    }
 		        }).name("ORK");
 
 		Foo foo = new Foo();
@@ -157,7 +161,7 @@ public class ConfigTest {
 		final String BAR_NAME = "Green";
 		orc.addWork(bar).name(BAR_NAME);
 		orc.execute();
-		ITaskMethodClosure closure = holder.closure;
+		TaskMethodClosure closure = holder.closure;
 		assertNotNull(closure);
 		assertTrue(closure.getMethodName().equals("gobar"));
 		assertThat(closure.getMethodActualSignature(),containsString(FOO_NAME));
@@ -167,6 +171,52 @@ public class ConfigTest {
 		assertEquals(BAR_NAME,closure.getTaskName());
 		assertThat(closure.getDurationMs(),is(greaterThanOrEqualTo(BAR_DURATION)));
 		assertThat(closure.getDurationNs(),is(greaterThan(closure.getDurationMs())));
+	}
+
+	@Test
+	public void testClosureThreadAssignment() {
+	    class X {
+	        Thread prepThread = null;
+	        Thread execThread = null;
+	        @Work public void exec() {}
+	    }
+	    
+		Orchestrator orc = Orchestrator.create().interceptor(
+		        new ITaskClosureGenerator() {
+                    @Override
+                    public TaskMethodClosure getClosure() {
+		                return new TaskMethodClosure() {
+		                    public void prepareTaskMethod() {
+		                        Object pojo = getTargetPojoTask();
+		                        if (pojo instanceof X) {
+		                            X x = (X)pojo;
+		                            x.prepThread = Thread.currentThread();
+		                        }
+		                    }
+
+		                    public boolean executeTaskMethod() {
+		                        Object pojo = getTargetPojoTask();
+		                        if (pojo instanceof X) {		                        
+		                            X x = (X)pojo;
+		                            x.execThread = Thread.currentThread();
+		                        }
+		                        return true;
+		                    }		                    
+		                };
+                    }
+		        }).name("ORK");
+
+	    final X x1 = new X();
+	    final X x2 = new X();
+	    
+		orc.addWork(x1);
+		orc.addWork(x2).fork();
+		orc.execute();
+		
+		assertNotNull(x1.prepThread);
+		assertSame(x1.prepThread,x1.execThread);
+		assertNotNull(x2.prepThread);
+		assertNotSame(x2.prepThread,x2.execThread);
 	}
 }
 

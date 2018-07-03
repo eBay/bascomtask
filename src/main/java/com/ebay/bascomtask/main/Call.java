@@ -257,11 +257,11 @@ class Call {
 		 * parameters for any dependent method are available. The sequencing here is non-trivial due to
 		 * allowance for multiple instance matching for each parameter.
 		 * <p>
-		 * Although all tasks could be spawned as necessary, one task Invocation is returned for the calling 
+		 * Although all tasks could be spawned as necessary, one task TaskMethodClosure is returned for the calling 
 		 * thread since it will be available to do work and it would be inefficient to spawn a new thread 
 		 * and then have the calling thread just wait(). The caller may already have such a pending invocation
 		 * which they can provide as the last argument, which is either returned as-is or a replacement is
-		 * returned; if the latter then the input Invocation is spawned in a new thread.
+		 * returned; if the latter then the input TaskMethodClosure is spawned in a new thread.
 		 * @param orc
 		 * @param context
 		 * @param userTaskInstance instance of user's task
@@ -269,7 +269,7 @@ class Call {
 		 * @param inv current invocation, null if none
 		 * @return same or possibly new invocation for the calling thread to invoke
 		 */
-		Invocation bind(Orchestrator orc, String context, Object userTaskInstance, Firing firing, Param.Instance firingParameter, Invocation inv) {
+		TaskMethodClosure bind(Orchestrator orc, String context, Object userTaskInstance, Firing firing, Param.Instance firingParameter, TaskMethodClosure inv) {
 			int[] freeze;
 			int ordinalOfFiringParameter;
 			if (firingParameter == null) {  // A root task call, i.e. one with no task parameters? 
@@ -317,7 +317,7 @@ class Call {
 		 * @param context descriptive text for logging
 		 * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
 		 */
-		Invocation crossInvoke(Invocation inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		TaskMethodClosure crossInvoke(TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			Object[] args = new Object[paramInstances.length];			
 			return crossInvoke(0,args,true,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
@@ -326,9 +326,9 @@ class Call {
 		 * Invoked recursively for each parameter position, accumulating parameter assignments in args, and performing the invocation 
 		 * when (and if) all args are assigned.
 		 */
-		private Invocation crossInvoke(int px, Object[]args, boolean fire, Invocation inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		private TaskMethodClosure crossInvoke(int px, Object[]args, boolean fire, TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			if (px == args.length) {
-				Invocation newInvocation = new Invocation(this,args);  // makes a copy of args!
+				TaskMethodClosure newInvocation = orc.getInterceptor(this,args);  // makes a copy of args!
 				if (!fire) {
 					orc.invokeAndFinish(newInvocation,"non-fire",fire);
 				}
@@ -386,7 +386,7 @@ class Call {
 		 * @param context
 		 * @return
 		 */
-		private Invocation crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, Invocation inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		private TaskMethodClosure crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			Param.Instance paramAtIndex = paramInstances[px];
 			Call.Instance.Firing firing = paramAtIndex.bindings.get(bindingIndex);
 			args[px] = firing.pojoCalled;
@@ -400,7 +400,7 @@ class Call {
 		 * @param inv to (possibly) queue
 		 * @return true iff queued
 		 */
-		private boolean postPending(Invocation inv) {
+		private boolean postPending(TaskMethodClosure inv) {
 			if (scope==Scope.SEQUENTIAL) {
 				synchronized (this) {
 					if (reserved) {
@@ -425,16 +425,17 @@ class Call {
 		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
 			boolean returnValue = true;
 			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
-			ReflectionClosure closure = null;
+			TaskMethodClosure closure = null;
 			
 			synchronized (this) {
 			    startOneCall();
 			}
 			if (method != null) {
 			    if (fire) {
-			        closure = new ReflectionClosure(this,method,args,context,kind);
+			        closure = orc.getInterceptor(this,args);
+			        closure.initCall(method,context,kind);
 			        try {
-			            returnValue = orc.getInterceptor().invokeTaskMethod(closure);
+			            returnValue = closure.executeTaskMethod();
 			            orc.validateProvided(taskInstance);
 			        }
 			        catch (Exception e) {

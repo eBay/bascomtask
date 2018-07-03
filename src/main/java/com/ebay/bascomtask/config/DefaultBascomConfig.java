@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.ebay.bascomtask.main.TaskMethodClosure;
 import com.ebay.bascomtask.main.Orchestrator;
 import com.ebay.bascomtask.main.TaskThreadStat;
 
@@ -75,11 +76,6 @@ public class DefaultBascomConfig implements IBascomConfig {
 		}
 	}
 
-    @Override
-    public ITaskInterceptor getDefaultInterceptor() {
-        return taskInterceptor;
-    }
-    
     /**
      * Indicates the width max for thread names such that when exceeded a '..' string will be provided in place
      * of any more predecessors. This is not an absolute width since the thread id and name is always included
@@ -163,5 +159,10 @@ public class DefaultBascomConfig implements IBascomConfig {
     @Override
     public void notifyThreadEnd(TaskThreadStat threadStat) {
         
+    }
+
+    @Override
+    public TaskMethodClosure getClosure() {
+        return new TaskMethodClosure();
     }
 }
