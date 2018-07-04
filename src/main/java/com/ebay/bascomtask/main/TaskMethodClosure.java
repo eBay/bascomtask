@@ -34,7 +34,6 @@ public class TaskMethodClosure {
 	static final Logger LOG = LoggerFactory.getLogger(TaskMethodClosure.class);
     
 	private Call.Instance callInstance;
-    private Method method;
     private Object[] args;
 
     private String context;
@@ -83,7 +82,7 @@ public class TaskMethodClosure {
 	}
 	
     void initCall(final Call.Instance callInstance, final Object[] args) {
-		this.callInstance = callInstance;        
+		this.callInstance = callInstance;
 		if (args==null) {
 			this.args = null;
 		}
@@ -93,18 +92,12 @@ public class TaskMethodClosure {
 		}
     }
 
-    void initCall(final Method method, final String context, final String kind) {
-        this.method = method;
-        this.context = context;
-        this.kind = kind;
-    }
-
     public String getTaskName() {
         return callInstance.taskInstance.getName();
     }
 
     public String getMethodName() {
-        return method==null ? null : method.getName();
+        return callInstance.getCall().getMethodName();
     }
 
     public String getMethodFormalSignature() {
@@ -142,13 +135,51 @@ public class TaskMethodClosure {
         return durationNs;
     }
     
+	/**
+	 * Invokes the Java method associated with this call.
+	 * @param orc
+	 * @param context string for debug messages
+	 * @param args for target call
+	 * @return false iff the java method returned a boolean false indicating that the method should not fire
+	 */
+	
 	Call.Instance.Firing invoke(Orchestrator orc, String context, boolean fire) {
 		if (!ready()) {
 			throw new RuntimeException("TaskMethodClosure not ready: " + this);
 		}
-	    prepare();
+		Method method = callInstance.getCall().getMethod();
+		if (fire && method != null) {
+		    prepare();
+		}
 		called = true;
-		return callInstance.invoke(orc,context,args,fire);
+	    boolean returnValue = true;
+	    Task.Instance taskInstance = callInstance.taskInstance;
+	    String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
+
+	    callInstance.startOneCall();
+	    if (fire) {
+	        if (method != null) {
+	            this.context = context;
+	            this.kind = kind;
+	            try {
+	                returnValue = executeTaskMethod();
+	                orc.validateProvided(taskInstance);
+	            }
+	            catch (Exception e) {
+	                orc.recordException(callInstance,e);
+	                throw e;
+	            }
+	        }
+	    }
+	    else {
+	        LOG.debug("Skipping {} {} {}",context,kind,this);
+	        returnValue = false;
+	    }
+	    // For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
+	    // for all threads to just reset this to false.
+	    callInstance.setReserve(false);
+	    long duration = getDurationMs();
+	    return callInstance.new Firing(taskInstance.targetPojo,duration,returnValue);
 	}
 	
 	private boolean prepared = false;
@@ -184,6 +215,7 @@ public class TaskMethodClosure {
         try {
             threadStat.setActive(true);
             LOG.debug("Invoking {} {} on {}",context,kind,targetPojo);
+            Method method = callInstance.getCall().getMethod();
             Object methodResult = method.invoke(targetPojo, (Object[])args);
             if (Boolean.FALSE.equals(methodResult)) {
                 returnValue = false;

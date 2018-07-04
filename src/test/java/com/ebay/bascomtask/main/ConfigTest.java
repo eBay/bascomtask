@@ -18,6 +18,9 @@ package com.ebay.bascomtask.main;
 
 import static org.junit.Assert.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -174,7 +177,7 @@ public class ConfigTest {
 	}
 
 	@Test
-	public void testClosureThreadAssignment() {
+	public void testClosurePreparesAndExecsInDifferentThreads() {
 	    class X {
 	        Thread prepThread = null;
 	        Thread execThread = null;
@@ -217,6 +220,57 @@ public class ConfigTest {
 		assertSame(x1.prepThread,x1.execThread);
 		assertNotNull(x2.prepThread);
 		assertNotSame(x2.prepThread,x2.execThread);
+	}
+	
+	@Test
+	public void testPreparesMatchExecs() {
+	    final List<Object> prepares = new ArrayList<>();
+	    final List<Object> execs = new ArrayList<>();
+	    class X {
+	    }
+	    class Y {
+	        @Work public void exec(X x) {}
+	    }
+	    class Z {
+	        @Work public void exec(Y y) {}
+	    }
+	    
+		Orchestrator orc = Orchestrator.create().interceptor(
+		        new ITaskClosureGenerator() {
+                    @Override
+                    public TaskMethodClosure getClosure() {
+		                return new TaskMethodClosure() {
+		                    public void prepareTaskMethod() {
+		                        Object pojo = getTargetPojoTask();
+		                        if (pojo.getClass() == X.class) {
+		                            System.out.println("HIT");
+		                        }
+		                        prepares.add(pojo);
+		                    }
+
+		                    public boolean executeTaskMethod() {
+		                        Object pojo = getTargetPojoTask();
+		                        execs.add(pojo);
+		                        return true;
+		                    }		                    
+		                };
+                    }
+		        });
+
+	    final X x = new X();  // Shouldn't be either list, since it has no exec
+	    final Y y1 = new Y(); // Should be in both lists
+	    final Y y2 = new Y(); // Should be in both lists
+	    final Z z = new Z();  // Should be in both lists twice
+	    
+		orc.addWork(x);
+		orc.addWork(y1);
+		orc.addWork(y2);
+		orc.addWork(z);
+		orc.execute();
+		
+		assertThat(prepares,containsInAnyOrder(y1,y2,z,z));
+		assertThat(execs,containsInAnyOrder(y1,y2,z,z));
+		
 	}
 }
 

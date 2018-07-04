@@ -1289,7 +1289,7 @@ public class Orchestrator {
 			if (followArgs != null) {
 			    inv = config.getClosure();
 			    inv.initCall(callInstance,followArgs);
-				invokeAndFinish(inv,"follow",true);
+				invokeAndFinish(inv,"follow",fire);
 			}
 		}
 	}

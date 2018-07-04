@@ -76,6 +76,10 @@ class Call {
 		return params.size();
 	}
 	
+	Method getMethod() {
+	    return method;
+	}
+	
 	String getMethodName() {
 		return method.getName();
 	}
@@ -330,7 +334,7 @@ class Call {
 			if (px == args.length) {
 				TaskMethodClosure newInvocation = orc.getInterceptor(this,args);  // makes a copy of args!
 				if (!fire) {
-					orc.invokeAndFinish(newInvocation,"non-fire",fire);
+					orc.invokeAndFinish(newInvocation,"non-fire",false);
 				}
 				else if (light) {
 					orc.invokeAndFinish(newInvocation,"light",fire);
@@ -415,44 +419,8 @@ class Call {
 			return false;
 		}
 
-		/**
-		 * Invokes the Java method associated with this call.
-		 * @param orc
-		 * @param context string for debug messages
-		 * @param args for target call
-		 * @return false iff the java method returned a boolean false indicating that the method should not fire
-		 */
-		Firing invoke(Orchestrator orc, String context, Object[] args, boolean fire) {
-			boolean returnValue = true;
-			String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
-			TaskMethodClosure closure = null;
-			
-			synchronized (this) {
-			    startOneCall();
-			}
-			if (method != null) {
-			    if (fire) {
-			        closure = orc.getInterceptor(this,args);
-			        closure.initCall(method,context,kind);
-			        try {
-			            returnValue = closure.executeTaskMethod();
-			            orc.validateProvided(taskInstance);
-			        }
-			        catch (Exception e) {
-			            orc.recordException(this,e);
-			            throw e;
-			        }
-			    }
-			    else {
-			        LOG.debug("Skipping {} {} {}",context,kind,this);
-			        returnValue = false;
-			    }
-			}
-			// For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
-			// for all threads to just reset this to false.
-			reserved = false;
-			long duration = closure==null ? 0 : closure.getDurationMs();
-			return new Firing(taskInstance.targetPojo,duration,returnValue);
+		void setReserve(boolean which) {
+		    reserved = which;
 		}
 		
 		@SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")

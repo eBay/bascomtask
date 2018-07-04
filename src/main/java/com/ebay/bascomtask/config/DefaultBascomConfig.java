@@ -29,7 +29,6 @@ public class DefaultBascomConfig implements IBascomConfig {
     static final String THREAD_ID_PREFIX = "BT:";
 	
 	private ExecutorService pool = Executors.newFixedThreadPool(30);
-	private ITaskInterceptor taskInterceptor = new DefaultTaskInterceptor();
 
 	@Override
 	public ExecutorService getExecutor() {

@@ -55,11 +55,11 @@ class Completable {
 	    forceCompletable = true;
 	}
 	
-	void startOneCall() {
+	synchronized void startOneCall() {
 		started++;
 	}
 
-	boolean completeOneCall() {
+	synchronized boolean completeOneCall() {
 		completed++;
 		return hasCompleted();
 	}
