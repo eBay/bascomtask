@@ -107,6 +107,11 @@ public class Orchestrator {
 	 * will be retrieved from <code>config</code>.
 	 */
 	private ITaskClosureGenerator closureGenerator = null;
+	
+	/**
+	 * Allow for an override to be set, otherwise one will be retrieved from global config.
+	 */
+	private ITaskClosureGenerator overrideClosureGenerator = null;
 
 	/**
 	 * How we know which task instances are active for a given POJO task class, relative to this orchestrator.
@@ -395,15 +400,21 @@ public class Orchestrator {
 	 * @see com.ebay.bascomtask.config.IBascomConfig#getClosure()
 	 */
 	public Orchestrator interceptor(ITaskClosureGenerator generator) {
-	    this.closureGenerator = generator;
+	    this.overrideClosureGenerator = generator;
 	    return this;
 	}
-	
-	TaskMethodClosure getInterceptor(Call.Instance callInstance, Object[] args) {
-	    ITaskClosureGenerator generator = closureGenerator==null ? config : closureGenerator;
-	    TaskMethodClosure inv = generator.getClosure();
-	    inv.initCall(callInstance,args);
-	    return inv;
+
+	TaskMethodClosure getTaskMethodClosure(TaskMethodClosure parent, Call.Instance callInstance, Object[] args) {
+	    TaskMethodClosure closure = null;
+	    if (parent != null) {
+	        closure = parent.getClosure();
+	        // If return true, then default to generator
+	    }
+	    if (closure == null) {
+	        closure = closureGenerator.getClosure();
+	    }
+	    closure.initCall(callInstance,args);
+	    return closure;
 	}
 	
     public TaskThreadStat getThreadStatForCurrentThread() {
@@ -579,7 +590,15 @@ public class Orchestrator {
 	 * Calls {@link #execute(long)} with a default from current {@link com.ebay.bascomtask.config.IBascomConfig#getDefaultOrchestratorTimeoutMs()}
 	 */
 	public void execute() {
-		execute(config.getDefaultOrchestratorTimeoutMs());
+		execute(null);
+	}
+	
+	public void execute(String pass) {
+		execute(config.getDefaultOrchestratorTimeoutMs(),pass);
+	}
+	
+	public void execute(long maxExecutionTimeMillis) {
+	    execute(maxExecutionTimeMillis,null);
 	}
 
 	/**
@@ -616,7 +635,7 @@ public class Orchestrator {
 	 * @throws InvalidGraph.ViolatedProvides if a task was indicated to {@link com.ebay.bascomtask.main.ITask#provides(Class)} an instance but this was not done
 	 * (or {@literal @}PassThru) method that has all of its parameters available as instances
 	 */
-	public void execute(long maxExecutionTimeMillis) {
+	public void execute(long maxExecutionTimeMillis, String pass) {
 	    final Thread t = Thread.currentThread();
 	    List<Task.Instance> taskInstances = nestedAdds.remove(t);
 	    synchronized (this) {
@@ -629,6 +648,13 @@ public class Orchestrator {
 	            this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
 	            startTime = System.currentTimeMillis();
 	            callingThread = t;
+	            
+	            if (overrideClosureGenerator != null) {
+	                closureGenerator = overrideClosureGenerator;
+	            }
+	            else {
+	                closureGenerator = config.getExecutionHook(this,pass);
+	            }
 	        }
 	    }
 	    if (callingThread==t) { // Can only happen once for top-level calling thread
@@ -1287,8 +1313,7 @@ public class Orchestrator {
 			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fired
 			Object[] followArgs = callInstance.popSequential();
 			if (followArgs != null) {
-			    inv = config.getClosure();
-			    inv.initCall(callInstance,followArgs);
+			    inv = getTaskMethodClosure(callInstance,followArgs);
 				invokeAndFinish(inv,"follow",fire);
 			}
 		}

@@ -88,7 +88,7 @@ public class ConfigTest {
                             return true; // Do not execute, but make available as parameter
                         }
                         return super.executeTaskMethod();
-                    } 
+                    }
                 };
             }
         };
@@ -115,9 +115,15 @@ public class ConfigTest {
 	    
 		BascomConfigFactory.setConfig(new DefaultBascomConfig() {
 		    @Override
-		    public TaskMethodClosure getClosure() {
-		        return createInterceptorAvoiding(a).getClosure();
-		    }});
+		    public ITaskClosureGenerator getExecutionHook(Orchestrator orc, String pass) {
+		        return new ITaskClosureGenerator() {
+		            @Override
+		            public TaskMethodClosure getClosure() {
+		                return createInterceptorAvoiding(a).getClosure();
+		            }
+		        };
+		    }}
+		);
 
 		Orchestrator orc = Orchestrator.create();
 		orc.addWork(a);
@@ -270,7 +276,76 @@ public class ConfigTest {
 		
 		assertThat(prepares,containsInAnyOrder(y1,y2,z,z));
 		assertThat(execs,containsInAnyOrder(y1,y2,z,z));
-		
+	}
+	
+	class BaseTask {
+	    String pass = null;
+	    MyTaskClosure parent = null;
+	}
+
+	class MyTaskClosure extends TaskMethodClosure {
+	    private final String pass;
+	    private final MyTaskClosure parent;
+	    MyTaskClosure(String pass, MyTaskClosure parent) {
+	        this.pass = pass;
+	        this.parent = parent;
+	    }
+
+	    @Override
+	    public boolean executeTaskMethod() {
+	        Object pojo = getTargetPojoTask();
+	        if (pojo instanceof BaseTask) {
+	            BaseTask task = (BaseTask)pojo;
+	            task.pass = pass;
+	            task.parent = parent;
+	        }
+	        else {
+	            fail("Not a BaseTask:  + pojo");
+	        }
+	        return true;
+	    }
+	    @Override
+	    public TaskMethodClosure getClosure() {
+	        return new MyTaskClosure(pass,this);
+	    }
+	}
+
+	@Test
+	public void closureConfig() {
+	    
+	    final String PASS = "foobar";
+	    
+	    class X extends BaseTask {
+	        @Work public void exec() {}
+	    }
+	    
+	    class Y extends BaseTask {
+	        @Work public void exec(X x) {}
+	    }
+	    
+		BascomConfigFactory.setConfig(new DefaultBascomConfig() {
+		    @Override
+		    public ITaskClosureGenerator getExecutionHook(Orchestrator orc, final String pass) {
+		        return new ITaskClosureGenerator() {
+		            @Override
+		            public TaskMethodClosure getClosure() {
+		                return new MyTaskClosure(pass,null);
+		            }
+		        };
+		    }}
+		);
+
+	    X x = new X();
+	    Y y = new Y();
+	    Orchestrator orc = Orchestrator.create();
+	    orc.addWork(x);
+	    orc.addWork(y);
+	    orc.execute(PASS);
+	    
+	    assertEquals(PASS,x.pass);
+	    assertEquals(PASS,y.pass);
+	    assertNull(x.parent);
+	    assertNotNull(y.parent);
 	}
 }
 

@@ -322,7 +322,7 @@ class Call {
 		 * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
 		 */
 		TaskMethodClosure crossInvoke(TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
-			Object[] args = new Object[paramInstances.length];			
+			Object[] args = new Object[paramInstances.length];	
 			return crossInvoke(0,args,true,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 		
@@ -332,7 +332,8 @@ class Call {
 		 */
 		private TaskMethodClosure crossInvoke(int px, Object[]args, boolean fire, TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			if (px == args.length) {
-				TaskMethodClosure newInvocation = orc.getInterceptor(this,args);  // makes a copy of args!
+				TaskMethodClosure newInvocation = orc.getTaskMethodClosure(this,args);  // makes a copy of args!
+				//TaskMethodClosure newInvocation = inv.assign(args);
 				if (!fire) {
 					orc.invokeAndFinish(newInvocation,"non-fire",false);
 				}

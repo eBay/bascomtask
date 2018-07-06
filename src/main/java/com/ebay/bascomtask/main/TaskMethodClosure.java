@@ -22,6 +22,8 @@ import java.lang.reflect.Method;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.ebay.bascomtask.config.ITaskClosureGenerator;
+
 /**
  * Wraps an invocation of a task method call. Subclasses can override to customize
  * invocation behavior. 
@@ -29,7 +31,7 @@ import org.slf4j.LoggerFactory;
  * @see #prepareTaskMethod()
  * @see #executeTaskMethod()
  */
-public class TaskMethodClosure {
+public class TaskMethodClosure implements ITaskClosureGenerator {
 
 	static final Logger LOG = LoggerFactory.getLogger(TaskMethodClosure.class);
     
@@ -69,7 +71,17 @@ public class TaskMethodClosure {
 		}
 		return true;
 	}
-	
+
+	/*
+	TaskMethodClosure assign(Object[]args) {
+	    if (this.args == null) {
+	        this.args = args;
+	        return this;
+	    }
+	    return getClosure().assign(args);
+	}
+	*/
+
 	Object[] copyArgs() {
 		if (args==EMPTY_ARGS) {
 			return args;
@@ -194,7 +206,7 @@ public class TaskMethodClosure {
     /**
      * Called before {@link #executeTaskMethod()}. 
      */
-    public void prepareTaskMethod() {
+    protected void prepareTaskMethod() {
         /* No preparation by default; subclasses can override */
     }
 
@@ -205,7 +217,7 @@ public class TaskMethodClosure {
      * parallelism. 
      * @return
      */
-    public boolean executeTaskMethod() {
+    protected boolean executeTaskMethod() {
         boolean returnValue = true;
         long startMs = System.currentTimeMillis();
         long startNs = System.nanoTime();
@@ -245,6 +257,11 @@ public class TaskMethodClosure {
             }
         }
         return returnValue;
+    }
+    
+    @Override
+    public TaskMethodClosure getClosure() {
+        return null;
     }
 }
 

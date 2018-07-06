@@ -160,8 +160,15 @@ public class DefaultBascomConfig implements IBascomConfig {
         
     }
 
+    private static ITaskClosureGenerator defaultTaskClosureGenerator = new ITaskClosureGenerator() {
+        @Override
+        public TaskMethodClosure getClosure() {
+            return new TaskMethodClosure();
+        }
+    }; 
+
     @Override
-    public TaskMethodClosure getClosure() {
-        return new TaskMethodClosure();
+    public ITaskClosureGenerator getExecutionHook(Orchestrator orc, String pass) {
+        return defaultTaskClosureGenerator;
     }
 }
