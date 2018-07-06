@@ -44,6 +44,8 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     private long durationMs;
     private long durationNs;
     
+    private boolean returned;
+    
 	private boolean called = false;
 	
 	private static Object[] EMPTY_ARGS = new Object[0];
@@ -57,6 +59,14 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 			String what = called?"called@":ready()?"ready@":"not-ready@";
 			return what + callInstance.formatState();
 		}
+	}
+	
+	boolean getReturned() {
+	    return returned;
+	}
+	
+	void setReturned(boolean which) {
+	    this.returned = which;
 	}
 	
 	Call.Instance getCallInstance() {
@@ -91,6 +101,11 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 			System.arraycopy(args,0,copy,0,args.length);
 			return copy;
 		}
+	}
+	
+	void initCall(final Call.Instance callInstance) {
+	    this.callInstance = callInstance;
+	    this.args = EMPTY_ARGS;
 	}
 	
     void initCall(final Call.Instance callInstance, final Object[] args) {
@@ -155,7 +170,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 	 * @return false iff the java method returned a boolean false indicating that the method should not fire
 	 */
 	
-	Call.Instance.Firing invoke(Orchestrator orc, String context, boolean fire) {
+	void invoke(Orchestrator orc, String context, boolean fire) {
 		if (!ready()) {
 			throw new RuntimeException("TaskMethodClosure not ready: " + this);
 		}
@@ -164,7 +179,6 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 		    prepare();
 		}
 		called = true;
-	    boolean returnValue = true;
 	    Task.Instance taskInstance = callInstance.taskInstance;
 	    String kind = taskInstance.taskMethodBehavior==Task.TaskMethodBehavior.WORK ? "@Work" :  "@PassThru";
 
@@ -174,7 +188,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 	            this.context = context;
 	            this.kind = kind;
 	            try {
-	                returnValue = executeTaskMethod();
+	                returned = executeTaskMethod();
 	                orc.validateProvided(taskInstance);
 	            }
 	            catch (Exception e) {
@@ -185,13 +199,11 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 	    }
 	    else {
 	        LOG.debug("Skipping {} {} {}",context,kind,this);
-	        returnValue = false;
+	        returned = false;
 	    }
 	    // For Scope.SEQUENTIAL, only one thread will be active at a time, so it is safe
 	    // for all threads to just reset this to false.
 	    callInstance.setReserve(false);
-	    long duration = getDurationMs();
-	    return callInstance.new Firing(taskInstance.targetPojo,duration,returnValue);
 	}
 	
 	private boolean prepared = false;

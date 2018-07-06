@@ -93,7 +93,7 @@ public class Orchestrator {
 	
 	private static class TaskRec {
 		final List<Task.Instance> added = new ArrayList<>();  // Unique elements
-		final List<Call.Instance.Firing> fired = new ArrayList<>();  // May have dups
+		final List<TaskMethodClosure> fired = new ArrayList<>();  // May have dups
 	}
 	
 	/**
@@ -874,7 +874,7 @@ public class Orchestrator {
 		}
 		return badParams;
 	}
-
+	
 	/**
 	 * Links a taskInstance together with any incoming tasks or outgoing parameters.
 	 * @param taskInstance to link
@@ -892,7 +892,9 @@ public class Orchestrator {
 				if (rec==null) {
 				    if (isInjectable(paramInstance)) {
 				        // Perform the same effects as below without accounting for anything having fired
-				        paramInstance.bindings.add(callInstance.createTaskFiring());
+				        TaskMethodClosure injectionClosure = new TaskMethodClosure();
+				        injectionClosure.initCall(callInstance);
+				        paramInstance.bindings.add(injectionClosure);
 				        callInstance.startingFreeze[i] = 1;
 				    }
 				    else {
@@ -912,7 +914,7 @@ public class Orchestrator {
 					}
 					// Add all tasks that have already fired
 					callInstance.startingFreeze[i] = numberAlreadyFired;
-					for (Call.Instance.Firing fired: rec.fired) {
+					for (TaskMethodClosure fired: rec.fired) {
 						paramInstance.bindings.add(fired);
 					}
 				}
@@ -963,8 +965,8 @@ public class Orchestrator {
         	    int sz = 0;
         	    for (Task.Instance before: befores) {
         	        backLink(before,paramInstance);
-        	        for (Call.Instance.Firing fired: rec.fired) {
-        	            if (fired.pojoCalled == before.targetPojo) {
+        	        for (TaskMethodClosure fired: rec.fired) {
+        	            if (fired.getTargetPojoTask() == before.targetPojo) {
         	                paramInstance.bindings.add(fired);
         	                sz++;
         	            }
@@ -994,8 +996,8 @@ public class Orchestrator {
                 for (Task.Instance next: befores) {
                     alt.added.add(next);
                     explicitsBefore.remove(task);  // Not a 'hidden' param if it's an explicit formal param                    
-                    for (Call.Instance.Firing firing: rec.fired) {
-                        if (firing.pojoCalled == next.targetPojo) {
+                    for (TaskMethodClosure firing: rec.fired) {
+                        if (firing.getTargetPojoTask() == next.targetPojo) {
                             alt.fired.add(firing);
                         }
                     }
@@ -1287,7 +1289,7 @@ public class Orchestrator {
 		for (Call.Instance nextBackCallInstance: roots) {
 			//inv = nextBackCallInstance.bind(this, "TBD", null, -1, inv);
 			int[] freeze = nextBackCallInstance.startingFreeze;
-			inv = nextBackCallInstance.crossInvoke(inv, freeze, null, -1, this, "root");
+			inv = nextBackCallInstance.crossInvoke(null,inv,freeze,null,-1,this,"root");
 		}
 		return inv;
 	}
@@ -1296,25 +1298,24 @@ public class Orchestrator {
 	 * Invokes a task method then follows up with any on-completion bookkeeping
 	 * which may include recursively invoking (or spawning new threads for) tasks 
 	 * that become ready as a result of the incoming call having completed.
-	 * @param inv
+	 * @param closureToInvoke
 	 * @param context descriptive term for log messages
 	 */
-	void invokeAndFinish(TaskMethodClosure inv, String context, boolean fire) {
+	void invokeAndFinish(TaskMethodClosure closureToInvoke, String context, boolean fire) {
 	    // Don't invoke any more tasks if there are any pending exceptions
-		if (inv != null && this.exceptions==null) {
-			Call.Instance callInstance = inv.getCallInstance();
+		if (closureToInvoke != null && this.exceptions==null) {
+			Call.Instance callInstance = closureToInvoke.getCallInstance();
 			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
 			taskOfCallInstance.startOneCall();
-			Call.Instance.Firing firing = inv.invoke(this,context,fire);
 			Task task = taskOfCallInstance.getTask();
 			TaskRec rec = taskMapByType.get(task.taskClass);
 
-			inv = processPostExecution(rec,callInstance,taskOfCallInstance,firing);
-			invokeAndFinish(inv,context,true); // If inv not null, it will represent a call that can be fired
+			closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
+			invokeAndFinish(closureToInvoke,context,true); // If inv not null, it will represent a call that can be fired
 			Object[] followArgs = callInstance.popSequential();
 			if (followArgs != null) {
-			    inv = getTaskMethodClosure(callInstance,followArgs);
-				invokeAndFinish(inv,"follow",fire);
+			    closureToInvoke = getTaskMethodClosure(callInstance,followArgs);
+				invokeAndFinish(closureToInvoke,"follow",fire);
 			}
 		}
 	}
@@ -1377,10 +1378,11 @@ public class Orchestrator {
 	 * the lock is still held).
 	 * @param completed
 	 */
-	private synchronized TaskMethodClosure processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, Call.Instance.Firing firing) {
-	    noWaitStats.update(firing.executionTime); 
+	private synchronized TaskMethodClosure processPostExecution(TaskRec rec, Call.Instance callInstance, Task.Instance taskOfCallInstance, TaskMethodClosure firing) {
+	    long duration = firing.getDurationMs();
+	    noWaitStats.update(duration);
 	    if (callingThread != null) {
-	        waitStats.update(firing.executionTime);
+	        waitStats.update(duration);
 	    }
 		boolean complete = false;
 		rec.fired.add(firing);
@@ -1412,7 +1414,7 @@ public class Orchestrator {
 	    return nt==null ? 0 : nt.size();
 	}
 
-	private synchronized TaskMethodClosure continueOrSpawn(Task.Instance taskInstance, Call.Instance.Firing firing, String context, TaskMethodClosure inv) {
+	private synchronized TaskMethodClosure continueOrSpawn(Task.Instance taskInstance, TaskMethodClosure firing, String context, TaskMethodClosure inv) {
 		List<Call.Param.Instance> backList = taskInstance.backList;
 		for (Call.Param.Instance nextBackParam: backList) {
 			Call.Instance nextCallInstance = nextBackParam.callInstance;

@@ -270,10 +270,10 @@ class Call {
 		 * @param context
 		 * @param userTaskInstance instance of user's task
 		 * @param parameterIndex index of parameter that is being bound
-		 * @param inv current invocation, null if none
+		 * @param pendingClosure current invocation, null if none
 		 * @return same or possibly new invocation for the calling thread to invoke
 		 */
-		TaskMethodClosure bind(Orchestrator orc, String context, Object userTaskInstance, Firing firing, Param.Instance firingParameter, TaskMethodClosure inv) {
+		TaskMethodClosure bind(Orchestrator orc, String context, Object userTaskInstance, TaskMethodClosure firing, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
 			int[] freeze;
 			int ordinalOfFiringParameter;
 			if (firingParameter == null) {  // A root task call, i.e. one with no task parameters? 
@@ -290,13 +290,13 @@ class Call {
 					firingParameter.bindings.add(firing);
 					for (Param.Instance next: paramInstances) {
 						if (!next.ready()) {
-							return inv; // If not all parameters ready (non-list params must have at least one binding), not ready to execute call
+							return pendingClosure; // If not all parameters ready (non-list params must have at least one binding), not ready to execute call
 						}
 					}
 					if (hiddenParameters != null) {
 					    for (Param.Instance next: hiddenParameters) {
 					        if (!next.ready()) {
-					            return inv; // If not all hidden parameters ready, not ready to execute call
+					            return pendingClosure; // If not all hidden parameters ready, not ready to execute call
 					        }
 					    }
 					}
@@ -307,13 +307,13 @@ class Call {
 				}
 			}
 
-			return crossInvoke(inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+			return crossInvoke(firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 		
 		/**
 		 * Invokes POJO task method 1 or more times with the cross-product off all parameters within the 'freeze' range,
 		 * *except* for the the firing parameter for which we don't include any of its sibling parameters.
-		 * @param inv the current invocation to be returned to the calling thread, null if none
+		 * @param pendingClosure the current invocation to be returned to the calling thread, null if none
 		 * @param freeze the max ordinal position of each parameter to include
 		 * @param firingParameterIndex which parameter fired that cause this method to be invoked
 		 * @param ordinalOfFiringParameter the ordinal position of the firing parameter within its Param.Instance.bindings
@@ -321,18 +321,18 @@ class Call {
 		 * @param context descriptive text for logging
 		 * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
 		 */
-		TaskMethodClosure crossInvoke(TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		TaskMethodClosure crossInvoke(TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			Object[] args = new Object[paramInstances.length];	
-			return crossInvoke(0,args,true,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+			return crossInvoke(0,args,true,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 		
 		/**
 		 * Invoked recursively for each parameter position, accumulating parameter assignments in args, and performing the invocation 
 		 * when (and if) all args are assigned.
 		 */
-		private TaskMethodClosure crossInvoke(int px, Object[]args, boolean fire, TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		private TaskMethodClosure crossInvoke(int px, Object[]args, boolean fire, TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			if (px == args.length) {
-				TaskMethodClosure newInvocation = orc.getTaskMethodClosure(this,args);  // makes a copy of args!
+				TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args);  // makes a copy of args!
 				//TaskMethodClosure newInvocation = inv.assign(args);
 				if (!fire) {
 					orc.invokeAndFinish(newInvocation,"non-fire",false);
@@ -349,8 +349,8 @@ class Call {
 					orc.spawn(newInvocation);
 				}
 				else if (!postPending(newInvocation)) {
-					if (inv != null) {
-						orc.spawn(inv);
+					if (pendingClosure != null) {
+						orc.spawn(pendingClosure);
 					}
 					return newInvocation;
 				}
@@ -359,22 +359,22 @@ class Call {
 				final Param.Instance paramAtIndex = paramInstances[px];
 				if (paramAtIndex.getParam().isList) {
 					if (!paramAtIndex.ready()) {
-						return inv;  // List arg not ready
+						return pendingClosure;  // List arg not ready
 					}
 					args[px] = paramAtIndex.asListArg();
 					// Don't change 'fire' value -- args only contains values that have fired; may even be empty but fire anyway
-					inv = crossInvoke(px+1,args,fire,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+					pendingClosure = crossInvoke(px+1,args,fire,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 				}
 				else if (paramAtIndex==firingParameter) {
-					inv = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+					pendingClosure = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 				}
 				else {
 					for (int i=0; i<freeze[px]; i++) {
-						inv = crossInvokeNext(px,args,fire,i,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+						pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 					}
 				}
 			}
-			return inv;
+			return pendingClosure;
 		}
 		
 		/**
@@ -383,7 +383,7 @@ class Call {
 		 * @param args
 		 * @param fire
 		 * @param bindingIndex
-		 * @param inv
+		 * @param pendingClosure
 		 * @param freeze
 		 * @param firingParameterIndex
 		 * @param ordinalOfFiringParameter
@@ -391,12 +391,12 @@ class Call {
 		 * @param context
 		 * @return
 		 */
-		private TaskMethodClosure crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, TaskMethodClosure inv, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+		private TaskMethodClosure crossInvokeNext(int px, Object[]args, boolean fire, int bindingIndex, TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			Param.Instance paramAtIndex = paramInstances[px];
-			Call.Instance.Firing firing = paramAtIndex.bindings.get(bindingIndex);
-			args[px] = firing.pojoCalled;
-			boolean fireAtLevel = fire && firing.taskMethodReturnValue;
-			return crossInvoke(px+1,args,fireAtLevel,inv,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+			TaskMethodClosure paramClosure = paramAtIndex.bindings.get(bindingIndex);
+			args[px] = paramClosure.getTargetPojoTask();
+			boolean fireAtLevel = fire && paramClosure.getReturned();
+			return crossInvoke(px+1,args,fireAtLevel,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
 		}
 
 		/**
@@ -438,15 +438,16 @@ class Call {
 		 * the result of completion is still propagated throughout the graph so that the termination 
 		 * logic can be applied.
 		 */
+		/*
 		class Firing {
 			/**
 			 * The actual POJO added to the orchestrator, or a clone of that object for (TODO) SCOPE.request
-			 */
+			 *\/
 			final Object pojoCalled;
 
 			/**
 			 * The value returned by the task method applied to that pojoCalled
-			 */
+			 *\/
 			final boolean taskMethodReturnValue;
 			
 			final long executionTime;
@@ -461,6 +462,7 @@ class Call {
 		Firing createTaskFiring() {
 		    return new Firing(taskInstance,0,true);
 		}
+		*/
 	}
 	
 	Call(Task task, Method method, Scope scope, boolean light) {
@@ -523,7 +525,7 @@ class Call {
 			 * The actual arguments in proper order, all of which will be POJOs added 
 			 * to the orchestrator as tasks
 			 */
-			final List<Call.Instance.Firing> bindings = new ArrayList<>();
+			final List<TaskMethodClosure> bindings = new ArrayList<>();
 			
 			/**
 			 * All tasks, auto-wired and explicit/hidden, that backlist to this param instance.
@@ -551,9 +553,9 @@ class Call {
 			
 			List<Object> asListArg() {
 				List<Object> result = new ArrayList<>(bindings.size());
-				for (Call.Instance.Firing next: bindings) {
-					if (next.taskMethodReturnValue) {
-						result.add(next.pojoCalled);
+				for (TaskMethodClosure next: bindings) {
+					if (next.getReturned()) {
+						result.add(next.getTargetPojoTask());
 					}
 				}
 				return result;
