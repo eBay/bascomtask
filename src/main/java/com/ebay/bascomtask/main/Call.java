@@ -333,7 +333,6 @@ class Call {
 		private TaskMethodClosure crossInvoke(int px, Object[]args, boolean fire, TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
 			if (px == args.length) {
 				TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args);  // makes a copy of args!
-				//TaskMethodClosure newInvocation = inv.assign(args);
 				if (!fire) {
 					orc.invokeAndFinish(newInvocation,"non-fire",false);
 				}

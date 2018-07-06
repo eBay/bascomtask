@@ -10,7 +10,8 @@ public interface ITaskClosureGenerator {
 	 * Note that there is no guarantee that the <code>TaskMethodClosure</code> returned
 	 * will be invoked; overriding subclasses should simply return an instance of
 	 * the desired type.
-	 * @see com.ebay.bascomtask.main.Orchestrator#interceptor(ITaskClosureGenerator)
+	 * @return a closure ready for execution
+	 * @see com.ebay.bascomtask.main.Orchestrator#closureGenerator(ITaskClosureGenerator)
 	 * @see com.ebay.bascomtask.config.DefaultBascomConfig#getClass()
 	 */
 	TaskMethodClosure getClosure();

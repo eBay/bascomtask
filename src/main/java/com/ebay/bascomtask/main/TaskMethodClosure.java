@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 import com.ebay.bascomtask.config.ITaskClosureGenerator;
 
 /**
- * Wraps an invocation of a task method call. Subclasses can override to customize
+ * Wraps an invocation of a task method call and its result. Subclasses can override to customize
  * invocation behavior. 
  * @author brendanmccarthy
  * @see #prepareTaskMethod()
@@ -34,9 +34,13 @@ import com.ebay.bascomtask.config.ITaskClosureGenerator;
 public class TaskMethodClosure implements ITaskClosureGenerator {
 
 	static final Logger LOG = LoggerFactory.getLogger(TaskMethodClosure.class);
+	
+	private TaskMethodClosure parent = null;
     
 	private Call.Instance callInstance;
     private Object[] args;
+    
+    private Object pojoTargetTask;
 
     private String context;
     private String kind;
@@ -44,7 +48,10 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     private long durationMs;
     private long durationNs;
     
-    private boolean returned;
+    /**
+     * Defaults to true unless set otherwise, usually as a result of a task method returning false
+     */
+    private boolean returned = true;
     
 	private boolean called = false;
 	
@@ -69,6 +76,14 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 	    this.returned = which;
 	}
 	
+	TaskMethodClosure getParent() {
+	    return parent;
+	}
+	
+	void setParent(TaskMethodClosure parent) {
+	    this.parent = parent;
+	}
+	
 	Call.Instance getCallInstance() {
 		return callInstance;
 	}
@@ -82,16 +97,6 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 		return true;
 	}
 
-	/*
-	TaskMethodClosure assign(Object[]args) {
-	    if (this.args == null) {
-	        this.args = args;
-	        return this;
-	    }
-	    return getClosure().assign(args);
-	}
-	*/
-
 	Object[] copyArgs() {
 		if (args==EMPTY_ARGS) {
 			return args;
@@ -103,13 +108,24 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 		}
 	}
 	
-	void initCall(final Call.Instance callInstance) {
-	    this.callInstance = callInstance;
-	    this.args = EMPTY_ARGS;
+	/**
+	 * Alternative to {@link #initCall(com.ebay.bascomtask.main.Call.Instance, Object[])} 
+	 * that simply installs its (injected) task instance without actually making a call.
+	 * @param taskInstance
+	 */
+	void initCall(Task.Instance taskInstance) {
+	    this.pojoTargetTask = taskInstance;
 	}
 	
+    /**
+     * In the normal (non-injection) case, a call instance is invoked with the 
+     * supplied args. This must be called before {@link #invoke(Orchestrator, String, boolean)}.
+     * @param callInstance
+     * @param args
+     */
     void initCall(final Call.Instance callInstance, final Object[] args) {
 		this.callInstance = callInstance;
+		this.pojoTargetTask = callInstance.taskInstance.targetPojo;
 		if (args==null) {
 			this.args = null;
 		}
@@ -146,7 +162,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     }
 
     public Object getTargetPojoTask() {
-        return callInstance.taskInstance.targetPojo;
+        return pojoTargetTask;
     }
     
     public Object[] getMethodBindings() {
@@ -227,7 +243,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
      * This thread may or may not be the same as the one in <code>prepareTaskMethod</code>. It will be
      * different if the orchestrator decided to run this task in a separate thread in order to maximize
      * parallelism. 
-     * @return
+     * @return boolean result of invoking task method
      */
     protected boolean executeTaskMethod() {
         boolean returnValue = true;

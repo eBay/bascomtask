@@ -99,7 +99,7 @@ public class ConfigTest {
 	    
 		final A a = new A();
 		B b = new B();
-		Orchestrator orc = Orchestrator.create().interceptor(createInterceptorAvoiding(a));
+		Orchestrator orc = Orchestrator.create().closureGenerator(createInterceptorAvoiding(a));
 		orc.addWork(a);
 		orc.addWork(b);
 		orc.execute();
@@ -155,7 +155,7 @@ public class ConfigTest {
 		    }
 		}
 	    
-		Orchestrator orc = Orchestrator.create().interceptor(
+		Orchestrator orc = Orchestrator.create().closureGenerator(
 		        new ITaskClosureGenerator() {
                     @Override
                     public TaskMethodClosure getClosure() {
@@ -190,7 +190,7 @@ public class ConfigTest {
 	        @Work public void exec() {}
 	    }
 	    
-		Orchestrator orc = Orchestrator.create().interceptor(
+		Orchestrator orc = Orchestrator.create().closureGenerator(
 		        new ITaskClosureGenerator() {
                     @Override
                     public TaskMethodClosure getClosure() {
@@ -241,7 +241,7 @@ public class ConfigTest {
 	        @Work public void exec(Y y) {}
 	    }
 	    
-		Orchestrator orc = Orchestrator.create().interceptor(
+		Orchestrator orc = Orchestrator.create().closureGenerator(
 		        new ITaskClosureGenerator() {
                     @Override
                     public TaskMethodClosure getClosure() {
@@ -311,7 +311,7 @@ public class ConfigTest {
 	}
 
 	@Test
-	public void closureConfig() {
+	public void testClosureParenting() {
 	    
 	    final String PASS = "foobar";
 	    

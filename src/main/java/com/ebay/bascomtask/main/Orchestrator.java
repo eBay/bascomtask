@@ -393,13 +393,13 @@ public class Orchestrator {
 	}
 	
 	/**
-	 * Sets an interceptor to use for this orchestrator, rather than the default which
+	 * Sets a closure generator to use for this orchestrator, rather than the default which
 	 * is retrieved from whichever IBascomConfig is active.
-	 * @param interceptor to use in place of default
+	 * @param generator to use in place of default
 	 * @return this instance for fluent-style chaining
-	 * @see com.ebay.bascomtask.config.IBascomConfig#getClosure()
+	 * @see com.ebay.bascomtask.config.IBascomConfig#getExecutionHook(Orchestrator, String)
 	 */
-	public Orchestrator interceptor(ITaskClosureGenerator generator) {
+	public Orchestrator closureGenerator(ITaskClosureGenerator generator) {
 	    this.overrideClosureGenerator = generator;
 	    return this;
 	}
@@ -408,6 +408,9 @@ public class Orchestrator {
 	    TaskMethodClosure closure = null;
 	    if (parent != null) {
 	        closure = parent.getClosure();
+	        if (closure != null) {
+	            closure.setParent(parent);
+	        }
 	        // If return true, then default to generator
 	    }
 	    if (closure == null) {
@@ -624,6 +627,7 @@ public class Orchestrator {
 	 * from this call. Once such an exception is thrown, the orchestrator ceases to start new tasks and instead
 	 * waits for all open threads to finish before returning (by throwing the exception in question). 
 	 * @param maxExecutionTimeMillis to timeout
+	 * @param pass description passed to config executors
 	 * @throws RuntimeException generated from a task
 	 * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
 	 * @throws RuntimeGraphError.Multi if more than one exception is thrown from different tasks
@@ -893,7 +897,7 @@ public class Orchestrator {
 				    if (isInjectable(paramInstance)) {
 				        // Perform the same effects as below without accounting for anything having fired
 				        TaskMethodClosure injectionClosure = new TaskMethodClosure();
-				        injectionClosure.initCall(callInstance);
+				        injectionClosure.initCall(taskInstance);
 				        paramInstance.bindings.add(injectionClosure);
 				        callInstance.startingFreeze[i] = 1;
 				    }
@@ -984,7 +988,7 @@ public class Orchestrator {
 	 * Produces a record of all the tasks upon which the given call parameter must wait, accounting for auto and explicit wiring.
 	 * @param paramInstance of target call
 	 * @param explicitsBefore containing explicitly-declared dependencies, and from which formal param matches will be removed
-	 * @return
+	 * @return record of all tasks that must fire before <code>paramInstance</code>
 	 */
 	private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, Map<Task, List<Task.Instance>> explicitsBefore) {
 	    Task task = paramInstance.getTask();  
@@ -1054,7 +1058,7 @@ public class Orchestrator {
 	 * @param taskInstance
 	 * @param level should be unique per call
 	 * @param toBeProvided possibly null map of pojo task classes and the tasks that will {@link com.ebay.bascomtask.main.ITask#provides(Class)} them
-	 * @return
+	 * @return how many times task must be invoked before it can be considered complete
 	 */
 	private int computeThreshold(Task.Instance taskInstance, int level, final Map<Class<?>, Task.Instance> toBeProvided) {
 		return computeThreshold(taskInstance,level,taskInstance,toBeProvided);
@@ -1307,14 +1311,16 @@ public class Orchestrator {
 			Call.Instance callInstance = closureToInvoke.getCallInstance();
 			Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
 			taskOfCallInstance.startOneCall();
+			closureToInvoke.invoke(this,context,fire);
 			Task task = taskOfCallInstance.getTask();
 			TaskRec rec = taskMapByType.get(task.taskClass);
+			TaskMethodClosure parent = closureToInvoke.getParent();
 
 			closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
-			invokeAndFinish(closureToInvoke,context,true); // If inv not null, it will represent a call that can be fired
+			invokeAndFinish(closureToInvoke,context,true);
 			Object[] followArgs = callInstance.popSequential();
 			if (followArgs != null) {
-			    closureToInvoke = getTaskMethodClosure(callInstance,followArgs);
+			    closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs);
 				invokeAndFinish(closureToInvoke,"follow",fire);
 			}
 		}
