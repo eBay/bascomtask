@@ -25,11 +25,12 @@ import org.slf4j.LoggerFactory;
 import com.ebay.bascomtask.config.ITaskClosureGenerator;
 
 /**
- * Wraps an invocation of a task method call and its result. Subclasses can override to customize
- * invocation behavior. 
+ * Wraps an invocation of a task method call and its result. Subclasses can override key methods
+ * to customize invocation behavior. 
  * @author brendanmccarthy
  * @see #prepareTaskMethod()
  * @see #executeTaskMethod()
+ * @see #getClosure()
  */
 public class TaskMethodClosure implements ITaskClosureGenerator {
 
@@ -179,13 +180,12 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     }
     
 	/**
-	 * Invokes the Java method associated with this call.
+	 * Invokes the Java task method conditionally.
 	 * @param orc
 	 * @param context string for debug messages
-	 * @param args for target call
+	 * @param fire if false, the actual task method will not be invoked
 	 * @return false iff the java method returned a boolean false indicating that the method should not fire
 	 */
-	
 	void invoke(Orchestrator orc, String context, boolean fire) {
 		if (!ready()) {
 			throw new RuntimeException("TaskMethodClosure not ready: " + this);
@@ -232,17 +232,23 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 	}
 	
     /**
-     * Called before {@link #executeTaskMethod()}. 
+     * Called before {@link #executeTaskMethod()}. The default implementation does nothing,
+     * and is provided only for the benefit of subclasses to override.
      */
     protected void prepareTaskMethod() {
-        /* No preparation by default; subclasses can override */
+        // Do nothing by default
     }
 
     /**
+     * Invokes the actual pojo task method.
+     * <p>
      * Called after {@link #prepareTaskMethod()} by the thread that will be used to invoke the method.
      * This thread may or may not be the same as the one in <code>prepareTaskMethod</code>. It will be
      * different if the orchestrator decided to run this task in a separate thread in order to maximize
      * parallelism. 
+     * <p>
+     * This method can be overridden but this super method should be invoked from the overridden method
+     * to actually perform the call. 
      * @return boolean result of invoking task method
      */
     protected boolean executeTaskMethod() {
@@ -287,6 +293,13 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
         return returnValue;
     }
     
+    /** 
+     * Returns a closure for nested (non-root, i.e. tasks that have to wait for other tasks to finish) tasks.
+     * This implementation returns null indicating that the closure should be retrieved from 
+     * {@link com.ebay.bascomtask.config.IBascomConfig#getExecutionHook(Orchestrator, String)}.getClosure().
+     * Subclasses can override to provide different behavior for non-root vs. root tasks, if desired. The
+     * difference with this method is that subclasses can know what the parent closure is, if that matters.
+     */
     @Override
     public TaskMethodClosure getClosure() {
         return null;

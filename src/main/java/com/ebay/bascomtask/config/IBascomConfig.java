@@ -68,10 +68,11 @@ public interface IBascomConfig {
 	void notifyThreadEnd(TaskThreadStat threadStat);
 	
 	/**
-	 * Returns a generator for use within an execution scope -- called once for each
+	 * Returns a generator for use within an orchestration execution scope -- i.e. called once for each
 	 * top-level invocation of {@link com.ebay.bascomtask.main.Orchestrator#execute(long, String)}.
 	 * Subclasses can provide their own version instead of the default which generates
-	 * {@link TaskMethodClosure} instances directly.
+	 * {@link TaskMethodClosure} instances directly. The returned value can be a singleton or
+	 * created for each call if the subclass needs to keep its own state.
 	 * @param orc on which the execution was invoked
 	 * @param pass provided as param to {@link com.ebay.bascomtask.main.Orchestrator#execute(long, String)}
 	 * @return generator

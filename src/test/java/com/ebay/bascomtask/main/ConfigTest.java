@@ -335,6 +335,30 @@ public class ConfigTest {
 		    }}
 		);
 
+		BascomConfigFactory.setConfig(new DefaultBascomConfig() {
+		    @Override
+		    public ITaskClosureGenerator getExecutionHook(Orchestrator orc, final String pass) {
+		        return new ITaskClosureGenerator() {
+		            @Override
+		            public TaskMethodClosure getClosure() {
+		                return new TaskMethodClosure() {
+		                    @Override
+		                    public boolean executeTaskMethod() {
+		                        System.out.println("Start " + getMethodFormalSignature());
+		                        try {
+		                            return super.executeTaskMethod();
+		                        }
+		                        finally {
+		                            System.out.println("End " + getMethodFormalSignature());
+		                        }		                        
+		                    }
+		                };
+		            }
+		        };
+		    }}
+		);
+
+		
 	    X x = new X();
 	    Y y = new Y();
 	    Orchestrator orc = Orchestrator.create();

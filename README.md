@@ -227,27 +227,32 @@ public class MyBascomConfig extends DefaultBascomConfig {
 }
 ```
 
-Among other things, interceptors can be set on on task method calls. For example, extending the previous MyBascomConfig example with the following method will log start and end messages on all task method invocations:
+Among other things, task method invocations can be intercepted. For example, extending the previous MyBascomConfig example with the following method will log start and end messages on all task method invocations:
 
 ```java
-    private ITaskInterceptor taskInterceptor = new ITaskInterceptor() {
-        @Override
-        public boolean invokeTaskMethod(ITaskMethodClosure closure) {
-            System.out.println("Start " + closure.getMethodFormalSignature());
-            try {
-                return closure.executeTaskMethod();
-            }
-            finally {
-                System.out.println("End " + closure.getMethodFormalSignature());
-            }
-        }
-    }
-
     @Override
-    public ITaskInterceptor getDefaultInterceptor() {
-        return taskInterceptor;
-    }
+    public ITaskClosureGenerator getExecutionHook(Orchestrator orc, final String pass) {
+        return new ITaskClosureGenerator() {  // LINE 1
+            @Override
+            public TaskMethodClosure getClosure() {  // LINE 2
+                return new TaskMethodClosure() {
+                    @Override
+                    public boolean executeTaskMethod() {
+                        System.out.println("Start " + getMethodFormalSignature());
+                        try {
+                            return super.executeTaskMethod();
+                        }
+                        // Catch exceptions if desired
+                        finally {
+                            System.out.println("End " + getMethodFormalSignature());
+                        }		                        
+                    }
+                };
+            }
+        };
+    }}
 ```
+The generator at LINE 1 is called for every top-level call to Orchestrator.invoke() -- a new instance is created here though a shared instance could just as well have been used. The closure at LINE 2 is called for every task method call. Additional options are provided for dealing with multiple threads as well as nested vs. root tasks, see javadoc for details.
 
 
 ## Comparison to Alternatives
