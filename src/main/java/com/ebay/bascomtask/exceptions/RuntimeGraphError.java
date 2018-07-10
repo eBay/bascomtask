@@ -19,51 +19,54 @@ package com.ebay.bascomtask.exceptions;
 import java.util.List;
 
 /**
- * Generated during Orchestrator execution. Some tasks may have completed
- * and some may still be in progress.
+ * Generated during Orchestrator execution. Some tasks may have completed and
+ * some may still be in progress.
+ * 
  * @author brendanmccarthy
-  */
+ */
 @SuppressWarnings("serial")
 public class RuntimeGraphError extends RuntimeException {
 
-	public RuntimeGraphError(String message) {
-		super(message);
-	}
+    public RuntimeGraphError(String message) {
+        super(message);
+    }
 
-	public RuntimeGraphError(String message, Exception e) {
-		super(message,e);
-	}
+    public RuntimeGraphError(String message, Exception e) {
+        super(message,e);
+    }
 
-	public static class Timeout extends InvalidTask {
-		public Timeout(long ms) {
-			super("Timed out after " + ms + "ms");
-		}
-	}
-	
-	/**
-	 * An internal error when the main thread is waiting yet there are no
-	 * other active threads to complete the task(s) being waited on. This
-	 * is an internal error and should not happen.
-	 */
-	public static class Stall extends RuntimeGraphError {
-		public Stall(String msg) {
-			super(msg);
-		}
-	}
-	
-	/**
-	 * When multiple errors occur. The first one is provided as the 'cause',
-	 * while others are accumulated in a list for later inspection if so
-	 * desired.
-	 */
-	public static class Multi extends RuntimeGraphError {
-	    private final List<Exception> exceptions;
-		public Multi(Exception e, List<Exception> all) {
-			super("Multiple exceptions, first is: " + e.getMessage(),e);
-			this.exceptions = all;
-		}
-		public List<Exception> getExceptions() {
-		    return exceptions;
-		}
-	}
+    public static class Timeout extends InvalidTask {
+        public Timeout(long ms) {
+            super("Timed out after " + ms + "ms");
+        }
+    }
+
+    /**
+     * An internal error when the main thread is waiting yet there are no other
+     * active threads to complete the task(s) being waited on. This is an
+     * internal error and should not happen.
+     */
+    public static class Stall extends RuntimeGraphError {
+        public Stall(String msg) {
+            super(msg);
+        }
+    }
+
+    /**
+     * When multiple errors occur. The first one is provided as the 'cause',
+     * while others are accumulated in a list for later inspection if so
+     * desired.
+     */
+    public static class Multi extends RuntimeGraphError {
+        private final List<Exception> exceptions;
+
+        public Multi(Exception e, List<Exception> all) {
+            super("Multiple exceptions, first is: " + e.getMessage(),e);
+            this.exceptions = all;
+        }
+
+        public List<Exception> getExceptions() {
+            return exceptions;
+        }
+    }
 }

@@ -18,61 +18,75 @@ package com.ebay.bascomtask.main;
 
 /**
  * Wraps a call to a POJO task method.
+ * 
  * @author bremccarthy
  */
 public interface ITaskMethodClosure {
-    
+
     /**
      * Returns the class name of the POJO or its overwritten name(String) value.
-     * @return the class name of the POJO or another name if explicitly set on the task
+     * 
+     * @return the class name of the POJO or another name if explicitly set on
+     *         the task
      */
     String getTaskName();
-    
+
     /**
      * Retrieves the method name.
+     * 
      * @return The java method name
      */
     String getMethodName();
-    
+
     /**
      * Method name with argument types.
+     * 
      * @return the java signature with just the argument types
      */
     String getMethodFormalSignature();
-    
+
     /**
      * Method name with argument values.
+     * 
      * @return the signature with the actual arguments values
      */
     String getMethodActualSignature();
-    
+
     /**
      * Returns the target object.
+     * 
      * @return the POJO whose task method will be called.
      */
     Object getTargetPojoTask();
-    
+
     /**
-     * Returns the list of POJO arguments to be passed to the task method. This is the actual 
-     * list so any modifications will be passed through to the task method.
+     * Returns the list of POJO arguments to be passed to the task method. This
+     * is the actual list so any modifications will be passed through to the
+     * task method.
+     * 
      * @return list of bindings.
      */
     Object[] getMethodBindings();
-    
+
     /**
      * Invokes the task method.
+     * 
      * @return its return result, or 'true' if the method type is void
      */
     boolean executeTaskMethod();
-    
+
     /**
-     * Returns millisecond duration of executeTaskMethod call, valid even if exception thrown.
+     * Returns millisecond duration of executeTaskMethod call, valid even if
+     * exception thrown.
+     * 
      * @return duration
      */
     long getDurationMs();
-    
+
     /**
-     * Returns nanosecond duration of executeTaskMethod call, valid even if exception thrown.
+     * Returns nanosecond duration of executeTaskMethod call, valid even if
+     * exception thrown.
+     * 
      * @return duration
      */
     long getDurationNs();

@@ -18,53 +18,55 @@ package com.ebay.bascomtask.exceptions;
 
 /**
  * A task supplied to an archestrator cannot be processed.
+ * 
  * @author brendanmccarthy
-  */
+ */
 @SuppressWarnings("serial")
 public class InvalidTask extends RuntimeException {
 
-	public InvalidTask(String message) {
-		super(message);
-	}
+    public InvalidTask(String message) {
+        super(message);
+    }
 
-	/**
-	 * Attempts to add the same POJO task more than once are rejected else 
-	 * the results would be ambiguous.
-	 */
-	public static class AlreadyAdded extends InvalidTask {
-		public AlreadyAdded(String message) {
-			super(message);
-		}
-	}
-	
-	/**
-	 * Thrown when a task method has a parameter that cannot be processed by
-	 * the orchestrator.
-	 */
-	public static class BadParam extends InvalidTask {
-		public BadParam(String message) {
-			super(message);
-		}
-	}
-	
-	/**
-	 * Thrown when a task method has a return type that is neither void nor boolean.
-	 */
-	public static class BadReturn extends InvalidTask {
-		public BadReturn(String message) {
-			super(message);
-		}
-	}
+    /**
+     * Attempts to add the same POJO task more than once are rejected else the
+     * results would be ambiguous.
+     */
+    public static class AlreadyAdded extends InvalidTask {
+        public AlreadyAdded(String message) {
+            super(message);
+        }
+    }
 
-	public static class NotPublic extends InvalidTask {
-		public NotPublic(String message) {
-			super(message);
-		}
-	}
+    /**
+     * Thrown when a task method has a parameter that cannot be processed by the
+     * orchestrator.
+     */
+    public static class BadParam extends InvalidTask {
+        public BadParam(String message) {
+            super(message);
+        }
+    }
 
-	public static class NameConflict extends InvalidTask {
-		public NameConflict(String message) {
-			super(message);
-		}
-	}
+    /**
+     * Thrown when a task method has a return type that is neither void nor
+     * boolean.
+     */
+    public static class BadReturn extends InvalidTask {
+        public BadReturn(String message) {
+            super(message);
+        }
+    }
+
+    public static class NotPublic extends InvalidTask {
+        public NotPublic(String message) {
+            super(message);
+        }
+    }
+
+    public static class NameConflict extends InvalidTask {
+        public NameConflict(String message) {
+            super(message);
+        }
+    }
 }

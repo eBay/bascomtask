@@ -17,91 +17,97 @@ limitations under the License.
 package com.ebay.bascomtask.main;
 
 /**
- * A type with a target completionCount that tracks its completionCount, for the purpose of 
- * tracing but also to known when {@link #hasCompleted()}.
+ * A type with a target completionCount that tracks its completionCount, for the
+ * purpose of tracing but also to known when {@link #hasCompleted()}.
+ * 
  * @author brendanmccarthy
  */
 class Completable {
-	// After this many invocations (of any task method) this object will be considered complete 
-	private int completionThresholdCount = -1;
+    // After this many invocations (of any task method) this object will be
+    // considered complete
+    private int completionThresholdCount = -1;
 
-	// Number of actual invocations so far started
-	private int started = 0;
+    // Number of actual invocations so far started
+    private int started = 0;
 
-	// Number of actual invocations so far completed
-	private int completed = 0;
-	
-	private int computedThresholdAtLevel = -1;
-	
-	private boolean forceCompletable = false;
-	
-	/**
-	 * Has been initalized at the given level?
-	 * @return
-	 */
-	boolean recomputeForLevel(int level) {
-		if (computedThresholdAtLevel != level) {
-			computedThresholdAtLevel = level;
-			return true;
-		}
-		return false;
-	}
-	
-	boolean isCompletable() {
-		return completionThresholdCount > 0 || forceCompletable;
-	}
-	
-	void setForceCompletable() {
-	    forceCompletable = true;
-	}
-	
-	synchronized void startOneCall() {
-		started++;
-	}
+    // Number of actual invocations so far completed
+    private int completed = 0;
 
-	synchronized boolean completeOneCall() {
-		completed++;
-		return hasCompleted();
-	}
-	
-	/**
-	 * His {@link Completable#completeOneCall()} been called at least as many 
-	 * times as our threshold?
-	 * @return
-	 */
-	boolean hasCompleted() {
-		return completed>=completionThresholdCount;
-	}
-	
-	int getCompletionThreshold() {
-		return completionThresholdCount;
-	}
+    private int computedThresholdAtLevel = -1;
 
-	/**
-	 * Sets threshold which determines when this completeable item is completed
-	 * @param tc
-	 * @return true iff new value is more than old
-	 */
-	boolean setCompletionThreshold(int tc) {
-		boolean result = tc > this.completionThresholdCount;
-		this.completionThresholdCount = tc;
-		return result;
-	}
+    private boolean forceCompletable = false;
 
-	String completionSay() {
-	    String status = "s" + String.valueOf(started) + "/c" + completed + "/t" + completionThresholdCount;
-	    Completable oc = containingCompletable();
-	    String outerText = oc==null ? "" : oc.completionSay();
-	    
-	    // Avoid repeating task and call status which in will usually be the same since
-	    // most POJO tasks will usually have only one method to invoke.
-	    if (!status.endsWith(outerText)) {
-	        status += " of " + outerText;
-	    }
-		return status;
-	}
-	
-	Completable containingCompletable() {
-		return null;
-	}
+    /**
+     * Has been initalized at the given level?
+     * 
+     * @return
+     */
+    boolean recomputeForLevel(int level) {
+        if (computedThresholdAtLevel != level) {
+            computedThresholdAtLevel = level;
+            return true;
+        }
+        return false;
+    }
+
+    boolean isCompletable() {
+        return completionThresholdCount > 0 || forceCompletable;
+    }
+
+    void setForceCompletable() {
+        forceCompletable = true;
+    }
+
+    synchronized void startOneCall() {
+        started++;
+    }
+
+    synchronized boolean completeOneCall() {
+        completed++;
+        return hasCompleted();
+    }
+
+    /**
+     * His {@link Completable#completeOneCall()} been called at least as many
+     * times as our threshold?
+     * 
+     * @return
+     */
+    boolean hasCompleted() {
+        return completed >= completionThresholdCount;
+    }
+
+    int getCompletionThreshold() {
+        return completionThresholdCount;
+    }
+
+    /**
+     * Sets threshold which determines when this completeable item is completed
+     * 
+     * @param tc
+     * @return true iff new value is more than old
+     */
+    boolean setCompletionThreshold(int tc) {
+        boolean result = tc > this.completionThresholdCount;
+        this.completionThresholdCount = tc;
+        return result;
+    }
+
+    String completionSay() {
+        String status = "s" + String.valueOf(started) + "/c" + completed + "/t" + completionThresholdCount;
+        Completable oc = containingCompletable();
+        String outerText = oc == null ? "" : oc.completionSay();
+
+        // Avoid repeating task and call status which in will usually be the
+        // same since
+        // most POJO tasks will usually have only one method to invoke.
+        if (!status.endsWith(outerText)) {
+            status += " of " + outerText;
+        }
+        return status;
+    }
+
+    Completable containingCompletable() {
+        return null;
+    }
 }

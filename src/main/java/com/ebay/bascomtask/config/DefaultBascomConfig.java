@@ -25,62 +25,67 @@ import com.ebay.bascomtask.main.Orchestrator;
 import com.ebay.bascomtask.main.TaskThreadStat;
 
 public class DefaultBascomConfig implements IBascomConfig {
-    
-    static final String THREAD_ID_PREFIX = "BT:";
-	
-	private ExecutorService pool = Executors.newFixedThreadPool(30);
 
-	@Override
-	public ExecutorService getExecutor() {
-		return pool;
-	}
-	
-    /** 
+    static final String THREAD_ID_PREFIX = "BT:";
+
+    private ExecutorService pool = Executors.newFixedThreadPool(30);
+
+    @Override
+    public ExecutorService getExecutor() {
+        return pool;
+    }
+
+    /**
      * 30-second default timeout.
      */
     @Override
     public long getDefaultOrchestratorTimeoutMs() {
         return 1000 * 30;
     }
-	
-	
-	@Override
-	public void notifyTerminate() {
-		shutdownAndAwaitTermination(pool);
-		pool = null;
-	}
 
-	/**
-	 * Standard way to shutdown an executor as defined in 
-	 * <a href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html">ExecutorService shutdown</a>,
-	 * used by this class and also made public here for convenience.
-	 * @param pool to shutdown
-	 */
-	public static void shutdownAndAwaitTermination(ExecutorService pool) {
-		pool.shutdown(); // Disable new tasks from being submitted
-		try {
-			// Wait a while for existing tasks to terminate
-			if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
-				pool.shutdownNow(); // Cancel currently executing tasks
-				// Wait a while for tasks to respond to being cancelled
-				if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
-					throw new RuntimeException("Pool did not terminate");
-				}
-			}
-		} catch (InterruptedException ie) {
-			// (Re-)Cancel if current thread also interrupted
-			pool.shutdownNow();
-			// Preserve interrupt status
-			Thread.currentThread().interrupt();
-		}
-	}
+    @Override
+    public void notifyTerminate() {
+        shutdownAndAwaitTermination(pool);
+        pool = null;
+    }
 
     /**
-     * Indicates the width max for thread names such that when exceeded a '..' string will be provided in place
-     * of any more predecessors. This is not an absolute width since the thread id and name is always included
-     * as well as the thread local index. It just prevents arbitrarily long thread names for very heavily nested
-     * thread spawn chains.
-     * @return the string width indicating when to stop including thread predecessors
+     * Standard way to shutdown an executor as defined in <a href=
+     * "https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ExecutorService.html">ExecutorService
+     * shutdown</a>, used by this class and also made public here for
+     * convenience.
+     * 
+     * @param pool to shutdown
+     */
+    public static void shutdownAndAwaitTermination(ExecutorService pool) {
+        pool.shutdown(); // Disable new tasks from being submitted
+        try {
+            // Wait a while for existing tasks to terminate
+            if (!pool.awaitTermination(60,TimeUnit.SECONDS)) {
+                pool.shutdownNow(); // Cancel currently executing tasks
+                // Wait a while for tasks to respond to being cancelled
+                if (!pool.awaitTermination(60,TimeUnit.SECONDS)) {
+                    throw new RuntimeException("Pool did not terminate");
+                }
+            }
+        }
+        catch (InterruptedException ie) {
+            // (Re-)Cancel if current thread also interrupted
+            pool.shutdownNow();
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Indicates the width max for thread names such that when exceeded a '..'
+     * string will be provided in place of any more predecessors. This is not an
+     * absolute width since the thread id and name is always included as well as
+     * the thread local index. It just prevents arbitrarily long thread names
+     * for very heavily nested thread spawn chains.
+     * 
+     * @return the string width indicating when to stop including thread
+     *         predecessors
      */
     public int getThreadNameWidthMax() {
         return 32;
@@ -88,6 +93,7 @@ public class DefaultBascomConfig implements IBascomConfig {
 
     /**
      * Sets the thread name.
+     * 
      * @param threadStat of the thread which is being started
      * @see #setThreadName(TaskThreadStat)
      */
@@ -95,21 +101,26 @@ public class DefaultBascomConfig implements IBascomConfig {
     public void notifyThreadStart(TaskThreadStat threadStat) {
         setThreadName(threadStat);
     }
-    
-    /** 
+
+    /**
      * Sets the name of given thread like so:
-     * <p><code>
+     * <p>
+     * <code>
      *   BT:ID:NAME#..11.12.13.14
-     * </code><p>
+     * </code>
+     * <p>
      * Where:
      * <ul>
-     * <li> "BT:" is a standard prefix
-     * <li> ID is the orchestrator id
-     * <li> The orchestrator NAME is only included if not null</li>
-     * <li> The last value (14 above) is the local thread index in the orchestrator</li>
-     * <li> Any values preceding the last are the threads which spawned it</li>
-     * <li> A '..' indicates there are more predecessors which are not included</li>
+     * <li>"BT:" is a standard prefix
+     * <li>ID is the orchestrator id
+     * <li>The orchestrator NAME is only included if not null</li>
+     * <li>The last value (14 above) is the local thread index in the
+     * orchestrator</li>
+     * <li>Any values preceding the last are the threads which spawned it</li>
+     * <li>A '..' indicates there are more predecessors which are not
+     * included</li>
      * </ul>
+     * 
      * @param threadStat of the thread which is being started
      */
     protected void setThreadName(TaskThreadStat threadStat) {
@@ -119,7 +130,7 @@ public class DefaultBascomConfig implements IBascomConfig {
         String threadId = constructThreadId(threadStat,id,name,getThreadNameWidthMax());
         Thread.currentThread().setName(threadId);
     }
-    
+
     protected static String constructThreadId(TaskThreadStat threadStat, String id, String name, int max) {
         StringBuilder sb = new StringBuilder();
         sb.append(THREAD_ID_PREFIX);
@@ -136,7 +147,8 @@ public class DefaultBascomConfig implements IBascomConfig {
     private static void fill(TaskThreadStat threadStat, StringBuilder sb, boolean first, int max) {
         if (threadStat != null) {
             final TaskThreadStat root = threadStat.getRoot();
-            // If root is null then threadStat is the initial execute() callingThread, 
+            // If root is null then threadStat is the initial execute()
+            // callingThread,
             // no need to add its index
             if (root != null) {
                 final String ix = String.valueOf(threadStat.getLocalIndex());
@@ -157,7 +169,7 @@ public class DefaultBascomConfig implements IBascomConfig {
 
     @Override
     public void notifyThreadEnd(TaskThreadStat threadStat) {
-        
+
     }
 
     private static ITaskClosureGenerator defaultTaskClosureGenerator = new ITaskClosureGenerator() {
@@ -165,7 +177,7 @@ public class DefaultBascomConfig implements IBascomConfig {
         public TaskMethodClosure getClosure() {
             return new TaskMethodClosure();
         }
-    }; 
+    };
 
     @Override
     public ITaskClosureGenerator getExecutionHook(Orchestrator orc, String pass) {

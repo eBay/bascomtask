@@ -20,20 +20,21 @@ import com.ebay.bascomtask.main.ITaskMethodClosure;
 
 /**
  * Interceptor for POJO task method calls.
+ * 
  * @author brendanmccarthy
  */
 public interface ITaskInterceptor {
-	
-	/**
-	 * Called when a task method is ready to be invoked. Implementations should call execute() 
-	 * on the supplied object to actually make the call. Such an implementation should also be
-	 * prepared to catch and rethrow -- or use finally block -- any exceptions, if they want 
-	 * to implement wrapping behavior (e.g. doing extra logging on entry and exit).
-	 * @param closure to be invoked
-	 * @return result from taskMethod call (if invoked task method is void, this value == true)
-	 */
-	boolean invokeTaskMethod(ITaskMethodClosure closure);
+
+    /**
+     * Called when a task method is ready to be invoked. Implementations should
+     * call execute() on the supplied object to actually make the call. Such an
+     * implementation should also be prepared to catch and rethrow -- or use
+     * finally block -- any exceptions, if they want to implement wrapping
+     * behavior (e.g. doing extra logging on entry and exit).
+     * 
+     * @param closure to be invoked
+     * @return result from taskMethod call (if invoked task method is void, this
+     *         value == true)
+     */
+    boolean invokeTaskMethod(ITaskMethodClosure closure);
 }
-
-
-
