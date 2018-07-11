@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -236,7 +237,7 @@ public class Orchestrator {
      * Records thread-specific metadata as a map rather than thread-local, so
      * that it can be retrieved in any context.
      */
-    private Map<Thread, TaskThreadStat> threadMap = new HashMap<>();
+    private Map<Thread, TaskThreadStat> threadMap = new ConcurrentHashMap<>();
 
     @Override
     public String toString() {
@@ -457,7 +458,16 @@ public class Orchestrator {
     }
 
     public TaskThreadStat getThreadStatForCurrentThread() {
-        return threadMap.get(Thread.currentThread());
+        Thread t = Thread.currentThread();
+        TaskThreadStat threadStat = threadMap.get(t);
+        if (threadStat == null) {
+            throw new RuntimeException("Unbound threadStat from thread " + t);
+        }
+        return threadStat;
+    }
+
+    void setThreadStatForCurrentThread(TaskThreadStat stat) {
+        threadMap.put(Thread.currentThread(),stat);
     }
 
     /**
@@ -722,8 +732,7 @@ public class Orchestrator {
         synchronized (this) {
             if (callingThread == null) {
                 // Set root TaskThreadStat to current thread
-                threadMap.clear();
-                threadMap.put(Thread.currentThread(),new TaskThreadStat(this,0,0,null));
+                setThreadStatForCurrentThread(new TaskThreadStat(this,0,0,null));
 
                 this.maxExecutionTimeMillis = maxExecutionTimeMillis;
                 this.maxWaitTime = Math.min(maxExecutionTimeMillis,500);
@@ -738,8 +747,8 @@ public class Orchestrator {
                 }
             }
         }
-        if (callingThread == t) { // Can only happen once for top-level calling
-                                  // thread
+
+        if (callingThread == t) { // Can only happen once for top-level calling thread
             try {
                 executeTasks(taskInstances,"top-level");
                 waitForCompletion();
@@ -1485,10 +1494,12 @@ public class Orchestrator {
                 @Override
                 public void run() {
                     Thread currentThread = Thread.currentThread();
-                    int localThreadIndex = threadMap.size();
-
-                    TaskThreadStat threadStat = new TaskThreadStat(lock,localThreadIndex,globalThreadIndex,parentStat);
-                    lock.threadMap.put(currentThread,threadStat);
+                    TaskThreadStat threadStat;
+                    synchronized (threadMap) {
+                        int localThreadIndex = threadMap.size();
+                        threadStat = new TaskThreadStat(lock,localThreadIndex,globalThreadIndex,parentStat);
+                        lock.setThreadStatForCurrentThread(threadStat);
+                    }
                     config.notifyThreadStart(threadStat);
                     Exception err = null;
                     try {
