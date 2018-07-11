@@ -11,6 +11,21 @@
     <description>A lightweight parallel task orchestrator featuring auto-wiring, dynamic graph modification, and efficient thread utilization</description>
     <url>https://github.com/eBay/bascomtask</url>
 
+    <developers>
+        <developer>
+            <id>bremccarthy</id>
+            <name>Brendan McCarthy</name>
+            <email>bremccarthy@ebay.com</email>
+            <organization>eBay</organization>
+            <organizationUrl>http://www.ebay.com</organizationUrl>
+            <roles>
+                <role>architect</role>
+                <role>developer</role>
+            </roles>
+            <timezone>America/San_Francisco</timezone>
+        </developer>
+    </developers>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.7</maven.compiler.source>
