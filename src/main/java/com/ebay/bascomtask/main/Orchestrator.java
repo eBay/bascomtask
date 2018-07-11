@@ -461,7 +461,7 @@ public class Orchestrator {
         Thread t = Thread.currentThread();
         TaskThreadStat threadStat = threadMap.get(t);
         if (threadStat == null) {
-            throw new RuntimeException("Unbound threadStat from thread " + t);
+            throw new RuntimeException("Unbound threadStat from thread name=" + t.getName() + " id="+t.getId());
         }
         return threadStat;
     }
@@ -762,6 +762,12 @@ public class Orchestrator {
             }
         }
         else { // Otherwise process taskInstances added by this thread if any
+            if (threadMap.get(t)==null) {
+                // Edge case: if the caller attempts to invoke execute again from a thread outside
+                // of executor control, it won't have a map entry. Easiest to just ignore such a 
+                // case since since it would have dubious utility.
+                LOG.warn("Rejected secondary attempt to invoke execute() at top-level"); 
+            }
             executeTasks(taskInstances,"nested");
         }
     }
