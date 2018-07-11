@@ -11,6 +11,20 @@
     <description>A lightweight parallel task orchestrator featuring auto-wiring, dynamic graph modification, and efficient thread utilization</description>
     <url>https://github.com/eBay/bascomtask</url>
 
+<licenses>
+  <license>
+    <name>Apache License, Version 2.0</name>
+    <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    <distribution>repo</distribution>
+  </license>
+</licenses>
+
+<scm>
+    <connection>https://github.com/eBay/bascomtask.git</connection>
+    <developerConnection>https://github.com/eBay/bascomtask.git</developerConnection>
+    <tag>master</tag>
+    <url>https://github.com/eBay/bascomtask</url>
+  </scm>
     <developers>
         <developer>
             <id>bremccarthy</id>
