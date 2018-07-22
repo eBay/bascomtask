@@ -215,14 +215,10 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
             if (method != null) {
                 this.context = context;
                 this.kind = kind;
-                try {
-                    returned = executeTaskMethod();
-                    orc.validateProvided(taskInstance);
-                }
-                catch (Exception e) {
-                    orc.recordException(callInstance,e);
-                    throw e;
-                }
+                // This call may safely generate an exception, which will be processed
+                // further up the chain.
+                returned = executeTaskMethod();
+                orc.validateProvided(taskInstance);
             }
         }
         else {
@@ -230,8 +226,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
             returned = false;
         }
         // For Scope.SEQUENTIAL, only one thread will be active at a time, so it
-        // is safe
-        // for all threads to just reset this to false.
+        // is safe for all threads to just reset this to false.
         callInstance.setReserve(false);
     }
 

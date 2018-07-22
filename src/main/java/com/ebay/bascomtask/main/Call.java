@@ -370,11 +370,8 @@ class Call {
                 TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter,
                 int ordinalOfFiringParameter, Orchestrator orc, String context) {
             if (px == args.length) {
-                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args); // makes
-                                                                                              // a
-                                                                                              // copy
-                                                                                              // of
-                                                                                              // args!
+                // makes a copy  of args!
+                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args); 
                 if (!fire) {
                     orc.invokeAndFinish(newInvocation,"non-fire",false);
                 }
@@ -382,13 +379,11 @@ class Call {
                     orc.invokeAndFinish(newInvocation,"light",fire);
                 }
                 else if (isNoWait() && orc.isCallingThread()) {
-                    // Don't assign main thread with tasks it should not wait
-                    // for.
+                    // Don't assign main thread with tasks it should not wait for.
                     orc.spawn(newInvocation);
                 }
                 else if (taskInstance.isFork()) {
-                    // Spawn right away if taskInstance has been flagged this
-                    // way
+                    // Spawn right away if taskInstance has been flagged this way
                     orc.spawn(newInvocation);
                 }
                 else if (!postPending(newInvocation)) {

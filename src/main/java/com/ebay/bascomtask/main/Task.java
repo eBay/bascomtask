@@ -56,6 +56,11 @@ class Task {
      * All the @PassThru methods in the task.
      */
     List<Call> passThruCalls = new ArrayList<>();
+    
+    /**
+     * The single @Rollback call, if any, a list so it is consistent with previous
+     */
+    List<Call> rollbackCalls = new ArrayList<>();
 
     /**
      * Used when a task has no task methods; not used if a task has task
@@ -73,7 +78,7 @@ class Task {
      * Which set of task methods should be considered?
      */
     enum TaskMethodBehavior {
-        WORK, PASSTHRU, NONE
+        WORK, PASSTHRU, ROLLBACK, NONE
     }
 
     private static List<Call> EMPTY_CALLS = new ArrayList<>();
@@ -178,6 +183,8 @@ class Task {
                 return workCalls;
             case PASSTHRU:
                 return passThruCalls;
+            case ROLLBACK:
+                return rollbackCalls;
             case NONE:
                 return EMPTY_CALLS;
             }

@@ -44,24 +44,18 @@ import com.ebay.bascomtask.main.Task.Instance;
 import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
 
 /**
- * A dataflow-driven collector and executor of tasks that implicitly honors all
- * dependencies while pursuing maximum parallelization with a minimum number of
- * threads.
+ * A dataflow-driven collector and executor of tasks that implicitly honors all dependencies while pursuing maximum
+ * parallelization with a minimum number of threads.
  * <p>
- * A task can be any POJO which can have any number of {@literal @}Work or
- * {@literal @}PassThru annotated methods, which we refer to as task methods.
- * Once added, {@link #execute()} will execute those methods either if they have
- * no arguments or once those arguments become available as a result of
- * executing other tasks. A task method's arguments will never be null, so no
- * null checks are required in task methods. For any POJO added as a task,
- * either its {@literal @}Work or its {@literal @}PassThru method(s) will be
- * executed (never both), depending on whether it was added by
- * {@link #addWork(Object)} or by {@link #addPassThru(Object)}.
- * {@literal @}PassThru is intended for use when a task needs to do only simple
- * bookkeeping but otherwise is not actively contributing to the overall result.
- * Typically a given POJO will have just one {@literal @}Work and possibly one
- * {@literal @}PassThru method, but can have any number of these; at runtime,
- * whichever method matches based on available inputs will fire (execute).
+ * A task can be any POJO which can have any number of {@literal @}Work or {@literal @}PassThru annotated methods, which
+ * we refer to as task methods. Once added, {@link #execute()} will execute those methods either if they have no
+ * arguments or once those arguments become available as a result of executing other tasks. A task method's arguments
+ * will never be null, so no null checks are required in task methods. For any POJO added as a task, either its
+ * {@literal @}Work or its {@literal @}PassThru method(s) will be executed (never both), depending on whether it was
+ * added by {@link #addWork(Object)} or by {@link #addPassThru(Object)}. {@literal @}PassThru is intended for use when a
+ * task needs to do only simple bookkeeping but otherwise is not actively contributing to the overall result. Typically
+ * a given POJO will have just one {@literal @}Work and possibly one {@literal @}PassThru method, but can have any
+ * number of these; at runtime, whichever method matches based on available inputs will fire (execute).
  * <p>
  * An example pojo invoked with BascomTask might be as follows:
  * 
@@ -76,24 +70,18 @@ import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
  * orc.execute();
  * </pre>
  * 
- * If MyOtherTask and SomOtherTask have no common dependencies then they may be
- * executed in parallel in different threads. BascomTask is dataflow driven,
- * attempting to execute tasks in parallel where possible while avoiding
+ * If MyOtherTask and SomOtherTask have no common dependencies then they may be executed in parallel in different
+ * threads. BascomTask is dataflow driven, attempting to execute tasks in parallel where possible while avoiding
  * wasteful creation of threads where possible.
  * <p>
- * Multiple instances of a given POJO class can also be added, each being
- * executed separately and each being supplied to all downstream task methods
- * with that type as an argument. If two instances of MyOtherTask were added to
- * the previous example, each would start in its own thread and MyTask.exec()
- * would be invoked twice, each time with a different MyOtherTask instance. The
- * default behavior for a task that receives multiple calls is simply to allow
- * them to proceed independently each firing in turn to any downstream tasks.
- * This assumes that the task (MyTask in the above example) is thread-safe.
- * There are several options for varying this behavior by adding a scope
- * argument to {@literal @}Work, see
- * {@link com.ebay.bascomtask.annotations.Scope} for a description of options.
- * Even simpler is to simply change a task argument to a list, in which case all
- * instances of that type will be received at once.
+ * Multiple instances of a given POJO class can also be added, each being executed separately and each being supplied to
+ * all downstream task methods with that type as an argument. If two instances of MyOtherTask were added to the previous
+ * example, each would start in its own thread and MyTask.exec() would be invoked twice, each time with a different
+ * MyOtherTask instance. The default behavior for a task that receives multiple calls is simply to allow them to proceed
+ * independently each firing in turn to any downstream tasks. This assumes that the task (MyTask in the above example)
+ * is thread-safe. There are several options for varying this behavior by adding a scope argument to {@literal @}Work,
+ * see {@link com.ebay.bascomtask.annotations.Scope} for a description of options. Even simpler is to simply change a
+ * task argument to a list, in which case all instances of that type will be received at once.
  * 
  * @author brendanmccarthy
  */
@@ -113,22 +101,19 @@ public class Orchestrator {
     final IBascomConfig config = BascomConfigFactory.getConfig();
 
     /**
-     * The interceptor used for making POJO task method calls. If this remains
-     * null (because the caller has not set it, which will usually be the case),
-     * then the default interceptor will be retrieved from <code>config</code>.
+     * The interceptor used for making POJO task method calls. If this remains null (because the caller has not set it,
+     * which will usually be the case), then the default interceptor will be retrieved from <code>config</code>.
      */
     private ITaskClosureGenerator closureGenerator = null;
 
     /**
-     * Allow for an override to be set, otherwise one will be retrieved from
-     * global config.
+     * Allow for an override to be set, otherwise one will be retrieved from global config.
      */
     private ITaskClosureGenerator overrideClosureGenerator = null;
 
     /**
-     * How we know which task instances are active for a given POJO task class,
-     * relative to this orchestrator. An added instance of <Sub extends Base>
-     * will result in two entries in this map, one for each of the types.
+     * How we know which task instances are active for a given POJO task class, relative to this orchestrator. An added
+     * instance of <Sub extends Base> will result in two entries in this map, one for each of the types.
      */
     private final Map<Class<?>, TaskRec> taskMapByType = new HashMap<>();
 
@@ -158,8 +143,7 @@ public class Orchestrator {
     private final Map<Param, List<Param.Instance>> paramMap = new HashMap<>();
 
     /**
-     * Aggregates exceptions, which may be more than one when sub-threads
-     * independently generate exceptions.
+     * Aggregates exceptions, which may be more than one when sub-threads independently generate exceptions.
      */
     private List<Exception> exceptions = null;
 
@@ -169,20 +153,19 @@ public class Orchestrator {
     final AtomicInteger threadsCreated = new AtomicInteger(0);
 
     /**
-     * Number of spawned threads that have not yet terminated, increased when a
-     * thread is pulled from the pool, and decreased when returned.
+     * Number of spawned threads that have not yet terminated, increased when a thread is pulled from the pool, and
+     * decreased when returned.
      */
     private int threadBalance = 0;
 
     /**
-     * How {@link #execute()} knows to exit: when this list is empty. NoWait
-     * tasks are never added to this list.
+     * How {@link #execute()} knows to exit: when this list is empty. NoWait tasks are never added to this list.
      */
     private final Set<Task.Instance> waitForTasks = new HashSet<>();
 
     /**
-     * Set before spawning a new thread, when it is detected that the main
-     * thread is idle and may as well do the work itself.
+     * Set before spawning a new thread, when it is detected that the main thread is idle and may as well do the work
+     * itself.
      */
     private TaskMethodClosure invocationPickup = null;
 
@@ -192,9 +175,8 @@ public class Orchestrator {
     private boolean waiting = false;
 
     /**
-     * Accumulates instances prior to execute() -- thread-specific to avoid
-     * conflicts between two separate threads dynamically adding tasks at the
-     * same time
+     * Accumulates instances prior to execute() -- thread-specific to avoid conflicts between two separate threads
+     * dynamically adding tasks at the same time
      */
     private Map<Thread, List<Task.Instance>> nestedAdds = new HashMap<>();
 
@@ -234,10 +216,19 @@ public class Orchestrator {
     private int waitLoopDebugCounter = 0;
 
     /**
-     * Records thread-specific metadata as a map rather than thread-local, so
-     * that it can be retrieved in any context.
+     * Records thread-specific metadata as a map rather than thread-local, so that it can be retrieved in any context.
      */
     private Map<Thread, TaskThreadStat> threadMap = new ConcurrentHashMap<>();
+
+    /**
+     * The top-level orchestrator may have a rollback orchestrator.
+     */
+    private Orchestrator rollback = null;
+
+    /**
+     * True iff this is an internally-created rollback orchestrator.
+     */
+    private final boolean isRollBack;
 
     @Override
     public String toString() {
@@ -257,14 +248,14 @@ public class Orchestrator {
     }
 
     public static Orchestrator create() {
-        return new Orchestrator();
+        return new Orchestrator(false);
     }
 
     /**
-     * Constructor hidden behind static create method in anticipation of future
-     * caching or other variations.
+     * Constructor hidden behind static create method in anticipation of future caching or other variations.
      */
-    private Orchestrator() {
+    private Orchestrator(boolean isRollBack) {
+        this.isRollBack = isRollBack;
         this.id = String.valueOf(hashCode());
     }
 
@@ -347,10 +338,9 @@ public class Orchestrator {
         }
 
         /**
-         * Returns the time saved by executing tasks in parallel rather than
-         * sequentially. Note that if all tasks were sequential (due to
-         * ordering), then this value would be slightly negative, accounting for
-         * the overhead of the orchestrator itself.
+         * Returns the time saved by executing tasks in parallel rather than sequentially. Note that if all tasks were
+         * sequential (due to ordering), then this value would be slightly negative, accounting for the overhead of the
+         * orchestrator itself.
          * 
          * @return time saved in ms
          */
@@ -359,9 +349,8 @@ public class Orchestrator {
         }
 
         /**
-         * Returns the time spent during the last call to {@link #execute()}.
-         * The result is undefined is that call has not yet completed. Any
-         * uncompleted nowait tasks are not accounted for.
+         * Returns the time spent during the last call to {@link #execute()}. The result is undefined is that call has
+         * not yet completed. Any uncompleted nowait tasks are not accounted for.
          * 
          * @return execution time in ms
          */
@@ -373,9 +362,8 @@ public class Orchestrator {
     }
 
     /**
-     * Returns a snapshot of execution statistics resulting from a previous
-     * execution, excluding any nowait tasks. This method is guaranteed to
-     * return the same result once the outermost execute() has completed.
+     * Returns a snapshot of execution statistics resulting from a previous execution, excluding any nowait tasks. This
+     * method is guaranteed to return the same result once the outermost execute() has completed.
      * 
      * @return stats snapshot
      */
@@ -384,10 +372,9 @@ public class Orchestrator {
     }
 
     /**
-     * Returns a snapshot of execution statistics resulting from a previous
-     * execution, including any nowait tasks. This method is guaranteed to
-     * return the same result once the outermost execute() has completed
-     * <i>and</i> all nowait tasks have completed.
+     * Returns a snapshot of execution statistics resulting from a previous execution, including any nowait tasks. This
+     * method is guaranteed to return the same result once the outermost execute() has completed <i>and</i> all nowait
+     * tasks have completed.
      * 
      * @return stats snapshot
      */
@@ -396,9 +383,8 @@ public class Orchestrator {
     }
 
     /**
-     * Sets a name used on entry and exit debugging statements, useful for
-     * identify which orchestrator is being invoked when there are many
-     * involved.
+     * Sets a name used on entry and exit debugging statements, useful for identify which orchestrator is being invoked
+     * when there are many involved.
      * 
      * @param name to include in debug statements
      * @return this instance for fluent-style chaining
@@ -418,8 +404,7 @@ public class Orchestrator {
     }
 
     /**
-     * Returns an id for this instance which has very low probability of
-     * clashing with other ids.
+     * Returns an id for this instance which has very low probability of clashing with other ids.
      * 
      * @return id of this object
      */
@@ -428,13 +413,12 @@ public class Orchestrator {
     }
 
     /**
-     * Sets a closure generator to use for this orchestrator, rather than the
-     * default which is retrieved from whichever IBascomConfig is active.
+     * Sets a closure generator to use for this orchestrator, rather than the default which is retrieved from whichever
+     * IBascomConfig is active.
      * 
      * @param generator to use in place of default
      * @return this instance for fluent-style chaining
-     * @see com.ebay.bascomtask.config.IBascomConfig#getExecutionHook(Orchestrator,
-     *      String)
+     * @see com.ebay.bascomtask.config.IBascomConfig#getExecutionHook(Orchestrator, String)
      */
     public Orchestrator closureGenerator(ITaskClosureGenerator generator) {
         this.overrideClosureGenerator = generator;
@@ -461,7 +445,7 @@ public class Orchestrator {
         Thread t = Thread.currentThread();
         TaskThreadStat threadStat = threadMap.get(t);
         if (threadStat == null) {
-            throw new RuntimeException("Unbound threadStat from thread name=" + t.getName() + " id="+t.getId());
+            throw new RuntimeException("Unbound threadStat from thread name=" + t.getName() + " id=" + t.getId());
         }
         return threadStat;
     }
@@ -471,9 +455,8 @@ public class Orchestrator {
     }
 
     /**
-     * Returns the number of additional threads (not including the starting
-     * thread) used in computing the result from this orchestrator. The value
-     * may increase until all tasks are terminated.
+     * Returns the number of additional threads (not including the starting thread) used in computing the result from
+     * this orchestrator. The value may increase until all tasks are terminated.
      * 
      * @return count of created threads
      */
@@ -482,9 +465,8 @@ public class Orchestrator {
     }
 
     /**
-     * Returns the number of threads that have been spawned but not yet
-     * completed. The returned value may only be &gt; 0 after a call to
-     * {@link #execute()} if there are nowait tasks.
+     * Returns the number of threads that have been spawned but not yet completed. The returned value may only be &gt; 0
+     * after a call to {@link #execute()} if there are nowait tasks.
      * 
      * @return number of open threads
      */
@@ -493,8 +475,8 @@ public class Orchestrator {
     }
 
     /**
-     * A convenience method, adds a task with a default name that is either
-     * active or passive depending on the given condition.
+     * A convenience method, adds a task with a default name that is either active or passive depending on the given
+     * condition.
      * 
      * @param task java POJO to add as task
      * @param cond if true then add as active else add as passive
@@ -510,45 +492,33 @@ public class Orchestrator {
     }
 
     /**
-     * Adds a task to be made available to other task's task ({@literal @}Work
-     * or {@literal @}PassThru) methods, and whose own {@literal @}Work methods
-     * will only be invoked (fired) when its task arguments have so fired.
+     * Adds a task to be made available to other task's task ({@literal @}Work or {@literal @}PassThru) methods, and
+     * whose own {@literal @}Work methods will only be invoked (fired) when its task arguments have so fired.
      * <p>
      * The rules for execution are as follows:
      * <ul>
-     * <li>A POJO can have no {@literal @}Work methods in which case it will
-     * instantly be available to other tasks.
-     * <li>Any {@literal @}Work method with no arguments will be started
-     * immediately in its own thread (which might be the calling thread of the
-     * orchestrator if it is not busy with other work).
-     * <li>Any {@literal Work} method with arguments will only be invoked when
-     * all of its task parameters have themselves completed with a proper return
-     * (see last point below).
-     * <li>Each {@literal @}Work method will be invoked with the cross-product
-     * of all available matching instances.
+     * <li>A POJO can have no {@literal @}Work methods in which case it will instantly be available to other tasks.
+     * <li>Any {@literal @}Work method with no arguments will be started immediately in its own thread (which might be
+     * the calling thread of the orchestrator if it is not busy with other work).
+     * <li>Any {@literal Work} method with arguments will only be invoked when all of its task parameters have
+     * themselves completed with a proper return (see last point below).
+     * <li>Each {@literal @}Work method will be invoked with the cross-product of all available matching instances.
      * </ul>
      * <p>
-     * Regarding the last point, although it is common to add just one instance
-     * of a given POJO type, it is safe to add any number. The default behavior
-     * of {@literal @}Work methods receiving argument sequences with multiple
-     * instances is that each is executed potentially in parallel. Different
-     * options can be set through {@literal @}Work.scope, see
-     * {@link com.ebay.bascomtask.annotations.Scope}. Alternatively,
-     * a @{literal @}Work method parameter can simply be a
-     * {@link java.util.List} of tasks in which case the entire set of matching
-     * instances will be made available once all instances are available.
+     * Regarding the last point, although it is common to add just one instance of a given POJO type, it is safe to add
+     * any number. The default behavior of {@literal @}Work methods receiving argument sequences with multiple instances
+     * is that each is executed potentially in parallel. Different options can be set through {@literal @}Work.scope,
+     * see {@link com.ebay.bascomtask.annotations.Scope}. Alternatively, a @{literal @}Work method parameter can simply
+     * be a {@link java.util.List} of tasks in which case the entire set of matching instances will be made available
+     * once all instances are available.
      * <p>
-     * An added task will have no effect until {@link #execute(long)} is called,
-     * either directly or implicitly as a result of a nested task method
-     * completing.
+     * An added task will have no effect until {@link #execute(long)} is called, either directly or implicitly as a
+     * result of a nested task method completing.
      * <p>
-     * A {@literal @}Work can return a boolean result or simply be void, which
-     * equates to returning {@code true}. A return value of {@code false}
-     * indicates that downstream tasks should not fire: any task fires only if
-     * all of its inputs have fired, except for {@link java.util.List}
-     * parameters, which never prevent firing but instead any false-returning
-     * tasks will be excluded from the list (which means that a list parameter
-     * may be empty).
+     * A {@literal @}Work can return a boolean result or simply be void, which equates to returning {@code true}. A
+     * return value of {@code false} indicates that downstream tasks should not fire: any task fires only if all of its
+     * inputs have fired, except for {@link java.util.List} parameters, which never prevent firing but instead any
+     * false-returning tasks will be excluded from the list (which means that a list parameter may be empty).
      * 
      * @param task java POJO to add as task
      * @return a 'shadow' task object which allows for various customizations
@@ -558,12 +528,10 @@ public class Orchestrator {
     }
 
     /**
-     * Adds a task whose {@literal @}PassThru methods (rather than its
-     * {@literal @}@Work methods) will be invoked, always in the calling thread
-     * -- no separate thread is created to execute a {@literal @}PassThru method
-     * since it assumed to perform simple actions like providing a default or
-     * passing-through its arguments with no or little change. Otherwise behaves
-     * the same as {@link #addWork(Object)}.
+     * Adds a task whose {@literal @}PassThru methods (rather than its {@literal @}@Work methods) will be invoked,
+     * always in the calling thread -- no separate thread is created to execute a {@literal @}PassThru method since it
+     * assumed to perform simple actions like providing a default or passing-through its arguments with no or little
+     * change. Otherwise behaves the same as {@link #addWork(Object)}.
      * 
      * @param task java POJO to add as task
      * @return a 'shadow' task object which allows for various customizations
@@ -573,14 +541,11 @@ public class Orchestrator {
     }
 
     /**
-     * Adds an object without considering any {@literal @}Work or
-     * {@literal @}PassThru methods even if they exist, as if the object did not
-     * have such methods in the first place. This enables the object to be make
-     * available as a parameter to other task methods without the object's task
-     * methods firing. Usage of this method is relatively uncommon, but does
-     * provide another way to handle variant situations be allowing a task
-     * object to be exposed but have its behavior managed outside the scope of
-     * an orchestrator.
+     * Adds an object without considering any {@literal @}Work or {@literal @}PassThru methods even if they exist, as if
+     * the object did not have such methods in the first place. This enables the object to be make available as a
+     * parameter to other task methods without the object's task methods firing. Usage of this method is relatively
+     * uncommon, but does provide another way to handle variant situations be allowing a task object to be exposed but
+     * have its behavior managed outside the scope of an orchestrator.
      * 
      * @param task to add
      * @return a 'shadow' task object which allows for various customizations
@@ -590,12 +555,10 @@ public class Orchestrator {
     }
 
     /**
-     * Records an added task to be added during a subsequent execute(), whether
-     * the latter is explicit or implied as a result of a nested inline call. We
-     * don't add right away because of the possibility of other active threads.
-     * The actual addition is only performed when we can synchronize the
-     * orchestrator and perform the additions atomically without impacting
-     * running threads.
+     * Records an added task to be added during a subsequent execute(), whether the latter is explicit or implied as a
+     * result of a nested inline call. We don't add right away because of the possibility of other active threads. The
+     * actual addition is only performed when we can synchronize the orchestrator and perform the additions atomically
+     * without impacting running threads.
      * 
      * @param targetTask java POJO to add as simple task
      * @param taskMethodBehavior describing how task was added
@@ -627,8 +590,7 @@ public class Orchestrator {
     }
 
     /**
-     * Throws exception conflicts with a task already linked in the graph, or
-     * another task added but not yet linked
+     * Throws exception conflicts with a task already linked in the graph, or another task added but not yet linked
      * 
      * @param name
      */
@@ -676,55 +638,42 @@ public class Orchestrator {
     }
 
     /**
-     * Begins processing of previously added tasks within the calling thread,
-     * spawning new threads where possible to exploit parallel execution and
-     * returning when all no-wait tasks are finished. Any task <i>will</i> hold
-     * up the exit of this method when all of the following apply:
+     * Begins processing of previously added tasks within the calling thread, spawning new threads where possible to
+     * exploit parallel execution and returning when all no-wait tasks are finished. Any task <i>will</i> hold up the
+     * exit of this method when all of the following apply:
      * <ol>
      * <li>It has <i>not</i> been flagged as no-wait
-     * <li>It has at least one {@literal @}Work (or {@literal @}PassThru) method
-     * <li>All of its methods that can fire (because there are matching
-     * instances as parameters) have fired
-     * <li>It has at least one such fireable method that may fire again
+     * <li>It has at least one {@literal @}Work (or {@literal @}PassThru) method that can fire (because there are
+     * matching instances as parameters)
+     * <li>At least one of those methods has not completed or may fire again
      * </ol>
-     * This method can safely be called multiple times, each time accounting for
-     * any new tasks added and firing all tasks that are fireable as a result of
-     * those new tasks added. In this way, each call to execute acts like a
-     * synchronizer across all executable tasks. Tasks added within a nested
-     * task can but do not have to call execute() if they add tasks, as there is
-     * an implicit call done automatically in this case. Note that tasks added
-     * by other threads will be invisible to the calling thread.
+     * This method can safely be called multiple times, each time accounting for any new tasks added and firing all
+     * tasks that are fireable as a result of those new tasks added. In this way, each call to execute acts like a
+     * synchronizer across all executable tasks. Tasks added within a nested task can but do not have to call execute()
+     * if they add tasks, as there is an implicit call done automatically in this case. Note that tasks added by other
+     * threads will be invisible to the calling thread.
      * <p>
-     * Consistency checks are performed prior to any task being started, and if
-     * a violation is found a subclass of InvalidGraph is thrown.
+     * Consistency checks are performed prior to any task being started, and if a violation is found a subclass of
+     * InvalidGraph is thrown.
      * <p>
-     * If any task throws an exception, which would have to be a non-checked
-     * exception, it will be propagated from this call. Once such an exception
-     * is thrown, the orchestrator ceases to start new tasks and instead waits
-     * for all open threads to finish before returning (by throwing the
-     * exception in question).
+     * If any task throws an exception, which would have to be a non-checked exception, it will be propagated from this
+     * call. Once such an exception is thrown, the orchestrator ceases to start new tasks and instead waits for all open
+     * threads to finish, begins @{link {@link #rollback()} processing, and then re-throws the original exception.
      * 
      * @param maxExecutionTimeMillis to timeout
      * @param pass description passed to config executors
      * @throws RuntimeException generated from a task
-     * @throws RuntimeGraphError.Timeout when the requested timeout has been
-     *             exceeded
-     * @throws RuntimeGraphError.Multi if more than one exception is thrown from
-     *             different tasks
-     * @throws InvalidTask.AlreadyAdded if the same task instance was added more
-     *             than once
-     * @throws InvalidTask.BadParam if a task method has a parameter that cannot
-     *             be processed
-     * @throws InvalidGraph.MissingDependents if a task cannot be exited because
-     *             it has no matching {@literal @}Work dependents
-     * @throws InvalidGraph.Circular if a circular reference between two tasks
-     *             is detected
-     * @throws InvalidGraph.MultiMethod if a task has more than one callable
-     *             method and is not marked multiMethodOk()
+     * @throws RuntimeGraphError.Multi if more than one exception is thrown from different tasks
+     * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
+     * @throws InvalidTask.AlreadyAdded if the same task instance was added more than once
+     * @throws InvalidTask.BadParam if a task method has a parameter that cannot be processed
+     * @throws InvalidGraph.MissingDependents if a task cannot be exited because it has no matching {@literal @}Work
+     *             dependents
+     * @throws InvalidGraph.Circular if a circular reference between two tasks is detected
+     * @throws InvalidGraph.MultiMethod if a task has more than one callable method and is not marked multiMethodOk()
      * @throws InvalidGraph.ViolatedProvides if a task was indicated to
-     *             {@link com.ebay.bascomtask.main.ITask#provides(Class)} an
-     *             instance but this was not done (or {@literal @}PassThru)
-     *             method that has all of its parameters available as instances
+     *             {@link com.ebay.bascomtask.main.ITask#provides(Class)} an instance but this was not done (or
+     *             {@literal @}PassThru) method that has all of its parameters available as instances
      */
     public void execute(long maxExecutionTimeMillis, String pass) {
         final Thread t = Thread.currentThread();
@@ -762,11 +711,11 @@ public class Orchestrator {
             }
         }
         else { // Otherwise process taskInstances added by this thread if any
-            if (threadMap.get(t)==null) {
+            if (threadMap.get(t) == null) {
                 // Edge case: if the caller attempts to invoke execute again from a thread outside
-                // of executor control, it won't have a map entry. Easiest to just ignore such a 
+                // of executor control, it won't have a map entry. Easiest to just ignore such a
                 // case since since it would have dubious utility.
-                LOG.warn("Rejected secondary attempt to invoke execute() at top-level"); 
+                LOG.warn("Rejected secondary attempt to invoke execute() at top-level");
             }
             executeTasks(taskInstances,"nested");
         }
@@ -833,8 +782,7 @@ public class Orchestrator {
     }
 
     /**
-     * Thread which calls begin(), is non-null only when outermost execute() is
-     * active
+     * Thread which calls begin(), is non-null only when outermost execute() is active
      */
     private Thread callingThread = null;
 
@@ -845,14 +793,12 @@ public class Orchestrator {
     int linkLevel = 0;
 
     /**
-     * Adds the given tasks and links each parameter of each applicable (@Work
-     * or @PassThru) call with each instance of that parameter's type. Also
-     * verifies that all tasks are callable, by ensuring that they have at least
-     * one such call that has all parameters available.
+     * Adds the given tasks and links each parameter of each applicable (@Work or @PassThru) call with each instance of
+     * that parameter's type. Also verifies that all tasks are callable, by ensuring that they have at least one such
+     * call that has all parameters available.
      * 
      * @param taskInstances to be added to the graph
-     * @throws InvalidGraph if any task is un-callable, and if so include list
-     *             of all such tasks (if more than one)
+     * @throws InvalidGraph if any task is un-callable, and if so include list of all such tasks (if more than one)
      * @return non-null but possibly empty list of instances ready to fire
      */
     private List<Call.Instance> linkGraph(List<Task.Instance> taskInstances) {
@@ -992,12 +938,10 @@ public class Orchestrator {
     }
 
     /**
-     * Links a taskInstance together with any incoming tasks or outgoing
-     * parameters.
+     * Links a taskInstance together with any incoming tasks or outgoing parameters.
      * 
      * @param taskInstance to link
-     * @param roots to add to for each call of each of the supplied
-     *            taskInstances that is immediately ready to fire
+     * @param roots to add to for each call of each of the supplied taskInstances that is immediately ready to fire
      */
     private void linkAll(Task.Instance taskInstance, List<Call.Instance> roots) {
         int matchableCallCount = 0;
@@ -1103,14 +1047,13 @@ public class Orchestrator {
     }
 
     /**
-     * Produces a record of all the tasks upon which the given call parameter
-     * must wait, accounting for auto and explicit wiring.
+     * Produces a record of all the tasks upon which the given call parameter must wait, accounting for auto and
+     * explicit wiring.
      * 
      * @param paramInstance of target call
-     * @param explicitsBefore containing explicitly-declared dependencies, and
-     *            from which formal param matches will be removed
-     * @return record of all tasks that must fire before
-     *         <code>paramInstance</code>
+     * @param explicitsBefore containing explicitly-declared dependencies, and from which formal param matches will be
+     *            removed
+     * @return record of all tasks that must fire before <code>paramInstance</code>
      */
     private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance,
             Map<Task, List<Task.Instance>> explicitsBefore) {
@@ -1139,10 +1082,8 @@ public class Orchestrator {
     }
 
     /**
-     * If there is any task that lacks at least one resolvable call, generate an
-     * error and include all unresolvable parameters so the user can result them
-     * with a holistic view rather having to
-     * fix/re-execute/find-problem/fix/etc.
+     * If there is any task that lacks at least one resolvable call, generate an error and include all unresolvable
+     * parameters so the user can result them with a holistic view rather having to fix/re-execute/find-problem/fix/etc.
      * 
      * @param badParams
      */
@@ -1160,8 +1101,7 @@ public class Orchestrator {
     }
 
     /**
-     * Link a taskInstance to a parameter that expects it, also bumping the
-     * threshold on that parameter.
+     * Link a taskInstance to a parameter that expects it, also bumping the threshold on that parameter.
      * 
      * @param taskInstance
      * @param paramInstance
@@ -1184,18 +1124,15 @@ public class Orchestrator {
     }
 
     /**
-     * Computes the completion threshold for each task/call instance. Must be
-     * called for each TaskInstance during initialization; although this method
-     * is invoked recursively that recursion calculation is only done once per
-     * task instance.
+     * Computes the completion threshold for each task/call instance. Must be called for each TaskInstance during
+     * initialization; although this method is invoked recursively that recursion calculation is only done once per task
+     * instance.
      * 
      * @param taskInstance
      * @param level should be unique per call
-     * @param toBeProvided possibly null map of pojo task classes and the tasks
-     *            that will
+     * @param toBeProvided possibly null map of pojo task classes and the tasks that will
      *            {@link com.ebay.bascomtask.main.ITask#provides(Class)} them
-     * @return how many times task must be invoked before it can be considered
-     *         complete
+     * @return how many times task must be invoked before it can be considered complete
      */
     private int computeThreshold(Task.Instance taskInstance, int level,
             final Map<Class<?>, Task.Instance> toBeProvided) {
@@ -1276,11 +1213,17 @@ public class Orchestrator {
     }
 
     /**
-     * Exceptions are stored in member variable that may be added to by the main
-     * or spawned threads. Pick them up here and propagate.
+     * Exceptions are stored in member variable that may be added to by the main or spawned threads. Pick them up here
+     * and propagate.
      */
     private synchronized void checkForExceptions() {
         if (exceptions != null) {
+            try {
+                rollback();
+            }
+            catch (Exception e) {
+                exceptions.add(new RuntimeException("Durinng rollback",e));
+            }
             int nx = exceptions.size();
             if (nx > 0) {
                 Exception e = exceptions.get(0);
@@ -1296,8 +1239,22 @@ public class Orchestrator {
     }
 
     /**
-     * Validates that for each of the provided() classes in the given task
-     * instance, a matching instance was actually provided
+     * Force rollback. This gets invoked automatically when a task throws an exception, but clients may also force the
+     * initiation of the rollback sequence after {@link #execute()} completes, if desired.
+     * <p>
+     * During rollback, any {@literal @}Rollback method on a completed task will be invoked, such that any downstream
+     * tasks that were directly or indirectly dependent on this task will have had their {@literal @}Rollback methods
+     * invoked first.
+     */
+    public void rollback() {
+        if (rollback != null) {
+            rollback.execute();
+        }
+    }
+
+    /**
+     * Validates that for each of the provided() classes in the given task instance, a matching instance was actually
+     * provided
      * 
      * @param taskInstance that has a possibly null provided list
      * @throws InvalidGraph.ViolatedProvides if not
@@ -1320,10 +1277,9 @@ public class Orchestrator {
     }
 
     /**
-     * Unlike other threads, the main task may have to wait for others to
-     * complete. As an optimization, while it is waiting, another thread might
-     * give it work (rather than incur the cost of another thread startup while
-     * the main thread sits idle).
+     * Unlike other threads, the main task may have to wait for others to complete. As an optimization, while it is
+     * waiting, another thread might give it work (rather than incur the cost of another thread startup while the main
+     * thread sits idle).
      */
     private void waitForCompletion() {
         outer: while (true) {
@@ -1447,7 +1403,6 @@ public class Orchestrator {
 
     private TaskMethodClosure fireRoots(List<Call.Instance> roots, TaskMethodClosure inv) {
         for (Call.Instance nextBackCallInstance : roots) {
-            // inv = nextBackCallInstance.bind(this, "TBD", null, -1, inv);
             int[] freeze = nextBackCallInstance.startingFreeze;
             inv = nextBackCallInstance.crossInvoke(null,inv,freeze,null,-1,this,"root");
         }
@@ -1455,10 +1410,8 @@ public class Orchestrator {
     }
 
     /**
-     * Invokes a task method then follows up with any on-completion bookkeeping
-     * which may include recursively invoking (or spawning new threads for)
-     * tasks that become ready as a result of the incoming call having
-     * completed.
+     * Invokes a task method then follows up with any on-completion bookkeeping which may include recursively invoking
+     * (or spawning new threads for) tasks that become ready as a result of the incoming call having completed.
      * 
      * @param closureToInvoke
      * @param context descriptive term for log messages
@@ -1469,17 +1422,49 @@ public class Orchestrator {
             Call.Instance callInstance = closureToInvoke.getCallInstance();
             Task.Instance taskOfCallInstance = callInstance.getTaskInstance();
             taskOfCallInstance.startOneCall();
-            closureToInvoke.invoke(this,context,fire);
             Task task = taskOfCallInstance.getTask();
-            TaskRec rec = taskMapByType.get(task.taskClass);
-            TaskMethodClosure parent = closureToInvoke.getParent();
 
-            closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
-            invokeAndFinish(closureToInvoke,context,true);
-            Object[] followArgs = callInstance.popSequential();
-            if (followArgs != null) {
-                closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs);
-                invokeAndFinish(closureToInvoke,"follow",fire);
+            try {
+                closureToInvoke.invoke(this,context,fire);
+                setForRollBack(closureToInvoke);
+
+                TaskRec rec = taskMapByType.get(task.taskClass);
+                TaskMethodClosure parent = closureToInvoke.getParent();
+
+                closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
+                invokeAndFinish(closureToInvoke,context,true);
+                Object[] followArgs = callInstance.popSequential();
+                if (followArgs != null) {
+                    closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs);
+                    invokeAndFinish(closureToInvoke,"follow",fire);
+                }
+            }
+            catch (Exception e) {
+                recordException(callInstance,e);
+            }
+        }
+    }
+
+    /**
+     * Adds a task to be rolled back, if later needed. Also adds this task as needing to occur before previously
+     * executed dependent tasks.
+     * 
+     * @param closureToInvoke that was invoked
+     */
+    private void setForRollBack(TaskMethodClosure closureToInvoke) {
+        Call.Instance callInstance = closureToInvoke.getCallInstance();
+        if (!isRollBack) {
+            if (rollback == null) {
+                rollback = new Orchestrator(true);
+            }
+            ITask rollBackTask = rollback.add(closureToInvoke.getTargetPojoTask(),TaskMethodBehavior.ROLLBACK);
+            Iterator<Call.Param.Instance> itr = callInstance.iterator();
+            while (itr.hasNext()) {
+                Call.Param.Instance next = itr.next();
+                List<TaskMethodClosure> alreadyExecuted = next.bindings;
+                for (TaskMethodClosure prev : alreadyExecuted) {
+                    rollBackTask.before(prev.getTargetPojoTask());
+                }
             }
         }
     }
@@ -1540,13 +1525,11 @@ public class Orchestrator {
     }
 
     /**
-     * After a task method has been invoked, look for more work, spawning more
-     * threads if there is more than one ready-to-go non-light method (execute
-     * the light methods directly by this thread). The work here involves
-     * possibly changing fields in this class and is therefore synchronized.
-     * However, call invocations are either spawned and or one is provided as a
-     * return result to be executed after the lock on this class has been
-     * released. (TBD... light tasks are executed while the lock is still held).
+     * After a task method has been invoked, look for more work, spawning more threads if there is more than one
+     * ready-to-go non-light method (execute the light methods directly by this thread). The work here involves possibly
+     * changing fields in this class and is therefore synchronized. However, call invocations are either spawned and or
+     * one is provided as a return result to be executed after the lock on this class has been released. (TBD... light
+     * tasks are executed while the lock is still held).
      * 
      * @param completed
      */

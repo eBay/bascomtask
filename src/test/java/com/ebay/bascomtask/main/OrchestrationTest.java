@@ -464,7 +464,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         verify(3);
     }
 
-    @Test(expected = OnlyATestException.class)
+    @Test(expected = RuntimeGraphError.Multi.class)
     public void testMultiExceptionKeepA1() {
         testMultiException(false,true,true);
     }
@@ -477,6 +477,38 @@ public class OrchestrationTest extends PathTaskTestBase {
     @Test(expected = RuntimeGraphError.Multi.class)
     public void testMultiExceptionKeepNone() {
         testMultiException(true,true,true);
+    }
+    
+    /**
+     * Ensure exception in main thread behaves the same as exceptions in spawned threads
+     */
+    @Test(expected = OnlyATestException.class)
+    public void testMainThreadExceptionWaits() {
+        class A extends PathTask {
+            @Work
+            public void exec() {
+                throw new OnlyATestException();
+            }
+        }
+        class B extends PathTask {
+            boolean hit = false;
+            @Work
+            public void exec() {
+                sleep(50);
+                got();
+                hit = true;
+            }
+        }
+        A a = new A();
+        B b = new B();
+        PathTask taskA = track.work(a);
+        PathTask taskB = track.work(b).fork();
+        try {
+            verify(1);
+        }
+        finally {
+            assertTrue(b.hit);
+        }
     }
 
     @Test

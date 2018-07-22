@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.ebay.bascomtask.annotations.PassThru;
+import com.ebay.bascomtask.annotations.Rollback;
 import com.ebay.bascomtask.annotations.Scope;
 import com.ebay.bascomtask.annotations.Work;
 import com.ebay.bascomtask.exceptions.InvalidTask;
@@ -87,6 +88,12 @@ class TaskParser {
             call = new Call(task,method,Scope.FREE,true);
             task.passThruCalls.add(call);
         }
+        Rollback rollBack = method.getAnnotation(Rollback.class);
+        if (rollBack != null) {
+            call = new Call(task,method,Scope.FREE,rollBack.light());
+            task.rollbackCalls.add(call);
+        }
+        
         if (call != null) {
             method.setAccessible(true); // Methods need not be public, allowing
                                         // for local classes
