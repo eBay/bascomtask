@@ -660,8 +660,9 @@ public class Orchestrator {
      * call. Once such an exception is thrown, the orchestrator ceases to start new tasks and instead waits for all open
      * threads to finish, begins @{link {@link #rollback()} processing, and then re-throws the original exception.
      * 
-     * @param maxExecutionTimeMillis to timeout
-     * @param pass description passed to config executors
+     * @param maxExecutionTimeMillis after which no new tasks are created (no active tasks are interrupted)
+     * @param pass description passed to config executors, useful (often only for logging) for distinguishing one
+     *            invocation this method from another
      * @throws RuntimeException generated from a task
      * @throws RuntimeGraphError.Multi if more than one exception is thrown from different tasks
      * @throws RuntimeGraphError.Timeout when the requested timeout has been exceeded
@@ -1329,11 +1330,7 @@ public class Orchestrator {
                     try {
                         waiting = true;
                         this.wait(maxWaitTime);
-                        long now = System.currentTimeMillis();
-                        if (now > startTime + maxExecutionTimeMillis) {
-                            LOG.error("Timing out after {}ms, state:\n{}",maxExecutionTimeMillis,getGraphState());
-                            throw new RuntimeGraphError.Timeout(maxExecutionTimeMillis);
-                        }
+                        checkForTimeout();
                     }
                     catch (InterruptedException e) {
                         throw new RuntimeGraphError("Unexpected interruption",e);
@@ -1348,7 +1345,14 @@ public class Orchestrator {
                 while (true);
             }
         }
-        ;
+    }
+
+    private void checkForTimeout() {
+        long now = System.currentTimeMillis();
+        if (now > startTime + maxExecutionTimeMillis) {
+            LOG.error("Timing out after {}ms, state:\n{}",maxExecutionTimeMillis,getGraphState());
+            throw new RuntimeGraphError.Timeout(maxExecutionTimeMillis);
+        }
     }
 
     synchronized boolean requestMainThreadComplete(TaskMethodClosure inv) {
@@ -1417,6 +1421,7 @@ public class Orchestrator {
      * @param context descriptive term for log messages
      */
     void invokeAndFinish(TaskMethodClosure closureToInvoke, String context, boolean fire) {
+        checkForTimeout();
         // Don't invoke any more tasks if there are any pending exceptions
         if (closureToInvoke != null && this.exceptions == null) {
             Call.Instance callInstance = closureToInvoke.getCallInstance();
