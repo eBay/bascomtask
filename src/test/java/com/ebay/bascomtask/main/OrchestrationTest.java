@@ -1797,4 +1797,34 @@ public class OrchestrationTest extends PathTaskTestBase {
         verify(0);
         assertEquals(1,count.get());
     }
+    
+    interface I {}    
+    
+    @Test
+    public void testMethodOnImpl() {
+
+        class B implements I {
+            boolean hit = false;
+            @Work
+            public void exec() {
+                hit = true;
+            }
+        }
+        class C {
+            boolean hit = false;
+            @Work public void exec(I i) {
+                hit = true;
+            }
+        }
+
+        B b = new B();
+        C c = new C();
+        
+        Orchestrator orc = Orchestrator.create();
+        orc.addWork(b);
+        orc.addWork(c);
+        orc.execute();
+        assertTrue(b.hit);
+        assertTrue(c.hit);
+    }
 }

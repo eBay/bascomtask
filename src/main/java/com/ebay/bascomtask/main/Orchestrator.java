@@ -861,7 +861,7 @@ public class Orchestrator {
         // taskInstances.
         // Later steps depend on these references having been set.
         for (Task.Instance taskInstance : taskInstances) {
-            addActual(taskInstance);
+            addAncestryMapping(taskInstance);
             List<Class<?>> provides = taskInstance.getProvides();
             if (provides != null && provides.size() > 0) {
                 if (toBeProvided == null) {
@@ -905,7 +905,7 @@ public class Orchestrator {
         return roots;
     }
 
-    private void addActual(Task.Instance taskInstance) {
+    private void addAncestryMapping(Task.Instance taskInstance) {
         if (pojoMap.get(taskInstance.targetPojo) != null) {
             throw new InvalidTask.AlreadyAdded("Invalid attempt to add task twice: " + taskInstance.targetPojo);
         }
@@ -915,23 +915,35 @@ public class Orchestrator {
         Task task = taskInstance.getTask();
         Class<?> taskClass = task.taskClass;
         do {
-            TaskRec rec = taskMapByType.get(taskClass);
-            if (rec == null) {
-                rec = new TaskRec();
-                taskMapByType.put(taskClass,rec);
-            }
-            if (taskClass == task.taskClass) {
-                // Set index and name only for the direct type
-                taskInstance.setIndexInType(rec.added.size());
-                String tn = taskInstance.getName();
-                checkUniqueTaskInstanceName(tn);
-                taskMapByName.put(tn,taskInstance);
-            }
-            rec.added.add(taskInstance);
+            addWithInterfaces(taskInstance,task,taskClass);
             taskClass = taskClass.getSuperclass();
         }
         while (taskClass != null && Object.class != taskClass);
     }
+    
+    private void addWithInterfaces(Task.Instance taskInstance, Task task, Class<?> taskClass) {
+        addTypeMapping(taskInstance,task,taskClass);
+        for (Class<?> nextInterface: taskClass.getInterfaces()) {
+            addWithInterfaces(taskInstance,task,nextInterface);
+        }
+    }
+
+    private void addTypeMapping(Task.Instance taskInstance, Task task, Class<?> taskClass) {
+        TaskRec rec = taskMapByType.get(taskClass);
+        if (rec == null) {
+            rec = new TaskRec();
+            taskMapByType.put(taskClass,rec);
+        }
+        if (taskClass == task.taskClass) {
+            // Set index and name only for the direct type
+            taskInstance.setIndexInType(rec.added.size());
+            String tn = taskInstance.getName();
+            checkUniqueTaskInstanceName(tn);
+            taskMapByName.put(tn,taskInstance);
+        }
+        rec.added.add(taskInstance);
+    }
+    
 
     private void recordCallsAndParameterInstances(Task.Instance task) {
         for (Call.Instance callInstance : task.calls) {
