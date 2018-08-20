@@ -616,6 +616,27 @@ public class Orchestrator {
         }
         return taskInstance;
     }
+    
+    /**
+     * Returns the ITask wrapper for a POJO task that has already been added to this orchestrator
+     * @param targetTask to match 
+     * @return ITask for previously added POJO or null if no such POJO was ever added 
+     */
+    public synchronized ITask asAdded(Object targetTask) {
+        ITask task = pojoMap.get(targetTask);
+        if (task == null) {
+            List<Task.Instance> tasks = nestedAdds.get(Thread.currentThread());
+            if (tasks != null) {
+                for (Task.Instance next: tasks) {
+                    if (next.getTargetPojo() == targetTask) {
+                        task = next;
+                        break;
+                    }
+                }
+            }
+        }
+        return task;
+    }
 
     void notifyWaitStatusChange(com.ebay.bascomtask.main.Task.Instance instance, boolean wait) {
         if (wait) {

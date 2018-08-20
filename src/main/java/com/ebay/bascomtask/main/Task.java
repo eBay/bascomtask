@@ -171,6 +171,10 @@ class Task {
         public String toString() {
             return getName() + '(' + taskMethodBehavior + ") ==> " + targetPojo.toString();
         }
+        
+        public Object getTargetPojo() {
+            return targetPojo;
+        }
 
         List<Call> getCandidateCalls() {
             switch (taskMethodBehavior) {
