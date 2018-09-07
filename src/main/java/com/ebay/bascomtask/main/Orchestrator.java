@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -103,8 +102,7 @@ public class Orchestrator {
 
     private static class TaskRec {
         final List<Task.Instance> added = new ArrayList<>(); // Unique elements
-        final List<TaskMethodClosure> fired = new ArrayList<>(); // May have
-                                                                 // dups
+        final List<TaskMethodClosure> fired = new ArrayList<>(); // May have dups
     }
 
     /**
@@ -661,9 +659,8 @@ public class Orchestrator {
                 throw new InvalidTask.NameConflict("Task name\"" + name + "\" already in use");
             }
         }
-        // There still might be a conflict when we add nestedAdds to the graph,
-        // but we can't check
-        // that until that actually occurs due the way names are auto-generated.
+        // There still might be a conflict when we add nestedAdds to the graph, but we can't
+        // check that until that actually occurs due the way names are auto-generated.
     }
 
     private void checkUniqueTaskInstanceName(String name) {
@@ -893,23 +890,25 @@ public class Orchestrator {
             }
         }
         // Ensure explicitBeforeDependencies are set on all taskInstances so
-        // that we
-        // can update thresholds in the next step
+        // that we can update thresholds in the next step
         for (Task.Instance taskInstance : taskInstances) {
             taskInstance.updateExplicitDependencies(pojoMap);
         }
+        // Same effect as previous, but specifically accounts for the case where
+        // an existing task (not in taskInstances) must come before this one.
+        for (Task.Instance taskInstance : allTasks) {
+            taskInstance.updateExplicitDependencies(pojoMap);
+        }
+        
         List<Call.Instance> roots = new ArrayList<>();
         // Now the taskInstances themselves can be linked
         for (Task.Instance taskInstance : taskInstances) {
             if (taskInstance.calls.size() == 0) {
-                // If no calls at all, the task is trivially available to all
-                // who depend on it.
-                // We create a dummy call so the task can then be processed like
-                // any other root.
+                // If no calls at all, the task is trivially available to all who depend on it.
+                // We create a dummy call so the task can then be processed like any other root.
                 roots.add(taskInstance.genNoCall());
                 // Since this task is already available as a parameter, no point
-                // in having any
-                // explicit dependencies on it, should there be any
+                // in having any explicit dependencies on it, should there be any
                 // TODO thread-safe dynamic explicits
                 taskInstance.clearExplicits();
             }
@@ -934,21 +933,12 @@ public class Orchestrator {
         allTasks.add(taskInstance);
         recordCallsAndParameterInstances(taskInstance);
         Task task = taskInstance.getTask();
-        Class<?> taskClass = task.taskClass;
-        do {
-            addWithInterfaces(taskInstance,task,taskClass);
-            taskClass = taskClass.getSuperclass();
+        
+        for (Class<?> next: task.ancestry) {
+            addTypeMapping(taskInstance,task,next);
         }
-        while (taskClass != null && Object.class != taskClass);
     }
     
-    private void addWithInterfaces(Task.Instance taskInstance, Task task, Class<?> taskClass) {
-        addTypeMapping(taskInstance,task,taskClass);
-        for (Class<?> nextInterface: taskClass.getInterfaces()) {
-            addWithInterfaces(taskInstance,task,nextInterface);
-        }
-    }
-
     private void addTypeMapping(Task.Instance taskInstance, Task task, Class<?> taskClass) {
         TaskRec rec = taskMapByType.get(taskClass);
         if (rec == null) {
@@ -1034,7 +1024,7 @@ public class Orchestrator {
      */
     private void linkAll(Task.Instance taskInstance, List<Call.Instance> roots) {
         int matchableCallCount = 0;
-        Map<Task, List<Task.Instance>> explicitsBefore = taskInstance.groupBeforeDependencies();
+        List<Task.Instance> explicitsBefore = taskInstance.getExplicitsBefore();
         for (Call.Instance callInstance : taskInstance.calls) {
             boolean match = true;
             boolean root = true;
@@ -1108,23 +1098,25 @@ public class Orchestrator {
         return ITask.class.equals(paramInstance.getTask().taskClass);
     }
 
-    private boolean addExplicitNonParameters(Task.Instance taskInstance,
-            Map<Task, List<Task.Instance>> explicitsBefore) {
+    /**
+     * Backlink explicit parameters that were not previously mapped to formal parameters.
+     * @param taskInstance
+     * @param explicitsBefore
+     * @return
+     */
+    private boolean addExplicitNonParameters(Task.Instance taskInstance, List<Task.Instance> explicitsBefore) {
         boolean root = true;
-        for (Entry<Task, List<Task.Instance>> next : explicitsBefore.entrySet()) {
-            Task task = next.getKey();
-            List<Task.Instance> befores = next.getValue();
+        for (Task.Instance next : explicitsBefore) {
+            Task task = next.getTask();
             TaskRec rec = taskMapByType.get(task.taskClass);
             for (Call.Instance call : taskInstance.calls) {
                 Call.Param.Instance paramInstance = call.addHiddenParameter(task);
                 int sz = 0;
-                for (Task.Instance before : befores) {
-                    backLink(before,paramInstance);
-                    for (TaskMethodClosure fired : rec.fired) {
-                        if (fired.getTargetPojoTask() == before.targetPojo) {
-                            paramInstance.bindings.add(fired);
-                            sz++;
-                        }
+                backLink(next,paramInstance);
+                for (TaskMethodClosure fired : rec.fired) {
+                    if (fired.getTargetPojoTask() == next.targetPojo) {
+                        paramInstance.bindings.add(fired);
+                        sz++;
                     }
                 }
                 if (sz < paramInstance.getThreshold()) {
@@ -1145,30 +1137,27 @@ public class Orchestrator {
      * @return record of all tasks that must fire before
      *         <code>paramInstance</code>
      */
-    private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance,
-            Map<Task, List<Task.Instance>> explicitsBefore) {
+    private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, List<Task.Instance> explicitsBefore) {
         Task task = paramInstance.getTask();
         TaskRec rec = taskMapByType.get(task.taskClass);
-        if (explicitsBefore != null) { // If no explicit parameters than all
-                                       // known instances are auto-wired
-            List<Task.Instance> befores = explicitsBefore.get(task);
-            if (befores != null) {
-                TaskRec alt = new TaskRec();
-                for (Task.Instance next : befores) {
+        if (explicitsBefore != null) { // If no explicit parameters than all known instances are auto-wired
+            for (Task.Instance next: explicitsBefore) {
+                Class<?> nextClass = next.getTask().taskClass;
+                if (task.taskClass.isAssignableFrom(nextClass)) {
+                    TaskRec alt = new TaskRec();
                     alt.added.add(next);
-                    explicitsBefore.remove(task); // Not a 'hidden' param if
-                                                  // it's an explicit formal
-                                                  // param
+                    explicitsBefore.remove(task); // Not a 'hidden' param if it's an explicit formal param
                     for (TaskMethodClosure firing : rec.fired) {
                         if (firing.getTargetPojoTask() == next.targetPojo) {
                             alt.fired.add(firing);
                         }
                     }
+                    rec = alt;
                 }
-                rec = alt;
             }
         }
         return rec;
+
     }
 
     /**
@@ -1525,8 +1514,7 @@ public class Orchestrator {
             ExecutorService executor = config.getExecutor();
             final Thread parent = Thread.currentThread();
             final TaskThreadStat parentStat = threadMap.get(parent);
-            // Offsetting by 1 ensures that 0 is left to refer to thread that
-            // invokes execute()
+            // Offsetting by 1 ensures that 0 is left to refer to thread that invokes execute()
             final int globalThreadIndex = threadsCreated.incrementAndGet() + 1;
             invocation.prepare();
             executor.execute(new Runnable() {
@@ -1581,7 +1569,6 @@ public class Orchestrator {
      * return result to be executed after the lock on this class has been
      * released. (TBD... light tasks are executed while the lock is still held).
      * 
-     * @param completed
      */
     private synchronized TaskMethodClosure processPostExecution(TaskRec rec, Call.Instance callInstance,
             Task.Instance taskOfCallInstance, TaskMethodClosure firing) {
@@ -1591,7 +1578,7 @@ public class Orchestrator {
             waitStats.update(duration);
         }
         boolean complete = false;
-        rec.fired.add(firing);
+        fireTree(taskOfCallInstance.getTask(),firing);
 
         // Both taskInstance and callInstance need to be marked as completable,
         // but here we're only interested in whether the task has completed
@@ -1613,6 +1600,13 @@ public class Orchestrator {
         LOG.debug("On {}complete exit from {} eval {} backLink{} ",cmsg,callInstance,backList.size(),plural);
         inv = continueOrSpawn(taskOfCallInstance,firing,"back",inv);
         return inv;
+    }
+    
+    private void fireTree(Task task, TaskMethodClosure firing) {
+        for (Class<?> next: task.ancestry) {
+            TaskRec rec = taskMapByType.get(next);
+            rec.fired.add(firing);
+        }
     }
 
     int getCountOfNewTasks() {

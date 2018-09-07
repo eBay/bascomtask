@@ -18,8 +18,10 @@ package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,11 @@ class Task {
      * Class of POJO.
      */
     final Class<?> taskClass;
+    
+    /**
+     * De-duped set of supers+interface tasks, including taskClass but excluding Object.class
+     */
+    final Class<?>[] ancestry;
 
     /**
      * For logging and debugging.
@@ -139,7 +146,15 @@ class Task {
          * All explicitly-added tasks that must complete before this one
          */
         private List<Instance> explicitBeforeDependencies = null;
+        
+        /**
+         * Explicitly added, not yet processed, tasks which must execute <i>before</i> this
+         */
         private List<Object> pendingBeforeDependencies = null;
+        
+        /**
+         * Explicitly added, not yet processed, tasks which must execute <i>after</i> this
+         */
         private List<Object> pendingAfterDependencies = null;
 
         /**
@@ -311,7 +326,6 @@ class Task {
                 for (Object next : pendingBeforeDependencies) {
                     Instance matchingInstance = pojoMap.get(next);
                     addExplicitDependency(matchingInstance);
-                    ;
                 }
             }
             if (pendingAfterDependencies != null) {
@@ -336,23 +350,11 @@ class Task {
             }
         }
 
-        Map<Task, List<Instance>> groupBeforeDependencies() {
+        List<Instance> getExplicitsBefore() {
             if (explicitBeforeDependencies == null) {
                 return null;
             }
-            else {
-                Map<Task, List<Instance>> map = new HashMap<>();
-                for (Instance taskBeforeInstance : explicitBeforeDependencies) {
-                    Task task = taskBeforeInstance.getTask();
-                    List<Instance> instances = map.get(task);
-                    if (instances == null) {
-                        instances = new ArrayList<>();
-                        map.put(task,instances);
-                    }
-                    instances.add(taskBeforeInstance);
-                }
-                return map;
-            }
+            return new ArrayList<>(explicitBeforeDependencies);
         }
 
         void clearExplicits() {
@@ -396,6 +398,22 @@ class Task {
             }
         }
         this.taskName = nm;
+        
+        Set<Class<?>> ancestrySet = new HashSet<>();
+        computeAncestors(taskClass,ancestrySet);
+        this.ancestry = new Class<?>[ancestrySet.size()];
+        ancestrySet.toArray(ancestry);
+    }
+    
+    private void computeAncestors(Class<?> clazz, Set<Class<?>> set) {
+        if (clazz != null && clazz != Object.class) {
+            set.add(clazz);
+            for (Class<?> next: clazz.getInterfaces()) {
+                computeAncestors(next,set);
+            }
+            clazz = clazz.getSuperclass();
+            computeAncestors(clazz,set);
+        }
     }
 
     String getName() {

@@ -197,7 +197,15 @@ class Call {
                     if (!first)
                         sb.append(',');
                     first = false;
-                    sb.append(next.toString());
+                    String nm;
+                    if (next.incoming.size()==1) { // It should be this, but checking anyway
+                        nm = next.incoming.get(0).getName();
+                    }
+                    else {
+                        nm = next.toString();  // Not expected, but return best alternative
+                    }
+                    sb.append(nm);
+                    
                 }
                 sb.append("]");
             }

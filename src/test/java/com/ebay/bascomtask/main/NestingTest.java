@@ -18,6 +18,8 @@ package com.ebay.bascomtask.main;
 
 import static org.junit.Assert.*;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
 
 import com.ebay.bascomtask.annotations.Work;
@@ -321,5 +323,56 @@ public class NestingTest extends PathTaskTestBase {
 
         sleep(LONG_WAIT + 15);
         assertTrue(record.taskLongWait.followed(record.taskShortWait));
+    }
+    
+    interface Nuthin {};
+    
+    private void invokNestingExplicit(final boolean beforeElseAfter) {
+        class A extends PathTask implements Nuthin {
+            @Work
+            public void exec() {
+                got();
+            }
+        }
+        class B implements Nuthin {
+            boolean bad = false;
+            @Work
+            public void exec(Nuthin n) {
+                if (! (n instanceof A)) {
+                    bad = true;
+                }
+            }
+        }
+        final B b = new B();
+        class C extends PathTask {
+            @Work
+            public void exec(ITask task, A a) {
+                got(a);
+                Orchestrator orc = task.getOrchestrator();
+                ITask taskB = orc.addWork(b);
+                if (beforeElseAfter) {
+                    orc.asAdded(a).before(b);
+                }
+                else {
+                    taskB.after(a);
+                }
+            }
+        }
+        A a = new A();
+        C c = new C();
+        PathTask taskA = track.work(a);
+        PathTask taskC = track.work(c).exp(a);
+        verify(0);
+        assertFalse(b.bad);
+    }
+    
+    @Test
+    public void testNestingExplicitBefore() {
+        invokNestingExplicit(true);
+    }
+
+    @Test
+    public void testNestingExplicitAfter() {
+        invokNestingExplicit(false);
     }
 }
