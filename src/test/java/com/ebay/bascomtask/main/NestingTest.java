@@ -375,4 +375,28 @@ public class NestingTest extends PathTaskTestBase {
     public void testNestingExplicitAfter() {
         invokNestingExplicit(false);
     }
+    
+    @Test(expected=InvalidGraph.Circular.class)
+    public void testNestedCircular() {
+        class A extends PathTask {
+            @Work public void exec() {}
+        }
+        class B {
+            @Work public void exec(B b) {} // Circular
+        }
+        class C extends PathTask {
+            @Work
+            public void exec(ITask task) {
+                Orchestrator orc = task.getOrchestrator();
+                B b = new B();
+                ITask taskB = orc.addWork(b);
+            }
+        }
+        A a = new A();
+        C c = new C();
+        PathTask taskA = track.work(a);
+        // Fork so that circular dependency is thrown in sub-thread
+        PathTask taskC = track.work(c).fork();
+        verify(0);
+    }
 }

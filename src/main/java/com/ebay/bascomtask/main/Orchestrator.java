@@ -670,11 +670,18 @@ public class Orchestrator {
     }
 
     public synchronized void recordException(Call.Instance callInstance, Exception e) {
+        recordException(e);
+        callInstance.taskInstance.addException(e);
+    }
+
+    public synchronized void recordException(Exception e) {
         if (exceptions == null) {
             exceptions = new ArrayList<>();
         }
+        else if (exceptions.contains(e)) {
+            return;
+        }
         exceptions.add(e);
-        callInstance.taskInstance.addException(e);
     }
 
     /**
@@ -916,8 +923,7 @@ public class Orchestrator {
                 linkAll(taskInstance,roots);
             }
         }
-        // With all linkages in place, thresholds can be (re)computed, and final
-        // verification performed
+        // With all linkages in place, thresholds can be (re)computed, and final verification performed
         List<Call.Param.Instance> badParams = recomputeAllThresholdsAndVerify(toBeProvided);
         if (badParams != null) {
             throwUncompletableParams(badParams);
@@ -986,11 +992,8 @@ public class Orchestrator {
         List<Call.Param.Instance> badParams = null;
         for (Task.Instance nextTaskInstance : allTasks) {
             computeThreshold(nextTaskInstance,linkLevel,toBeProvided);
-            if (nextTaskInstance.calls.size() > 0) { // Don't do the enclosed
-                                                     // checks if there are no
-                                                     // calls
-                // If at least one call for a task has all parameters, the graph
-                // is resolvable.
+            if (nextTaskInstance.calls.size() > 0) { // Don't do the enclosed checks if there are no calls
+                // If at least one call for a task has all parameters, the graph is resolvable.
                 // If there is no such call, report all unbound parameters.
                 if (!nextTaskInstance.isCompletable()) {
                     if (badParams == null) {
@@ -1077,9 +1080,9 @@ public class Orchestrator {
             msg += " matching calls, either remove the extra tasks or mark task as multiMethodOk()";
             throw new InvalidGraph.MultiMethod(msg);
         }
-        // Although new taskInstances are linked above, this final pass ensures
-        // that taskInstance is
-        // backlinked to any previously-existing instances.
+        // Although new taskInstances are linked above, this final pass ensures that
+        // taskInstance is backlinked to any previously-existing instances.
+        // 
         for (Param backParam : taskInstance.getTask().backList) {
             List<Param.Instance> paramInstances = paramMap.get(backParam);
             if (paramInstances != null) {
@@ -1141,12 +1144,13 @@ public class Orchestrator {
         Task task = paramInstance.getTask();
         TaskRec rec = taskMapByType.get(task.taskClass);
         if (explicitsBefore != null) { // If no explicit parameters than all known instances are auto-wired
-            for (Task.Instance next: explicitsBefore) {
+            for (int i=explicitsBefore.size()-1; i>=0; i--) {
+                Task.Instance next = explicitsBefore.get(i);
                 Class<?> nextClass = next.getTask().taskClass;
                 if (task.taskClass.isAssignableFrom(nextClass)) {
                     TaskRec alt = new TaskRec();
                     alt.added.add(next);
-                    explicitsBefore.remove(task); // Not a 'hidden' param if it's an explicit formal param
+                    explicitsBefore.remove(i); // Not a 'hidden' param if it's an explicit formal param
                     for (TaskMethodClosure firing : rec.fired) {
                         if (firing.getTargetPojoTask() == next.targetPojo) {
                             alt.fired.add(firing);
@@ -1533,6 +1537,9 @@ public class Orchestrator {
                         invokeAndFinish(invocation,"spawned",true);
                     }
                     catch (Exception e) {
+                        // The exception will have been recorded at a deeper level if thrown from a pojo task
+                        // method; ensure it is recorded here in case it was generated outside a pojo method
+                        recordException(e);
                         err = e;
                     }
                     finally {
