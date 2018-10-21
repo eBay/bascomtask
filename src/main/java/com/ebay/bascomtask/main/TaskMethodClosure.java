@@ -177,8 +177,35 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
         return pojoTargetTask;
     }
 
-    public Object[] getMethodBindings() {
-        return args;
+    /**
+     * Returns the number of actual arguments on entry to a task method invocation.
+     * @return number of arguments
+     */
+    public int getNumberOfActualArguments() {
+        return args==null ? 0 : args.length;
+    }
+    
+    /**
+     * Gets the specified actual argument on entry to a task method invocation.
+     * Assumes the caller has verified that the provided index is valid.
+     * @param index of argument
+     * @see #getNumberOfActualArguments()
+     * @return value of argument
+     */
+    public Object getActualArgument(int index) {
+        return args[index];
+    }
+    
+    /**
+     * Replaces the actual argument prior to task method invocation. This is
+     * provided for interceptors that want to change arguments values.
+     * Assumes the caller has verified that the provided index is valid.
+     * @param index of argument
+     * @see #getNumberOfActualArguments()
+     * @param v new value to set
+     */
+    public void setActualArgument(int index, Object v) {
+        args[index] = v;
     }
 
     public long getDurationMs() {

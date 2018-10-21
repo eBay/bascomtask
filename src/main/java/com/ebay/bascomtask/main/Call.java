@@ -29,8 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import com.ebay.bascomtask.annotations.Scope;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 /**
  * A wrapper for a Java method on a task POJO, including parameter wrappers for
  * each parameter.
@@ -487,37 +485,12 @@ class Call {
             reserved = which;
         }
 
-        @SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")
         Object[] popSequential() {
             if (followCallArgs != null) {
                 return followCallArgs.pollFirst();
             }
             return null;
         }
-
-        /**
-         * Associates a return value with the specific pojoCalled instance whose
-         * task method was invoked. This is necessary because even when a
-         * pojoCalled task method returns false (it doesn't 'fire'), the result
-         * of completion is still propagated throughout the graph so that the
-         * termination logic can be applied.
-         */
-        /*
-         * class Firing { /** The actual POJO added to the orchestrator, or a
-         * clone of that object for (TODO) SCOPE.request \/ final Object
-         * pojoCalled;
-         * 
-         * /** The value returned by the task method applied to that pojoCalled
-         * \/ final boolean taskMethodReturnValue;
-         * 
-         * final long executionTime;
-         * 
-         * Firing(Object pojo, long duration, boolean returnValue) {
-         * this.pojoCalled = pojo; this.executionTime = duration;
-         * this.taskMethodReturnValue = returnValue; } }
-         * 
-         * Firing createTaskFiring() { return new Firing(taskInstance,0,true); }
-         */
     }
 
     Call(Task task, Method method, Scope scope, boolean light) {

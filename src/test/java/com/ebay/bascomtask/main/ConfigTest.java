@@ -193,7 +193,7 @@ public class ConfigTest {
         assertNotNull(closure);
         assertTrue(closure.getMethodName().equals("gobar"));
         assertThat(closure.getMethodActualSignature(),containsString(FOO_NAME));
-        assertSame(foo,closure.getMethodBindings()[0]);
+        assertSame(foo,closure.getActualArgument(0));
         assertThat(closure.getMethodFormalSignature(),containsString(Foo.class.getSimpleName()));
         assertSame(bar,closure.getTargetPojoTask());
         assertEquals(BAR_NAME,closure.getTaskName());

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<FindBugsFilter>
+
+  <!-- 
+    BT tests often create nested classes with methods called by reflection. 
+    FB incorrectly generates warnings for those.
+   -->
+  <Match>
+    <Class name="*Test"/>
+    <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS)"/>
+  </Match>
+  
+</FindBugsFilter>
