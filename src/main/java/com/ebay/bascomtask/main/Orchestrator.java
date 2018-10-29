@@ -125,13 +125,13 @@ public class Orchestrator {
 
     /**
      * How we know which task instances are active for a given POJO task class,
-     * relative to this orchestrator. An added instance of <Sub extends Base>
-     * will result in two entries in this map, one for each of the types.
+     * relative to this orchestrator. For handling inheritance, an added instance of
+     * <Sub extends Base> will result in two entries in this map, one for each of the types.
      */
     private final Map<Class<?>, TaskRec> taskMapByType = new HashMap<>();
 
     /**
-     * For performance we also maintain the list directly.
+     * Generally needed when constructing or modifying a new runtime graph of tasks.
      */
     private final List<Task.Instance> allTasks = new ArrayList<>();
 
@@ -253,9 +253,29 @@ public class Orchestrator {
         sb.append(')');
         return sb.toString();
     }
-
+    
+    /**
+     * Creates a new Orchestrator. New Orchestrator instances are typically created anew
+     * for each unit of work, and this is the standard way to create one. 
+     * @return
+     */
     public static Orchestrator create() {
         return new Orchestrator();
+    }
+
+    private static StatKeeper keeper = null;    
+    
+    /**
+     * Returns an object for reporting stats across all orchestrators.
+     * @return
+     */
+    public static StatKeeper stat() {
+        synchronized (Orchestrator.class) {
+            if (keeper == null) {
+                keeper = new StatKeeper();
+            }
+        }
+        return keeper;
     }
 
     /**
@@ -439,7 +459,7 @@ public class Orchestrator {
         return this;
     }
 
-    TaskMethodClosure getTaskMethodClosure(TaskMethodClosure parent, Call.Instance callInstance, Object[] args) {
+    TaskMethodClosure getTaskMethodClosure(TaskMethodClosure parent, Call.Instance callInstance, Object[] args, TaskMethodClosure longestIncoming) {
         TaskMethodClosure closure = null;
         if (parent != null) {
             closure = parent.getClosure();
@@ -451,7 +471,7 @@ public class Orchestrator {
         if (closure == null) {
             closure = closureGenerator.getClosure();
         }
-        closure.initCall(callInstance,args);
+        closure.initCall(callInstance,args,longestIncoming);
         return closure;
     }
 
@@ -1504,7 +1524,7 @@ public class Orchestrator {
             invokeAndFinish(closureToInvoke,context,true);
             Object[] followArgs = callInstance.popSequential();
             if (followArgs != null) {
-                closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs);
+                closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs,closureToInvoke.getLongestIncoming());
                 invokeAndFinish(closureToInvoke,"follow",fire);
             }
         }

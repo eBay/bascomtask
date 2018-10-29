@@ -59,7 +59,12 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     private boolean called = false;
 
     private static Object[] EMPTY_ARGS = new Object[0];
-
+    
+    /**
+     * The closure of one of the incoming parameters for this call, if any. If more than one, the one that took the longest
+     */
+    private TaskMethodClosure longestIncoming = null;
+    
     @Override
     public String toString() {
         if (callInstance == null) {
@@ -133,10 +138,12 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
      * 
      * @param callInstance
      * @param args
+     * @param longestIncoming 
      */
-    void initCall(final Call.Instance callInstance, final Object[] args) {
+    void initCall(final Call.Instance callInstance, final Object[] args, TaskMethodClosure longestIncoming) {
         this.callInstance = callInstance;
         this.pojoTargetTask = callInstance.taskInstance.targetPojo;
+        this.longestIncoming = longestIncoming;
         if (args == null) {
             this.args = null;
         }
@@ -244,6 +251,8 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
                 this.kind = kind;
                 try {
                     returned = executeTaskMethod();
+                    StatKeeper keeper = Orchestrator.stat();
+                    keeper.record(orc,this);
                     orc.validateProvided(taskInstance);
                 }
                 catch (Exception e) {
@@ -348,5 +357,28 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     @Override
     public TaskMethodClosure getClosure() {
         return null;
+    }
+    
+    TaskMethodClosure getLongestIncoming() {
+        return longestIncoming;
+    }
+
+    /**
+     * Returns the execution duration of this call + the longest equivalent time of any incoming
+     * parameter that fired to initiate this call.
+     * @return
+     */
+    long getLongestDuration() {
+        long result = durationMs;
+        if (longestIncoming != null) {
+            result += longestIncoming.getLongestDuration();
+        }
+        return result;
+    }
+    
+    String getLongestIncomingPath() {
+        // TBO
+        String s = longestIncoming == null ? "" : longestIncoming.getLongestIncomingPath() + '>';
+        return s + callInstance.taskInstance.getName();
     }
 }

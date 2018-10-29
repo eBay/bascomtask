@@ -271,6 +271,18 @@ class Call {
                 }
             };
         }
+        
+        private TaskMethodClosure longestIncoming = null;
+
+        /**
+         * Remembers the given closure if it is longer than anything else we've seen so far.
+         * @return
+         */
+        void scoreIncoming(TaskMethodClosure closure) {
+            if (longestIncoming==null || longestIncoming.getDurationMs() > longestIncoming.getDurationMs()) {
+                longestIncoming = closure;
+            }
+        }
 
         /**
          * Adds a binding for a parameter, possibly resulting in POJO task
@@ -299,36 +311,29 @@ class Call {
                 Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
             int[] freeze;
             int ordinalOfFiringParameter;
-            if (firingParameter == null) { // A root task call, i.e. one with no
-                                           // task parameters?
+            if (firingParameter == null) { // A root task call, i.e. one with no task parameters?
                 freeze = EMPTY_FREEZE;
                 ordinalOfFiringParameter = -1;
             }
             else {
-                // final Param.Instance firingParameter =
-                // paramInstances[parameterIndex];
-                // Obtain a unique set of parameter indexes within the
-                // synchronized block such that no
-                // other thread would get the same set. Once these are set, the
-                // actual execution can
+                // Obtain a unique set of parameter indexes within the synchronized block such that no
+                // other thread would get the same set. Once these are set, the actual execution can
                 // safely proceed outside the synchronized block.
                 synchronized (this) {
+                    scoreIncoming(firing);
                     ordinalOfFiringParameter = firingParameter.bindings.size();
                     firingParameter.bindings.add(firing);
                     for (Param.Instance next : paramInstances) {
                         if (!next.ready()) {
-                            return pendingClosure; // If not all parameters
-                                                   // ready (non-list params
-                                                   // must have at least one
-                                                   // binding), not ready to
+                            return pendingClosure; // If not all parameters ready (non-list params
+                                                   // must have at least one binding), not ready to
                                                    // execute call
                         }
                     }
                     if (hiddenParameters != null) {
                         for (Param.Instance next : hiddenParameters) {
                             if (!next.ready()) {
-                                return pendingClosure; // If not all hidden
-                                                       // parameters ready, not
+                                return pendingClosure; // If not all hidden parameters ready, not
                                                        // ready to execute call
                             }
                         }
@@ -376,11 +381,7 @@ class Call {
                 TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter,
                 int ordinalOfFiringParameter, Orchestrator orc, String context) {
             if (px == args.length) {
-                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args); // makes
-                                                                                              // a
-                                                                                              // copy
-                                                                                              // of
-                                                                                              // args!
+                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args,longestIncoming); // makes a copy of args!
                 if (!fire) {
                     orc.invokeAndFinish(newInvocation,"non-fire",false);
                 }
@@ -388,13 +389,11 @@ class Call {
                     orc.invokeAndFinish(newInvocation,"light",fire);
                 }
                 else if (isNoWait() && orc.isCallingThread()) {
-                    // Don't assign main thread with tasks it should not wait
-                    // for.
+                    // Don't assign main thread with tasks it should not wait for
                     orc.spawn(newInvocation);
                 }
                 else if (taskInstance.isFork()) {
-                    // Spawn right away if taskInstance has been flagged this
-                    // way
+                    // Spawn right away if taskInstance has been flagged this way
                     orc.spawn(newInvocation);
                 }
                 else if (!postPending(newInvocation)) {
@@ -529,8 +528,6 @@ class Call {
 
     /**
      * A parameter of a POJO task method.
-     * 
-     * @author brendanmccarthy
      */
     class Param {
 
@@ -628,7 +625,7 @@ class Call {
 
             void setExplicitlyWired() {
                 explicitlyWired = true;
-            }
+            }          
         }
 
         Param(Task task, int parameterPosition, boolean isList) {
