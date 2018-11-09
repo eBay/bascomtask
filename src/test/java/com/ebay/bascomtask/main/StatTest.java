@@ -177,7 +177,7 @@ public class StatTest {
         graph.path(taskA.getName());
         TaskStat.Path pathB = graph.path(taskB.getName());
         
-        pathB.segment(taskB.getName());
+        pathB.segment(taskB.getName()); 
 
         assertEquals(exp,got);
     }

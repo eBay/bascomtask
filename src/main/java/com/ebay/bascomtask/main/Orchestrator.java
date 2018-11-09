@@ -747,7 +747,7 @@ public class Orchestrator {
      * exception, it will be propagated from this call. Once such an exception
      * is thrown, the orchestrator ceases to start new tasks and instead waits
      * for all open threads to finish before returning (by throwing the
-     * exception in question).
+     * exception in question). 
      * 
      * @param maxExecutionTimeMillis to timeout
      * @param pass description passed to config executors
@@ -1520,11 +1520,12 @@ public class Orchestrator {
             TaskRec rec = taskMapByType.get(task.taskClass);
             TaskMethodClosure parent = closureToInvoke.getParent();
 
+            TaskMethodClosure originalClosureToInvoke = closureToInvoke;
             closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
             invokeAndFinish(closureToInvoke,context,true);
             Object[] followArgs = callInstance.popSequential();
             if (followArgs != null) {
-                closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs,closureToInvoke.getLongestIncoming());
+                closureToInvoke = getTaskMethodClosure(parent,callInstance,followArgs,originalClosureToInvoke.getLongestIncoming());
                 invokeAndFinish(closureToInvoke,"follow",fire);
             }
         }
