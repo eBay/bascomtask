@@ -21,9 +21,17 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.ElementType.FIELD;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
  * Provides generalized non-strict equality on objects, where the strictness is user-defined.
@@ -31,16 +39,39 @@ import java.util.Objects;
  * @author bremccarthy
  */
 public class FlexEq {
-    public interface Rule<T> {
-        boolean eq(T x, T y);
+    /**
+     * Pre-defined rule that is always available. Allows for two integers to be considered
+     * equal if within a specified range of each other.
+     */
+    @Retention(RUNTIME)
+    @Target({METHOD,FIELD})
+    public @interface IntegerInRange {
+        /**
+         * Range, non-inclusive.
+         * @return
+         */
+        public int value();
     }
     
-    private class RuleHolder<T> {
+    private static final Rule<Integer,IntegerInRange> intRangeRule = new Rule<Integer,IntegerInRange>() {
+        @Override
+        public boolean eq(Integer x, Integer y, IntegerInRange ann) {
+            int diff = Math.abs(x.intValue() - y.intValue());
+            int range = ann.value();
+            return diff < range;
+        }
+    };
+    
+    public interface Rule<T,ANN> {
+        boolean eq(T x, T y, ANN ann);
+    }
+    
+    private class RuleHolder<T,ANN> {
         final Class<? extends Annotation> ann;
-        final Rule<T> rule;
+        final Rule<T,ANN> rule;
         final Class<T> paramType;
         final boolean nullPass;
-        RuleHolder(Class<? extends Annotation> ann, boolean nullPass, Rule<T> rule, Class<T> type) {
+        RuleHolder(Class<? extends Annotation> ann, boolean nullPass, Rule<T,ANN> rule, Class<T> type) {
             this.ann = ann;
             this.rule = rule;
             this.paramType = type;
@@ -48,11 +79,15 @@ public class FlexEq {
         }
     }
     
-    public <T> void rule(Class<? extends Annotation> ann, boolean nullPass, Class<T> type, Rule<T> rule) {
-        map.put(ann,new RuleHolder<T>(ann,nullPass,rule,type));
+    public FlexEq() {
+        rule(IntegerInRange.class,false,Integer.class,intRangeRule);
     }
     
-    private Map<Class<? extends Annotation>,RuleHolder<?>> map = new HashMap<>();
+    public <T,ANN> void rule(Class<? extends Annotation> ann, boolean nullPass, Class<T> type, Rule<T,ANN> rule) {
+        map.put(ann,new RuleHolder<T,ANN>(ann,nullPass,rule,type));
+    }
+    
+    private Map<Class<? extends Annotation>,RuleHolder<?,?>> map = new HashMap<>();
     
     public static class Output {
         final boolean result;
@@ -105,19 +140,25 @@ public class FlexEq {
                 rez = false;
             }
             else {
-                Boolean eq=null;
-                if (xc.getPackage().getName().startsWith("java.")) {
-                    eq = checkUserSuppliedEquals(fd,x,y);
-                    if (eq==null) {
-                        eq = Objects.equals(x,y);
-                    }
-                    if (eq) {
-                        one(sb,pos,fd,x);
+                if (x instanceof Collection) {
+                    Collection<?> xs = (Collection<?>)x;
+                    Collection<?> ys = (Collection<?>)y;
+                    int xSize = xs.size();
+                    int ySize = ys.size();
+                    if (xSize != ySize) {
+                        // TBD print
+                        return false;
                     }
                     else {
-                        pair(sb,pos,fd,x,y);
-                        rez = false;                        
+                        Iterator<?> itr = ys.iterator();
+                        for (Object nextX: xs) {
+                            Object nextY = itr.next();
+                            rez &= apx(sb,pos+1,null,nextX,nextY);
+                        }
                     }
+                }
+                else if (xc.getPackage().getName().startsWith("java.")) {
+                    rez = compJavaLibObjects(sb,pos,fd,x,y);
                 }
                 else {
                     one(sb,pos,fd,'{');
@@ -133,16 +174,30 @@ public class FlexEq {
         return rez;
     }
 
+    private boolean compJavaLibObjects(StringBuffer sb, int pos, Field fd, Object x, Object y) {
+        Boolean eq = checkUserSuppliedEquals(fd,x,y);
+        if (eq==null) {
+            eq = Objects.equals(x,y);
+        }
+        if (eq) {
+            one(sb,pos,fd,x);
+        }
+        else {
+            pair(sb,pos,fd,x,y);
+        }
+        return eq;
+    }
+
     private Boolean checkUserSuppliedEquals(Field fd, Object x, Object y) {
         if (fd != null) {
             Annotation[] anns = fd.getAnnotations();
             for (Annotation ann: anns) {
-                RuleHolder<?> holder = map.get(ann.annotationType());
+                RuleHolder<?,?> holder = map.get(ann.annotationType());
                 if (holder != null) {
                     Class<?>type = holder.paramType;
                     try {
-                        Method method = holder.rule.getClass().getMethod("eq",type,type);
-                        Object[] args = {x,y};
+                        Method method = holder.rule.getClass().getMethod("eq",type,type,holder.ann);
+                        Object[] args = {x,y,ann};
                         Object methodResult = method.invoke(holder.rule,args);
                         return (Boolean)methodResult;
                     }

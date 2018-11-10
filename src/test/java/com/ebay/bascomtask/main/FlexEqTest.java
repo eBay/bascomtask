@@ -4,6 +4,9 @@ import static org.junit.Assert.*;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import java.util.ArrayList;
+import java.util.List;
+
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
@@ -71,23 +74,28 @@ public class FlexEqTest {
         assertFalse(ax.apxOut(d1,d2));
     }
     
+    static class OneInt {
+        int x;
+    }
+    
     @Retention(RUNTIME)
     @Target({METHOD,FIELD})
-    public @interface LessThenNotEqual {
+    public @interface LessThanNotEqual {
     }    
     
     @Test
     public void testInequality() {
         FlexEq ax = new FlexEq();
-        ax.rule(LessThenNotEqual.class, false, Integer.class, new FlexEq.Rule<Integer>() {
+        
+        ax.rule(LessThanNotEqual.class, false, Integer.class, new FlexEq.Rule<Integer,LessThanNotEqual>() {
 
             @Override
-            public boolean eq(Integer x, Integer y) {
+            public boolean eq(Integer x, Integer y, LessThanNotEqual ann) {
                 return x.intValue() < y.intValue();
             }});
         
         class Foo {
-            @LessThenNotEqual
+            @LessThanNotEqual
             int x;
         }
         
@@ -102,4 +110,51 @@ public class FlexEqTest {
         assertTrue(ax.apxOut(f1,f2));
     }
     
+    @Test
+    public void testInRange() {
+        FlexEq ax = new FlexEq();
+
+        class Foo {
+            @FlexEq.IntegerInRange(2)
+            int x;
+        }
+        
+        Foo f1 = new Foo();
+        f1.x = 1;
+        Foo f2 = new Foo();
+        f2.x = f1.x;
+        
+        assertTrue(ax.apxOut(f1,f2));
+        f2.x++;
+        assertTrue(ax.apxOut(f1,f2));
+        f2.x++;
+        assertFalse(ax.apxOut(f1,f2));
+    }
+    
+    @Test
+    public void testList() {
+        FlexEq ax = new FlexEq();
+
+        class Foo {
+            List<OneInt> bars = new ArrayList<>();
+            
+            void addBar(int x) {
+                OneInt oneInt = new OneInt();
+                oneInt.x = x;
+                bars.add(oneInt);
+            }
+        }
+        
+        Foo f1 = new Foo();
+        f1.addBar(3);
+        f1.addBar(7);
+        
+        Foo f2 = new Foo();
+        f2.addBar(3);
+        f2.addBar(7);
+        
+        assertTrue(ax.apxOut(f1,f2));
+        f1.bars.get(0).x++;
+        assertFalse(ax.apxOut(f1,f2));
+    }
 }
