@@ -1,3 +1,19 @@
+/************************************************************************
+Copyright 2018 eBay Inc.
+Author/Developer: Brendan McCarthy
+ 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+ 
+    https://www.apache.org/licenses/LICENSE-2.0
+ 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+**************************************************************************/
 package com.ebay.bascomtask.main;
 
 import static org.junit.Assert.*;
@@ -17,13 +33,13 @@ public class FlexEqTest {
 
     @Test
     public void testPrimitives() {
-        FlexEq ax = new FlexEq();
-        assertTrue(ax.apxOut(null,null));
-        assertTrue(ax.apxOut(4,4));
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(null,null));
+        assertTrue(feq.apxOut(4,4));
         final String V = "yes";
-        assertTrue(ax.apxOut(V,V));
-        assertFalse(ax.apxOut(V,null));
-        FlexEq.Output out = ax.apx(null,V);
+        assertTrue(feq.apxOut(V,V));
+        assertFalse(feq.apxOut(V,null));
+        FlexEq.Output out = feq.apx(null,V);
         assertFalse(out.result);
         assertTrue(out.outline.indexOf('+') >= 0);
         assertTrue(out.outline.indexOf('-') >= 0);
@@ -42,40 +58,36 @@ public class FlexEqTest {
     public void testSimple() {
         Simple s1 = new Simple(3,"foo");
         Simple s2 = new Simple(3,"foo");
-        FlexEq ax = new FlexEq();
-        assertTrue(ax.apxOut(s1,s2));
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(s1,s2));
         
         s2.x++;
-        assertFalse(ax.apxOut(s1,s2));
+        assertFalse(feq.apxOut(s1,s2));
     }
     
-    static class Double {
+    static class Nested {
         boolean b;
         Simple s;
     }
     
     @Test
-    public void testDouble() {
-        Double d1 = new Double();
+    public void testNested() {
+        Nested d1 = new Nested();
         d1.s = new Simple(5,"foo");
-        Double d2 = new Double();
+        Nested d2 = new Nested();
         d2.s = d1.s;
         
-        FlexEq ax = new FlexEq();
-        assertTrue(ax.apxOut(d1,d2));
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(d1,d2));
         
         d2.s = new Simple(5,"foo");
-        assertTrue(ax.apxOut(d1,d2));
+        assertTrue(feq.apxOut(d1,d2));
         
         d1.b = !d1.b;
-        assertFalse(ax.apxOut(d1,d2));
+        assertFalse(feq.apxOut(d1,d2));
         d1.b = !d1.b;
         d1.s.y = "bar";
-        assertFalse(ax.apxOut(d1,d2));
-    }
-    
-    static class OneInt {
-        int x;
+        assertFalse(feq.apxOut(d1,d2));
     }
     
     @Retention(RUNTIME)
@@ -84,10 +96,10 @@ public class FlexEqTest {
     }    
     
     @Test
-    public void testInequality() {
-        FlexEq ax = new FlexEq();
+    public void testCustomInequalityRule() {
+        FlexEq feq = new FlexEq();
         
-        ax.rule(LessThanNotEqual.class, false, Integer.class, new FlexEq.Rule<Integer,LessThanNotEqual>() {
+        feq.rule(LessThanNotEqual.class, false, Integer.class, new FlexEq.Rule<Integer,LessThanNotEqual>() {
 
             @Override
             public boolean eq(Integer x, Integer y, LessThanNotEqual ann) {
@@ -104,15 +116,15 @@ public class FlexEqTest {
         Foo f2 = new Foo();
         f2.x = f1.x;
         
-        assertFalse(ax.apxOut(f1,f2)); // Above test is <, not =
+        assertFalse(feq.apxOut(f1,f2)); // Above test is <, not =
         
         f2.x++;
-        assertTrue(ax.apxOut(f1,f2));
+        assertTrue(feq.apxOut(f1,f2));
     }
     
     @Test
     public void testInRange() {
-        FlexEq ax = new FlexEq();
+        FlexEq feq = new FlexEq();
 
         class Foo {
             @FlexEq.IntegerInRange(2)
@@ -124,16 +136,20 @@ public class FlexEqTest {
         Foo f2 = new Foo();
         f2.x = f1.x;
         
-        assertTrue(ax.apxOut(f1,f2));
+        assertTrue(feq.apxOut(f1,f2));
         f2.x++;
-        assertTrue(ax.apxOut(f1,f2));
+        assertTrue(feq.apxOut(f1,f2));
         f2.x++;
-        assertFalse(ax.apxOut(f1,f2));
+        assertFalse(feq.apxOut(f1,f2));
+    }
+    
+    static class OneInt {
+        int x;
     }
     
     @Test
     public void testList() {
-        FlexEq ax = new FlexEq();
+        FlexEq feq = new FlexEq();
 
         class Foo {
             List<OneInt> bars = new ArrayList<>();
@@ -153,8 +169,71 @@ public class FlexEqTest {
         f2.addBar(3);
         f2.addBar(7);
         
-        assertTrue(ax.apxOut(f1,f2));
-        f1.bars.get(0).x++;
-        assertFalse(ax.apxOut(f1,f2));
+        assertTrue(feq.apxOut(f1,f2));
+        f1.bars.get(0).x++; // force inequality
+        assertFalse(feq.apxOut(f1,f2));
+        
+        f1.bars.get(0).x--; // restore equality
+        f1.addBar(11);  // Lists now different size
+        assertFalse(feq.apxOut(f1,f2));
+    }
+    
+    @Test
+    public void testArray() {
+        FlexEq feq = new FlexEq();
+
+        class Foo {
+            final OneInt[] arr;
+            
+            Foo(int size) {
+                arr = new OneInt[size];
+                for (int i=0; i<size; i++) {
+                    arr[i] = new OneInt();
+                    arr[i].x = i;
+                }
+            }
+        }
+        
+        Foo f1 = new Foo(2);
+        Foo f2 = new Foo(2);
+        
+        assertTrue(feq.apxOut(f1,f2));
+        f1.arr[1].x++;
+        assertFalse(feq.apxOut(f1,f2));
+        
+        f2 = new Foo(1);  // Arrays now different size
+        assertFalse(feq.apxOut(f1,f2));
+    }
+    
+    @Retention(RUNTIME)
+    @Target({METHOD,FIELD})
+    @interface NullMismatch {
+    }    
+    
+    @Test
+    public void testNullPass() {
+        FlexEq feq = new FlexEq();
+        
+        feq.rule(NullMismatch.class, true, OneInt.class, new FlexEq.Rule<OneInt,NullMismatch>() {
+
+            @Override
+            public boolean eq(OneInt x, OneInt y, NullMismatch ann) {
+                return x == null ? y != null : y==null && x != null;
+            }});
+        
+        class Foo {
+            @NullMismatch
+            OneInt oneInt;
+        }
+        
+        Foo f1 = new Foo();
+        f1.oneInt = new OneInt();
+        Foo f2 = new Foo();
+
+        assertTrue(feq.apxOut(f1,f2));
+        
+        f2.oneInt = new OneInt();
+        assertFalse(feq.apxOut(f1,f2));
+
     }
 }

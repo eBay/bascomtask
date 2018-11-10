@@ -36,6 +36,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 /**
  * Provides generalized non-strict equality on objects, where the strictness is user-defined.
  * 
+ * N.B.: Doesn't handle primitive arrays at this point, nor maps (well). Doesn't check for cycles.
+ * 
  * @author bremccarthy
  */
 public class FlexEq {
@@ -79,10 +81,27 @@ public class FlexEq {
         }
     }
     
+    private class BoundRule<T,ANN> {
+        final RuleHolder<T,ANN> holder;
+        final Annotation ann;
+        BoundRule(RuleHolder<T,ANN> holder, Annotation ann) {
+            this.holder = holder;
+            this.ann = ann;
+        }
+    }
+    
     public FlexEq() {
         rule(IntegerInRange.class,false,Integer.class,intRangeRule);
     }
     
+    /**
+     * Defines a comparison rule. Only one per field will be considered. If there is more than one the choice
+     * is random. 
+     * @param ann annotation to look for
+     * @param nullPass if false, consider result false if either value is null -- this is the usual value
+     * @param type of field
+     * @param rule to invoke
+     */
     public <T,ANN> void rule(Class<? extends Annotation> ann, boolean nullPass, Class<T> type, Rule<T,ANN> rule) {
         map.put(ann,new RuleHolder<T,ANN>(ann,nullPass,rule,type));
     }
@@ -98,6 +117,12 @@ public class FlexEq {
         }
     }
     
+    /**
+     * Compare and if false then print diff to stderr.
+     * @param x
+     * @param y
+     * @return true iff deep equals except where custom rules apply
+     */
     public boolean apxOut(Object x, Object y) {
         Output output = apx(x,y);
         if (!output.result) {
@@ -106,6 +131,12 @@ public class FlexEq {
         return output.result;
     }
     
+    /**
+     * Compare two values.
+     * @param x
+     * @param y
+     * @return boolean result and string diff
+     */
     public Output apx(Object x, Object y) {
         StringBuffer sb = new StringBuffer();
         sb.append("///////////////////////\n");
@@ -120,91 +151,143 @@ public class FlexEq {
     }
 
     private boolean apx(StringBuffer sb, int pos, Field fd, Object x, Object y) throws IllegalArgumentException, IllegalAccessException {
+        BoundRule<?,?> boundRule = findRuleDefinedOn(fd);
         boolean rez = true;
         if (x==null && y==null) {
-            one(sb,pos,fd,null);
+            normal(sb,pos,fd,null);
         }
-        else if (x==null && y != null) {
-            pair(sb,pos,fd,null,y);
-            rez = false;
-        }
-        else if (x != null && y==null) {
-            pair(sb,pos,fd,x,null);
-            rez = false;
+        else if (x==null || y==null) {
+            if (boundRule != null && !boundRule.holder.nullPass) {
+                rez = false;
+            }
+            else {
+                // Check right away so we don't have to worry about nulls after this point
+                rez = Boolean.TRUE.equals(checkUserSuppliedEquals(boundRule,x,y));
+            }
+            if (!rez) {
+                miss(sb,pos,fd,x,y);
+            }
         }
         else {
-            
             Class<?> xc = x.getClass();
             Class<?> yc = y.getClass();
             if (!xc.equals(yc)) {
                 rez = false;
             }
             else {
-                if (x instanceof Collection) {
+                if (xc.isArray()) {
+                    Object[] xa = (Object[])x;
+                    Object[] ya = (Object[])y;
+                    rez = compareArrays(sb,pos,fd,xa,ya);
+                }
+                else if (x instanceof Collection) {
                     Collection<?> xs = (Collection<?>)x;
                     Collection<?> ys = (Collection<?>)y;
-                    int xSize = xs.size();
-                    int ySize = ys.size();
-                    if (xSize != ySize) {
-                        // TBD print
-                        return false;
-                    }
-                    else {
-                        Iterator<?> itr = ys.iterator();
-                        for (Object nextX: xs) {
-                            Object nextY = itr.next();
-                            rez &= apx(sb,pos+1,null,nextX,nextY);
-                        }
-                    }
+                    rez = compareCollections(sb,pos,fd,xs,ys);
                 }
-                else if (xc.getPackage().getName().startsWith("java.")) {
-                    rez = compJavaLibObjects(sb,pos,fd,x,y);
+                else if (xc.getPackage().getName().startsWith("java.") || boundRule != null) {
+                    rez = compareDirectly(sb,pos,fd,boundRule,x,y);
                 }
                 else {
-                    one(sb,pos,fd,'{');
+                    normal(sb,pos,fd,'{');
                     Field[] xfs = xc.getDeclaredFields();
                     Field[] yfs = yc.getDeclaredFields();
                     for (int i=0; i<xfs.length; i++) {
                         rez &= compareField(sb,pos+2,x,xfs[i],y,yfs[i],xc);
                     }
-                    one(sb,pos,null,'}');
+                    normal(sb,pos,null,'}');
                 }
             }
         }
         return rez;
     }
 
-    private boolean compJavaLibObjects(StringBuffer sb, int pos, Field fd, Object x, Object y) {
-        Boolean eq = checkUserSuppliedEquals(fd,x,y);
+    private static class Say {
+        final int size;
+        @Override public String toString() {
+            return "<size="+size+'>';
+        }
+        Say(int size) {
+            this.size = size;
+        }
+    }
+    
+    private boolean compareCollections(StringBuffer sb, int pos, Field fd, Collection<?> xs, Collection<?> ys)
+            throws IllegalAccessException {
+        boolean rez = true;
+        int xSize = xs.size();
+        int ySize = ys.size();
+        if (xSize != ySize) {
+            miss(sb,pos,fd,new Say(xSize),new Say(ySize));
+            rez = false;
+        }
+        else {
+            Iterator<?> itr = ys.iterator();
+            for (Object nextX: xs) {
+                Object nextY = itr.next();
+                rez &= apx(sb,pos+1,null,nextX,nextY);
+            }
+        }
+        return rez;
+    }
+
+    private boolean compareArrays(StringBuffer sb, int pos, Field fd, Object[]xa, Object[]ya)
+            throws IllegalAccessException {
+        boolean rez = true;
+        int xSize = xa.length;
+        int ySize = ya.length;
+        if (xSize != ySize) {
+            miss(sb,pos,fd,new Say(xSize),new Say(ySize));
+            rez = false;
+        }
+        else {
+            for (int i=0; i<xSize; i++) {
+                Object nextX = xa[i];
+                Object nextY = ya[i];
+                rez &= apx(sb,pos+1,null,nextX,nextY);
+            }
+        }
+        return rez;
+    }
+
+    private boolean compareDirectly(StringBuffer sb, int pos, Field fd, BoundRule<?,?> boundRule, Object x, Object y) {
+        Boolean eq = checkUserSuppliedEquals(boundRule,x,y);
         if (eq==null) {
             eq = Objects.equals(x,y);
         }
         if (eq) {
-            one(sb,pos,fd,x);
+            normal(sb,pos,fd,x);
         }
         else {
-            pair(sb,pos,fd,x,y);
+            miss(sb,pos,fd,x,y);
         }
         return eq;
     }
-
-    private Boolean checkUserSuppliedEquals(Field fd, Object x, Object y) {
+    
+    private BoundRule<?,?> findRuleDefinedOn(Field fd) {
         if (fd != null) {
             Annotation[] anns = fd.getAnnotations();
             for (Annotation ann: anns) {
                 RuleHolder<?,?> holder = map.get(ann.annotationType());
                 if (holder != null) {
-                    Class<?>type = holder.paramType;
-                    try {
-                        Method method = holder.rule.getClass().getMethod("eq",type,type,holder.ann);
-                        Object[] args = {x,y,ann};
-                        Object methodResult = method.invoke(holder.rule,args);
-                        return (Boolean)methodResult;
-                    }
-                    catch (Exception e) {
-                        throw new RuntimeException("Couldn't invoke 'eq' method on rule",e);
-                    }
+                    return new BoundRule<>(holder,ann);
                 }
+            }
+        }
+        return null;
+    }
+
+    private Boolean checkUserSuppliedEquals(BoundRule<?,?> boundRule, Object x, Object y) {
+        if (boundRule != null) {
+            Class<?>type = boundRule.holder.paramType;
+            try {
+                Method method = boundRule.holder.rule.getClass().getMethod("eq",type,type,boundRule.holder.ann);
+                Object[] args = {x,y,boundRule.ann};
+                Object methodResult = method.invoke(boundRule.holder.rule,args);
+                return (Boolean)methodResult;
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Couldn't invoke 'eq' method on rule",e);
             }
         }
         return null;
@@ -222,16 +305,16 @@ public class FlexEq {
         return rez;
     }
 
-    private void pair(StringBuffer sb, int pos, Field fd, Object x, Object y) {
-        one('+',sb,pos,fd,x);
-        one('-',sb,pos,fd,y);
+    private void miss(StringBuffer sb, int pos, Field fd, Object x, Object y) {
+        oneLine('+',sb,pos,fd,x);
+        oneLine('-',sb,pos,fd,y);
     }
     
-    private void one(StringBuffer sb, int pos, Field fd, Object x) {
-        one(' ',sb,pos,fd,x);
+    private void normal(StringBuffer sb, int pos, Field fd, Object x) {
+        oneLine(' ',sb,pos,fd,x);
     }
     
-    private void one(char c, StringBuffer sb, int pos, Field fd, Object x) {
+    private void oneLine(char c, StringBuffer sb, int pos, Field fd, Object x) {
         sb.append(c);
         tab(sb,2 + pos*2 - 1);
         if (fd != null) {
