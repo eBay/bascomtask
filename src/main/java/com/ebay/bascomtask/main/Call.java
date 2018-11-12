@@ -279,8 +279,10 @@ class Call {
          * @return
          */
         void scoreIncoming(TaskMethodClosure closure) {
-            if (longestIncoming==null || longestIncoming.getDurationMs() > longestIncoming.getDurationMs()) {
-                longestIncoming = closure;
+            if (closure != null) {
+                if (longestIncoming==null || closure.getDurationMs() > longestIncoming.getDurationMs()) {
+                    longestIncoming = closure;
+                }
             }
         }
 

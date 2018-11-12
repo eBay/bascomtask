@@ -21,35 +21,33 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
+import com.ebay.bascomtask.flexeq.FlexEq;
+
+/**
+ * Expresses timing results from profiling.
+ * 
+ * @author bremccarthy
+ */
 public class TaskStat {
     
     public List<Graph> graphs = new ArrayList<>();
     public List<Segment> tasks = new ArrayList<>();
     public int nonReportableOrchestrations;
-    
-    @Override
-    public boolean equals(Object o) {
-        if (this==o) return true;
-        if (o instanceof TaskStat) {
-            TaskStat that = (TaskStat)o;
-            if (Objects.equals(this.graphs,that.graphs)) return false;
-            return true;
-        }
-        return false;
-    }
-    
-    @Override
-    public int hashCode() {
-        return Objects.hash(graphs,tasks,nonReportableOrchestrations);
-    }
-    
+
     public static abstract class Timing {
         public int called;
+        
+        @FlexEq.LongInRange(20)
         public long aggregateTime;
+        
+        @FlexEq.LongInRange(20)
         public long minTime;
+        
+        @FlexEq.LongInRange(20)
         public long avgTime;
+        
+        @FlexEq.LongInRange(20)
         public long maxTime;
         
         public Timing called(int called) {
@@ -81,33 +79,6 @@ public class TaskStat {
             this.maxTime = timing.maxTime;
         }
         
-        /* 
-         * Uses non-strict comparison for time-related values.
-         */
-        @Override
-        public boolean equals(Object o) {
-            if (this==o) return true;
-            if (o instanceof Timing) {
-                Timing that = (Timing)o;
-                if (this.called!=that.called) return false;
-                if (!inRange(this.aggregateTime,that.aggregateTime)) return false;
-                if (!inRange(this.minTime,that.minTime)) return false;
-                if (!inRange(this.avgTime,that.avgTime)) return false;
-                if (!inRange(this.maxTime,that.maxTime)) return false;
-                return true;
-            }
-            return false;
-        }
-        
-        private boolean inRange(long v1, long v2) {
-            return Math.abs(v1-v2) < 20;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(called,aggregateTime,minTime,avgTime,maxTime);
-        }
-        
         void update(long duration) {
             called++;
             aggregateTime += duration;
@@ -120,6 +91,9 @@ public class TaskStat {
         }
     }
     
+    /**
+     * The combined results from operations on orchestrators with the same name.
+     */
     static public class Graph {
         public String name;
         private Map<String,Path> paths = new HashMap<>();
@@ -156,22 +130,6 @@ public class TaskStat {
             return path;
         }
         
-        @Override
-        public boolean equals(Object o) {
-            if (this==o) return true;
-            if (o instanceof Graph) {
-                Graph that = (Graph)o;
-                if (!Objects.equals(this.name,that.name)) return false;
-                if (!Objects.equals(this.paths,that.paths)) return false;
-                return true;
-            }
-            return false;
-        }
-        @Override
-        public int hashCode() {
-            return Objects.hash(name,paths);
-        }
-
         public Graph copy() {
             Graph graph = new Graph();
             graph.name = this.name;
@@ -183,6 +141,18 @@ public class TaskStat {
         }
     }
     
+    /**
+     * An ordered list of task segments within an orchestrator graph each connected by dependency.
+     * Every node in a graph constitutes at least one path, and if it has inputs it will be the
+     * endpoint in multiple paths. For example, a diamond would have 5 paths:
+     * <ul>
+     * <li> Top
+     * <li> Top-Left
+     * <li> Top-Right
+     * <li> Top-Left-Bottom
+     * <li> Top-Right-Bottom
+     * </ul>
+     */
     static public class Path extends Timing {
         public String name;
         public List<Segment> segments = new ArrayList<>();
@@ -204,48 +174,20 @@ public class TaskStat {
             }
             return path;
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this==o) return true;
-            if (!super.equals(o)) return false;
-            if (o instanceof Path) {
-                Path that = (Path)o;
-                if (!Objects.equals(this.name,that.name)) return false;
-                if (!Objects.equals(this.segments,that.segments)) return false;
-                return true;
-            }
-            return false;
-        }
-        @Override
-        public int hashCode() {
-            return Objects.hash(name,segments);
-        }
     }
     
+    /**
+     * Timings for a task in a graph. Every path has at least one segment. 
+     * Only root tasks will have only one segment.
+     */
     static public class Segment extends Timing {
         public String task;
         
-        @Override
-        public boolean equals(Object o) {
-            if (this==o) return true;
-            if (!super.equals(o)) return false;
-            if (o instanceof Segment) {
-                Segment that = (Segment)o;
-                if (!Objects.equals(this.task,that.task)) return false;
-                return true;
-            }
-            return false;
-        }
         public Segment copy() {
             Segment segment  = new Segment();
             segment.task = task;
             segment.setFrom(this);
             return segment;
-        }
-        @Override
-        public int hashCode() {
-            return Objects.hash(task);
         }
     }
     

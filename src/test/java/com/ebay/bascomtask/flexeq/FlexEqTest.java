@@ -14,14 +14,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 **************************************************************************/
-package com.ebay.bascomtask.main;
+package com.ebay.bascomtask.flexeq;
 
 import static org.junit.Assert.*;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.ElementType.FIELD;
@@ -176,6 +178,11 @@ public class FlexEqTest {
         f1.bars.get(0).x--; // restore equality
         f1.addBar(11);  // Lists now different size
         assertFalse(feq.apxOut(f1,f2));
+        
+        f2.addBar(11);
+        assertTrue(feq.apxOut(f1,f2));
+        f2.addBar(13);  // Make list 2 longer than list 1
+        assertFalse(feq.apxOut(f1,f2));
     }
     
     @Test
@@ -208,7 +215,40 @@ public class FlexEqTest {
     @Retention(RUNTIME)
     @Target({METHOD,FIELD})
     @interface NullMismatch {
-    }    
+    }
+    
+    @Test
+    public void testMap() {
+        FlexEq feq = new FlexEq();
+
+        class Foo {
+            Map<Integer,OneInt> bars = new HashMap<>();
+            
+            void addBar(int x) {
+                OneInt oneInt = new OneInt();
+                oneInt.x = x;
+                bars.put(x,oneInt);
+            }
+        }
+        
+        Foo f1 = new Foo();
+        f1.addBar(3);
+        f1.addBar(7);
+        
+        Foo f2 = new Foo();
+        f2.addBar(3);
+        f2.addBar(7);
+        
+        assertTrue(feq.apxOut(f1,f2));
+        f1.bars.get(7).x++; // force inequality
+        assertFalse(feq.apxOut(f1,f2));
+        
+        f1.bars.get(7).x--; // restore equality
+        f1.addBar(11);  // Maps now different size
+        assertFalse(feq.apxOut(f1,f2));
+    }
+    
+    
     
     @Test
     public void testNullPass() {
@@ -234,6 +274,32 @@ public class FlexEqTest {
         
         f2.oneInt = new OneInt();
         assertFalse(feq.apxOut(f1,f2));
-
     }
+    
+    @Test
+    public void testSuper() {
+        FlexEq feq = new FlexEq();
+        
+        class Base {
+            int b;
+        }
+        
+        class Sub extends Base {
+            int s;
+        }
+        
+        Sub sub1 = new Sub();
+        sub1.b = 1;
+        sub1.s = 99;
+        
+        Sub sub2 = new Sub();
+        sub2.b = sub1.b;
+        sub2.s = sub1.s;
+        
+        assertTrue(feq.apxOut(sub1,sub2));
+        sub2.b++;
+        assertFalse(feq.apxOut(sub1,sub2));
+        
+    }
+    
 }

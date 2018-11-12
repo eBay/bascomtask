@@ -65,30 +65,30 @@ public class StatKeeper {
             if (path.segments.isEmpty()) {
                 populate(path.segments,closure);
             }
+            else {
+                apply(path.segments,0,closure);    
+            }
             
             long duration = closure.getLongestDuration();
             path.update(duration);
-
-            apply(path.segments,0,closure);
         }
     }
 
     private void populate(List<TaskStat.Segment> segments, TaskMethodClosure closure) {
         if (closure != null) {
             TaskStat.Segment segment = new TaskStat.Segment();
-            segments.add(segment);
-            segment.update(closure.getLongestDuration());
             segment.task = closure.getMethodFormalSignature(); 
             populate(segments,closure.getLongestIncoming());
+            segments.add(segment);
+            segment.update(closure.getDurationMs());
         }
     }
 
     private void apply(List<Segment> segments, int pos, TaskMethodClosure closure) {
         if (closure != null) {
+            apply(segments,pos+1,closure.getLongestIncoming());
             TaskStat.Segment segment = segments.get(pos);
-            segment.update(closure.getLongestDuration());
-            closure = closure.getLongestIncoming();
-            apply(segments,pos+1,closure);
+            segment.update(closure.getDurationMs());
         }
     }
 }

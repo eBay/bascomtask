@@ -257,7 +257,7 @@ public class Orchestrator {
     /**
      * Creates a new Orchestrator. New Orchestrator instances are typically created anew
      * for each unit of work, and this is the standard way to create one. 
-     * @return
+     * @return empty and read-to-use Orchestrator
      */
     public static Orchestrator create() {
         return new Orchestrator();
@@ -267,7 +267,7 @@ public class Orchestrator {
     
     /**
      * Returns an object for reporting stats across all orchestrators.
-     * @return
+     * @return stat profiling object
      */
     public static StatKeeper stat() {
         synchronized (Orchestrator.class) {

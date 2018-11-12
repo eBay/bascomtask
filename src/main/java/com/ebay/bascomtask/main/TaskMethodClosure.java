@@ -377,8 +377,12 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     }
     
     String getLongestIncomingPath() {
-        // TBO
+        // 
+        // TBO -- replace with tree lookup of these values rather than continuously creating strings on every invocation
+        //
         String s = longestIncoming == null ? "" : longestIncoming.getLongestIncomingPath() + '>';
-        return s + callInstance.taskInstance.getName();
+        Call call = callInstance.getCall();
+        String sig = call.signature();
+        return s + sig;
     }
 }
