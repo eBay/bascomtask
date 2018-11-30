@@ -85,6 +85,7 @@ class Call {
     }
 
     void add(Param param) {
+        signature = null; // Force recompute
         params.add(param);
     }
 
@@ -494,6 +495,11 @@ class Call {
         }
     }
 
+    /**
+     * Cache signature since does not change after params added
+     */
+    private String signature = null;
+
     Call(Task task, Method method, Scope scope, boolean light) {
         this.task = task;
         this.method = method;
@@ -510,21 +516,31 @@ class Call {
     static String format(Method method) {
         return method == null ? "<<no-method>>" : method.getName();
     }
-
+    
     String signature() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(task.getName());
-        sb.append('.');
-        sb.append(format(method));
-        sb.append('(');
-        boolean first = true;
-        for (Param next : params) {
-            if (!first)
-                sb.append(',');
-            first = false;
-            sb.append(next.getTypeName());
+        if (signature==null) {
+            signature = constructSignature();
         }
-        sb.append(')');
+        return signature; 
+    }
+    
+    private String constructSignature() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(task==null?"???":task.getName());
+        if (method != null) {
+            // If no method, pojo was added without task method so just print task
+            sb.append('.');
+            sb.append(format(method));
+            sb.append('(');
+            boolean first = true;
+            for (Param next : params) {
+                if (!first)
+                    sb.append(',');
+                first = false;
+                sb.append(next.getTypeName());
+            }
+            sb.append(')');
+        }
         return sb.toString();
     }
 

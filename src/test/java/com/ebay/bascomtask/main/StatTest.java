@@ -23,12 +23,10 @@ import org.junit.Test;
 
 import com.ebay.bascomtask.annotations.Work;
 import com.ebay.bascomtask.flexeq.FlexEq;
-import com.ebay.bascomtask.flexeq.FlexEq.Output;
-import com.ebay.bascomtask.main.TaskStat.Graph;
 
 
 /**
- * Tests related to TaskStat profile.
+ * Tests TaskStat profiling
  * 
  * @author brendanmccarthy
  */
@@ -44,7 +42,7 @@ public class StatTest {
      * this class involve relative timings.
      */
     private class Sleeper {
-        public void sleep(long delay) {
+        void sleep(long delay) {
             try {
                 Thread.sleep(delay);
             }
@@ -53,39 +51,36 @@ public class StatTest {
             }
         }
     }
-    
-    private class PathTimer {
-        private final TaskStat.Path path;
-        PathTimer(TaskStat.Path path) {
-            this.path = path;
+
+    private class SleepChild extends Sleeper {
+        private final long time;
+        SleepChild(long time) {
+            this.time = time;
         }
-        PathTimer step(String segmentName, long time) {
-            path.segment(segmentName).update(time);
-            return this;
+        void sleep() {
+            sleep(time);
         }
     }
     
-    /**
-     * Utility to add a path with a return result that enables segments to be added fluent style 
-     * @param graph
-     * @param name
-     * @param time
-     * @return temp object on which step() can be called
-     */
-    private PathTimer pathTime(Graph graph, String name, long time) {
-        TaskStat.Path path = graph.path(name);
-        path.update(time);
-        return new PathTimer(path);
+    TaskStat.Path createExpectedPath(TaskStat.Graph graph, String...segments) {
+        TaskStat.Path path = graph.path();
+        for (String next: segments) {
+            path.segment(next);
+        }
+        return path;
     }
     
-    private final static String SEP = ">";
-    
+    private void updateExpectedPath(TaskStat.Path path, long...vs) {
+        for (int i=0; i< vs.length; i++) {
+            path.segments.get(i).update(vs[i]);
+        }
+    }
+
     @Test
     public void testOne() {
         final int TIME = 100;
         class A extends Sleeper {
             final static String SEGMENT = "A.exec()";
-            final static String PATH = SEGMENT;
             @Work public void exec() {
                 System.out.println("HIT");
                 sleep(TIME);
@@ -100,144 +95,258 @@ public class StatTest {
         
         TaskStat exp = new TaskStat();
         TaskStat.Graph graph = exp.graph(ORC_NAME);
-        TaskStat.Path path = graph.path(A.PATH);
+        TaskStat.Path path = graph.path(); //A.PATH);
         
         TaskStat.Segment segment = path.segment(A.SEGMENT);
         path.called = segment.called = 1;
+        path.minTime = segment.minTime = TIME;
         path.aggregateTime = path.maxTime = segment.aggregateTime = segment.maxTime = TIME;
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
     }
-    
-    @Test
-    public void testTwoSeparate() {
-        final int TIME = 100;
-        class A extends Sleeper {
+
+    class TwoSeparate {
+        class A extends SleepChild {
             final static String SEGMENT = "A.exec()";
-            final static String PATH = SEGMENT;
+            A(long time) {super(time);}
             @Work public void exec() {
-                sleep(TIME);
+                sleep();
             }
         }
-        class B extends Sleeper {
+        class B extends SleepChild {
             final static String SEGMENT = "B.exec()";
-            final static String PATH = SEGMENT;
+            B(long time) {super(time);}
             @Work public void exec() {
-                sleep(TIME);
+                sleep();
             }
         }
-        final String ORC_NAME = "foo";
-        Orchestrator orc = Orchestrator.create().name(ORC_NAME);
-        orc.addWork(new A());
-        orc.addWork(new B());
-        orc.execute();
-
-        TaskStat got = Orchestrator.stat().getStats();        
         
-        TaskStat exp = new TaskStat();
-        TaskStat.Graph graph = exp.graph(ORC_NAME);
+        final String orcName;
+        final TaskStat.Graph graph;
         
-        pathTime(graph,A.PATH,TIME).step(A.SEGMENT,TIME);
-        pathTime(graph,B.PATH,TIME).step(B.SEGMENT,TIME);
+        // Possible paths in this graph
+        final TaskStat.Path aPath;
+        final TaskStat.Path bPath;
         
-        FlexEq feq = new FlexEq();
-        assertTrue(feq.apxOut(exp,got));
-    }
-
-    @Test
-    public void testTwoPath() {
-        final int TIME = 100;
-        class A extends Sleeper {
-            final static String SEGMENT = "A.exec()";
-            final static String PATH = SEGMENT;
-            @Work public void exec() {
-                sleep(100);
-            }
+        TwoSeparate(TaskStat exp, String orcName) {
+            this.orcName = orcName;
+            graph = exp.graph(orcName);
+            aPath = createExpectedPath(graph,A.SEGMENT);
+            bPath = createExpectedPath(graph,B.SEGMENT);
         }
-        class B extends Sleeper {
-            final static String SEGMENT = "B.exec(A)";
-            final static String PATH = A.PATH + SEP + SEGMENT;
-            @Work public void exec(A a) {
-                sleep(100);
-            }
+        
+        void run(long aTime, long bTime) {
+            Orchestrator orc = Orchestrator.create().name(orcName);
+            orc.addWork(new A(aTime));
+            orc.addWork(new B(bTime));
+            orc.execute();
+            updateExpectedPath(aPath,aTime);
+            updateExpectedPath(bPath,bTime);
+            aPath.update(aTime);
+            bPath.update(bTime);
         }
-        final String ORC_NAME = "foo";
-        Orchestrator orc = Orchestrator.create().name(ORC_NAME);
-        orc.addWork(new A());
-        orc.addWork(new B());
-        orc.execute();
-
-        TaskStat got = Orchestrator.stat().getStats();        
         
-        TaskStat exp = new TaskStat();
-        TaskStat.Graph graph = exp.graph(ORC_NAME);
-        
-        pathTime(graph,A.PATH,TIME).step(A.SEGMENT,TIME);
-        pathTime(graph,B.PATH,TIME*2).step(A.SEGMENT,TIME).step(B.SEGMENT,TIME);
-        
-        FlexEq feq = new FlexEq();
-        assertTrue(feq.apxOut(exp,got));
-        
-        Output z = feq.apx(exp,got);
-        System.out.println(z.outline);
+        void setExpectAFirst() {
+            graph.getPaths().set(0,aPath);
+            graph.getPaths().set(1,bPath);
+        }
+        void setExpectBFirst() {
+            graph.getPaths().set(0,bPath);
+            graph.getPaths().set(1,aPath);
+        }
     }
     
     @Test
-    public void testDiamond() {
-        class A extends Sleeper {
-            final static String SEGMENT = "A.exec()";
-            final static String PATH = SEGMENT;
-            final static long TIME = 0;
-            @Work public void exec() {
-            }
-        }
-        class B extends Sleeper {
-            final static String SEGMENT = "B.exec(A)";
-            final static String PATH = A.PATH + SEP + SEGMENT;
-            final static long TIME = 200;
-            @Work public void exec(A a) {
-                System.out.println("This-B");
-                sleep(TIME);
-            }
-        }
-        class C extends Sleeper {
-            final static String SEGMENT = "C.exec(A)";
-            final static String PATH = A.PATH + SEP + SEGMENT;
-            final static long TIME = 100;
-            @Work public void exec(A a) {
-                sleep(TIME);
-            }
-        }
-        class D extends Sleeper {
-            final static String SEGMENT = "D.exec(B,C)";
-            final static String PATHB = B.PATH + SEP + SEGMENT;
-            final static long TIME = 0;
-            @Work public void exec(B b, C c) {
-                System.out.println("This-D");
-            }
-        }
-        final String ORC_NAME = "foo";
-        Orchestrator orc = Orchestrator.create().name(ORC_NAME);
-        orc.addWork(new A());
-        orc.addWork(new B());
-        orc.addWork(new C());
-        orc.addWork(new D());
-        orc.execute();
-
-        TaskStat got = Orchestrator.stat().getStats();        
-        
+    public void testTwoSeparateAFirst() {
         TaskStat exp = new TaskStat();
-        TaskStat.Graph graph = exp.graph(ORC_NAME);
+        TwoSeparate twoSep = new TwoSeparate(exp,"foo");
+        twoSep.run(200,100);
+        twoSep.setExpectAFirst();
+
+        TaskStat got = Orchestrator.stat().getStats();
+
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(exp,got));
+    }    
+
+    @Test
+    public void testTwoSeparateBFirst() {
+        TaskStat exp = new TaskStat();
+        TwoSeparate twoSep = new TwoSeparate(exp,"foo");
+        twoSep.run(100,200);
+        twoSep.setExpectBFirst();
+
+        TaskStat got = Orchestrator.stat().getStats();
+
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(exp,got));
+        System.out.println(feq.apx(exp,got).outline);
+    }    
+
+    class TwoPath {
+        class A extends SleepChild {
+            final static String SEGMENT = "A.exec()";
+            A(long time) {super(time);}
+            @Work public void exec() {
+                sleep();
+            }
+        }
+        class B extends SleepChild {
+            final static String SEGMENT = "B.exec(A)";
+            B(long time) {super(time);}
+            @Work public void exec(A a) {
+                sleep();
+            }
+        }
         
-        pathTime(graph,A.PATH,A.TIME).step(A.SEGMENT,A.TIME);
-        pathTime(graph,B.PATH,A.TIME+B.TIME).step(A.SEGMENT,A.TIME).step(B.SEGMENT,B.TIME);
-        pathTime(graph,C.PATH,A.TIME+C.TIME).step(A.SEGMENT,A.TIME).step(C.SEGMENT,C.TIME);
-        pathTime(graph,D.PATHB,A.TIME+B.TIME+D.TIME).step(A.SEGMENT,A.TIME).step(B.SEGMENT,B.TIME).step(D.SEGMENT,D.TIME);
+        final String orcName;
+        final TaskStat.Graph graph;
         
+        // Possible paths in this graph
+        final TaskStat.Path only;
+        
+        TwoPath(TaskStat exp, String orcName) {
+            this.orcName = orcName;
+            graph = exp.graph(orcName);
+            only = createExpectedPath(graph,A.SEGMENT,B.SEGMENT);
+        }
+        
+        void run(TaskStat.Path path, long aTime, long bTime) {
+            Orchestrator orc = Orchestrator.create().name(orcName);
+            orc.addWork(new A(aTime));
+            orc.addWork(new B(bTime));
+            orc.execute();
+            updateExpectedPath(path,aTime,bTime);
+            path.update(aTime+bTime);
+        }
+    }
+
+    @Test
+    public void testTwoPathOnce() {
+        TaskStat exp = new TaskStat();
+        TwoPath twoPath = new TwoPath(exp,"foo");
+        twoPath.run(twoPath.only,100,100);
+
+        TaskStat got = Orchestrator.stat().getStats();
+
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
         
         System.out.println(feq.apx(exp,got).outline);
+    }
+    
+    @Test
+    public void testTwoPathMulti() {
+        TaskStat exp = new TaskStat();
+        TwoPath twoPath = new TwoPath(exp,"foo");
+        twoPath.run(twoPath.only,100,100);
+        twoPath.run(twoPath.only,100,100);
+        twoPath.run(twoPath.only,100,100);
+
+        TaskStat got = Orchestrator.stat().getStats();
+
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(exp,got));
+        
+        System.out.println(feq.apx(exp,got).outline);
+    }
+    
+    @Test
+    public void testDiamondLeft() {
+        TaskStat exp = new TaskStat();
+        Diamond d = new Diamond(exp,"foo");
+        d.run(d.left,200,100);
+        d.run(d.right,100,200);
+        d.run(d.left,200,100);
+        d.run(d.right,0,50);
+        d.run(d.left,200,100);
+        d.setExpectLeftFirst();
+
+        TaskStat got = Orchestrator.stat().getStats();
+
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(exp,got));
+        
+        System.out.println(feq.apx(exp,got).outline);
+    }
+    
+    @Test
+    public void testDiamondRight() {
+        TaskStat exp = new TaskStat();
+        Diamond d = new Diamond(exp,"foo");
+        d.run(d.left,200,100);
+        d.run(d.right,100,200);
+        d.run(d.right,200,400);
+        d.setExpectRightFirst();
+
+        TaskStat got = Orchestrator.stat().getStats();
+
+        FlexEq feq = new FlexEq();
+        assertTrue(feq.apxOut(exp,got));
+        
+        System.out.println(feq.apx(exp,got).outline);
+    }
+    
+    class Diamond {
+        class Top extends Sleeper {
+            final static String SEGMENT = "Top.exec()";
+            @Work public void exec() {
+            }
+        }
+        class Left extends SleepChild {
+            final static String SEGMENT = "Left.exec(Top)";
+            Left(long time) {super(time);}
+            @Work public void exec(Top top) {
+                sleep();
+            }
+        }
+        class Right extends SleepChild {
+            final static String SEGMENT = "Right.exec(Top)";
+            Right(long time) {super(time);}
+            @Work public void exec(Top top) {
+                sleep();
+            }
+        }
+        class Bottom extends Sleeper {
+            final static String SEGMENT = "Bottom.exec(Left,Right)";
+            @Work public void exec(Left x, Right y) {
+            }
+        }
+        
+        final String orcName;
+        final TaskStat.Graph graph;
+        
+        // Possible paths in this graph
+        final TaskStat.Path right;
+        final TaskStat.Path left;
+        
+        Diamond(TaskStat exp, String orcName) {
+            this.orcName = orcName;
+            graph = exp.graph(orcName);
+            left = createExpectedPath(graph,Top.SEGMENT,Left.SEGMENT,Bottom.SEGMENT);
+            right = createExpectedPath(graph,Top.SEGMENT,Right.SEGMENT,Bottom.SEGMENT);
+        }
+        
+        void run(TaskStat.Path path, final long leftTime, final long rightTime) {
+            Orchestrator orc = Orchestrator.create().name(orcName);
+            orc.addWork(new Top());
+            orc.addWork(new Left(leftTime));
+            orc.addWork(new Right(rightTime));
+            orc.addWork(new Bottom());
+            orc.execute();
+            long time = Math.max(leftTime,rightTime);
+            updateExpectedPath(path,0,time,0);
+            path.update(time);
+        }
+        
+        void setExpectLeftFirst() {
+            graph.getPaths().set(0,left);
+            graph.getPaths().set(1,right);
+        }
+        void setExpectRightFirst() {
+            graph.getPaths().set(0,right);
+            graph.getPaths().set(1,left);
+        }
     }
 }

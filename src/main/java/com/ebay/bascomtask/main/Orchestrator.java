@@ -1522,6 +1522,11 @@ public class Orchestrator {
 
             TaskMethodClosure originalClosureToInvoke = closureToInvoke;
             closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
+            if (originalClosureToInvoke.isEndPath()) {
+                StatKeeper keeper = Orchestrator.stat();
+                // Invoked in this non-synchronized method so that any synchronization it does will not lead to race condition
+                keeper.record(this,originalClosureToInvoke);
+            }
             invokeAndFinish(closureToInvoke,context,true);
             Object[] followArgs = callInstance.popSequential();
             if (followArgs != null) {
@@ -1622,10 +1627,15 @@ public class Orchestrator {
             inv = executeTasks(newTaskInstances,"nested",null);
         }
         List<Call.Param.Instance> backList = taskOfCallInstance.backList;
-        String cmsg = complete ? "" : "in";
-        int sz = backList.size();
-        String plural = sz != 1 ? "s" : "";
-        LOG.debug("On {}complete exit from {} eval {} backLink{} ",cmsg,callInstance,backList.size(),plural);
+        int backSize = backList.size();
+        if (backSize==0) {
+            firing.setIsEndPath();
+        }
+        if (LOG.isDebugEnabled()) {
+            String cmsg = complete ? "" : "in";
+            String plural = backSize != 1 ? "s" : "";
+            LOG.debug("On {}complete exit from {} eval {} backLink{} ",cmsg,callInstance,backSize,plural);
+        }
         inv = continueOrSpawn(taskOfCallInstance,firing,"back",inv);
         return inv;
     }

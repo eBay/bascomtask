@@ -16,79 +16,41 @@ limitations under the License.
 **************************************************************************/
 package com.ebay.bascomtask.main;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import com.ebay.bascomtask.main.TaskStat.*;
+import java.util.Map.Entry;
 
 public class StatKeeper {
-    private Map<String,Graph> trackers = new HashMap<>();
+    private Map<String,PathTree> trackers = new HashMap<>();
 
     public synchronized void reset() {
         trackers.clear();
     }
 
-    /*
-    private Comparator<TaskMethodClosure> comparator = new Comparator<TaskMethodClosure>() {
-        @Override
-		public int compare(TaskMethodClosure c1, TaskMethodClosure c2) {
-			long t1 = c1.getDurationMs();
-			long t2 = c2.getDurationMs();
-			return t1==t2 ? 0 : t1<t2 ? -1 : 1;
-		}        
-    };
-    */
-    
-    public TaskStat getStats() {
+    public synchronized TaskStat getStats() {
         TaskStat stat = new TaskStat();
-        stat.graphs = new ArrayList<>();
-        for (Graph next: trackers.values()) {
-            stat.graphs.add(next.copy());
+
+        for (Entry<String,PathTree> next: trackers.entrySet()) {
+            String orcName = next.getKey();
+            TaskStat.Graph graph = new TaskStat.Graph(orcName);
+            stat.graphs.add(graph);
+            PathTree tree = next.getValue();
+            tree.populate(graph);
         }
+        
         return stat;
     }
     
     synchronized void record(Orchestrator orc, TaskMethodClosure closure) {
+        System.out.println("Record " + orc.getName());
         String name = orc.getName();
         if (name != null) {
-            Graph graph = trackers.get(name);
-            if (graph == null) {
-                graph = new Graph();
-                graph.name = name;
-                trackers.put(name,graph);
+            PathTree basePathTree = trackers.get(name);
+            if (basePathTree == null) {
+                basePathTree = new PathTree(null,null);
+                trackers.put(name,basePathTree);
             }
-
-            String pathName = closure.getLongestIncomingPath();
-            TaskStat.Path path = graph.ensurePath(pathName);
-            if (path.segments.isEmpty()) {
-                populate(path.segments,closure);
-            }
-            else {
-                apply(path.segments,0,closure);    
-            }
-            
-            long duration = closure.getLongestDuration();
-            path.update(duration);
-        }
-    }
-
-    private void populate(List<TaskStat.Segment> segments, TaskMethodClosure closure) {
-        if (closure != null) {
-            TaskStat.Segment segment = new TaskStat.Segment();
-            segment.task = closure.getMethodFormalSignature(); 
-            populate(segments,closure.getLongestIncoming());
-            segments.add(segment);
-            segment.update(closure.getDurationMs());
-        }
-    }
-
-    private void apply(List<Segment> segments, int pos, TaskMethodClosure closure) {
-        if (closure != null) {
-            apply(segments,pos+1,closure.getLongestIncoming());
-            TaskStat.Segment segment = segments.get(pos);
-            segment.update(closure.getDurationMs());
+            basePathTree.record(closure);
         }
     }
 }

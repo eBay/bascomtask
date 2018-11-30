@@ -251,8 +251,6 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
                 this.kind = kind;
                 try {
                     returned = executeTaskMethod();
-                    StatKeeper keeper = Orchestrator.stat();
-                    keeper.record(orc,this);
                     orc.validateProvided(taskInstance);
                 }
                 catch (Exception e) {
@@ -384,5 +382,22 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
         Call call = callInstance.getCall();
         String sig = call.signature();
         return s + sig;
+    }
+    
+    /**
+     * Has completed and has no dependents?
+     */
+    private boolean isEndPath = false;
+
+    public void setIsEndPath() {
+        isEndPath = true;
+    }
+    
+    /**
+     * Indicates that this closure is a full path.
+     * @return true iff completed and has no dependents.
+     */
+    public boolean isEndPath() {
+        return isEndPath;
     }
 }
