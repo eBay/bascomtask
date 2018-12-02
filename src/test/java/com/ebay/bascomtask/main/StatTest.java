@@ -34,7 +34,7 @@ public class StatTest {
 
     @Before
     public void before() {
-        Orchestrator.stat().reset();
+        Orchestrator.stat().clear();
     }
 
     /**
@@ -91,7 +91,7 @@ public class StatTest {
         orc.addWork(new A());
         orc.execute();
 
-        TaskStat got = Orchestrator.stat().getStats();        
+        TaskStat got = Orchestrator.stat().getThenClearStats();        
         
         TaskStat exp = new TaskStat();
         TaskStat.Graph graph = exp.graph(ORC_NAME);
@@ -164,7 +164,7 @@ public class StatTest {
         twoSep.run(200,100);
         twoSep.setExpectAFirst();
 
-        TaskStat got = Orchestrator.stat().getStats();
+        TaskStat got = Orchestrator.stat().getThenClearStats();
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
@@ -177,7 +177,7 @@ public class StatTest {
         twoSep.run(100,200);
         twoSep.setExpectBFirst();
 
-        TaskStat got = Orchestrator.stat().getStats();
+        TaskStat got = Orchestrator.stat().getThenClearStats();
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
@@ -228,7 +228,7 @@ public class StatTest {
         TwoPath twoPath = new TwoPath(exp,"foo");
         twoPath.run(twoPath.only,100,100);
 
-        TaskStat got = Orchestrator.stat().getStats();
+        TaskStat got = Orchestrator.stat().getThenClearStats();
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
@@ -244,7 +244,7 @@ public class StatTest {
         twoPath.run(twoPath.only,100,100);
         twoPath.run(twoPath.only,100,100);
 
-        TaskStat got = Orchestrator.stat().getStats();
+        TaskStat got = Orchestrator.stat().getThenClearStats();
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
@@ -263,7 +263,7 @@ public class StatTest {
         d.run(d.left,200,100);
         d.setExpectLeftFirst();
 
-        TaskStat got = Orchestrator.stat().getStats();
+        TaskStat got = Orchestrator.stat().getThenClearStats();
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));
@@ -280,7 +280,7 @@ public class StatTest {
         d.run(d.right,200,400);
         d.setExpectRightFirst();
 
-        TaskStat got = Orchestrator.stat().getStats();
+        TaskStat got = Orchestrator.stat().getThenClearStats();
 
         FlexEq feq = new FlexEq();
         assertTrue(feq.apxOut(exp,got));

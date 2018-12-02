@@ -40,7 +40,7 @@ class PathTree {
     /**
      * Our predecessor 
      */
-    private final PathTree root;
+    private final PathTree pred;
     
     /**
      * Each node can have ann number of children, however we optimize since most
@@ -65,14 +65,21 @@ class PathTree {
     
     PathTree(Call call, PathTree root) {
         this.call = call;
-        this.root = root;
+        this.pred = root;
     }
     
     @Override
     public String toString() {
         if (call==null) return "PATH";
         // Not efficient, but only expecting to be called during debugging
-        return root.toString() + ">" + call.signature();
+        return pred.toString() + ">" + call.signature();
+    }
+    
+    PathTree getRoot() {
+        if (pred==null) {
+            return this;
+        }
+        return pred.getRoot();
     }
     
     /**
@@ -82,9 +89,9 @@ class PathTree {
      */
     PathTree find(TaskMethodClosure closure) {
         PathTree tree = this;
-        TaskMethodClosure pred = closure.getLongestIncoming();
-        if (pred != null) {
-            tree = find(pred);
+        TaskMethodClosure longestIncoming = closure.getLongestIncoming();
+        if (longestIncoming != null) {
+            tree = find(longestIncoming);
         }
         return tree.more(closure);
     }
@@ -138,14 +145,14 @@ class PathTree {
     
     private int walk(TaskMethodClosure closure, PathTree leaf, int depth) {
         int pos = 0;
-        TaskMethodClosure pred = closure.getLongestIncoming();
-        if (pred == null) {
+        TaskMethodClosure longestIncoming = closure.getLongestIncoming();
+        if (longestIncoming == null) {
             if (leaf.path.segments == null) {
                 leaf.path.segments = new ArrayList<>(depth);
             }
         }
         else {
-            pos = root.walk(pred,leaf,depth+1);
+            pos = pred.walk(longestIncoming,leaf,depth+1);
         }
         TaskStat.Segment segment;
         if (leaf.path.segments.size() <= pos) {
@@ -159,10 +166,6 @@ class PathTree {
         long duration = closure.getDurationMs();
         segment.update(duration);
         return pos+1;
-    }
-    
-    synchronized TaskStat.Graph stat() {
-        return null;
     }
     
     private static Comparator<TaskStat.Path> ascendingAvgTimecomparator = new Comparator<TaskStat.Path>() {
@@ -204,13 +207,6 @@ class PathTree {
      */
     TaskStat.Path getPath() {
         return path;
-    }
-
-    int getNumberOfDirectChildren() {
-        if (firstMethod == null) return 0;
-        if (secondMethod == null) return 1;
-        if (map == null) return 2;
-        return map.size() + 2;
     }
 }
 

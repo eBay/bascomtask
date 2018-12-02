@@ -143,7 +143,13 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     void initCall(final Call.Instance callInstance, final Object[] args, TaskMethodClosure longestIncoming) {
         this.callInstance = callInstance;
         this.pojoTargetTask = callInstance.taskInstance.targetPojo;
-        this.longestIncoming = longestIncoming;
+        if (longestIncoming != null) {
+            // Null-method closures reflect POJOs added to the graph but not executed. Avoid recording them
+            // because they always produce zero-valued timing results and just add noise to the profiling graph.
+            if (longestIncoming.getCallInstance().getCall().getMethod() != null) {
+                this.longestIncoming = longestIncoming;    
+            }
+        }
         if (args == null) {
             this.args = null;
         }
@@ -217,6 +223,14 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
 
     public long getDurationMs() {
         return durationMs;
+    }
+
+    /**
+     * Usually set internally. Visible for test.
+     * @param durationMs
+     */
+    void setDurationMs(long durationMs) {
+        this.durationMs = durationMs;
     }
 
     public long getDurationNs() {
@@ -372,16 +386,6 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
             result += longestIncoming.getLongestDuration();
         }
         return result;
-    }
-    
-    String getLongestIncomingPath() {
-        // 
-        // TBO -- replace with tree lookup of these values rather than continuously creating strings on every invocation
-        //
-        String s = longestIncoming == null ? "" : longestIncoming.getLongestIncomingPath() + '>';
-        Call call = callInstance.getCall();
-        String sig = call.signature();
-        return s + sig;
     }
     
     /**

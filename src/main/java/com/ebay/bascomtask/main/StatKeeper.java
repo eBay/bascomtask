@@ -23,11 +23,33 @@ import java.util.Map.Entry;
 public class StatKeeper {
     private Map<String,PathTree> trackers = new HashMap<>();
 
-    public synchronized void reset() {
+    public synchronized void clear() {
         trackers.clear();
     }
-
+    
+    /**
+     * Gets profiling stats.
+     * @return stats since last clear
+     */
     public synchronized TaskStat getStats() {
+        return createStatsFrom(trackers);
+    }
+
+    /**
+     * Gets profiling stats and clears current values.
+     * Minimizes synchronization window.
+     * @return stats since last clear
+     */
+    public TaskStat getThenClearStats() {
+        Map<String,PathTree> copy;
+        synchronized (this) {
+            copy = trackers;
+            trackers = new HashMap<>();
+        }
+        return createStatsFrom(copy);
+    }
+        
+    private static TaskStat createStatsFrom(Map<String,PathTree> trackers) {
         TaskStat stat = new TaskStat();
 
         for (Entry<String,PathTree> next: trackers.entrySet()) {
@@ -41,6 +63,12 @@ public class StatKeeper {
         return stat;
     }
     
+    /**
+     * Records one execution path traced from the given closure and its longest 
+     * incoming closure, recursively.
+     * @param orc
+     * @param closure
+     */
     synchronized void record(Orchestrator orc, TaskMethodClosure closure) {
         System.out.println("Record " + orc.getName());
         String name = orc.getName();

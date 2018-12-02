@@ -149,7 +149,7 @@ public class ConfigTest {
     @Test
     public void testClosureMethodsValid() {
         class Holder {
-            TaskMethodClosure closure;
+            List<TaskMethodClosure> closures = new ArrayList<>();
         }
         final Holder holder = new Holder();
 
@@ -175,30 +175,72 @@ public class ConfigTest {
             }
         }
 
+        class Bar2 {
+            @Work
+            public void gobar(Foo foo, Bar bar) {
+                try {
+                    Thread.sleep(BAR_DURATION);
+                }
+                catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                ;
+            }
+        }
+        
         Orchestrator orc = Orchestrator.create().closureGenerator(new ITaskClosureGenerator() {
             @Override
             public TaskMethodClosure getClosure() {
-                holder.closure = new TaskMethodClosure();
-                return holder.closure;
+                TaskMethodClosure closure = new TaskMethodClosure(); 
+                holder.closures.add(closure);
+                return closure;
             }
         }).name("ORK");
 
         Foo foo = new Foo();
         Bar bar = new Bar();
+        Bar2 bar2 = new Bar2();
         orc.addWork(foo);
         final String BAR_NAME = "Green";
         orc.addWork(bar).name(BAR_NAME);
+        orc.addWork(bar2);
         orc.execute();
-        TaskMethodClosure closure = holder.closure;
-        assertNotNull(closure);
-        assertTrue(closure.getMethodName().equals("gobar"));
-        assertThat(closure.getMethodActualSignature(),containsString(FOO_NAME));
-        assertSame(foo,closure.getActualArgument(0));
-        assertThat(closure.getMethodFormalSignature(),containsString(Foo.class.getSimpleName()));
-        assertSame(bar,closure.getTargetPojoTask());
-        assertEquals(BAR_NAME,closure.getTaskName());
-        assertThat(closure.getDurationMs(),is(greaterThanOrEqualTo(BAR_DURATION)));
-        assertThat(closure.getDurationNs(),is(greaterThan(closure.getDurationMs())));
+
+        TaskMethodClosure fooClosure = null;
+        TaskMethodClosure barClosure = null;
+        TaskMethodClosure bar2Closure = null;
+
+        for (TaskMethodClosure next: holder.closures) {
+            if (next.getTargetPojoTask()==foo) {
+                fooClosure = next;
+            }
+            if (next.getTargetPojoTask()==bar) {
+                barClosure = next;
+            }
+            if (next.getTargetPojoTask()==bar2) {
+                bar2Closure = next;
+            }
+        }
+        
+        assertNotNull(fooClosure);
+        assertNotNull(barClosure);
+        assertNotNull(bar2Closure);
+        
+        assertEquals(0,fooClosure.getNumberOfActualArguments());
+        
+        assertTrue(barClosure.getMethodName().equals("gobar"));
+        assertThat(barClosure.getMethodActualSignature(),containsString(FOO_NAME));
+        assertEquals(1,barClosure.getNumberOfActualArguments());
+        assertSame(foo,barClosure.getActualArgument(0));
+        assertThat(barClosure.getMethodFormalSignature(),containsString(Foo.class.getSimpleName()));
+        assertSame(bar,barClosure.getTargetPojoTask());
+        assertEquals(BAR_NAME,barClosure.getTaskName());
+        assertThat(barClosure.getDurationMs(),is(greaterThanOrEqualTo(BAR_DURATION)));
+        assertThat(barClosure.getDurationNs(),is(greaterThan(barClosure.getDurationMs())));
+        
+        assertEquals(2,bar2Closure.getNumberOfActualArguments());
+        assertSame(foo,bar2Closure.getActualArgument(0));
+        assertSame(bar,bar2Closure.getActualArgument(1));
     }
 
     @Test

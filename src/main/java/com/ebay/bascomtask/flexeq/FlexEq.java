@@ -359,6 +359,7 @@ public class FlexEq {
             if (xValue==null) {
                 Member fm = new FauxMember(yKey,null);
                 oneLine('-',sb,pos,fm,yValue);
+                rez = false;
             }
         }        
         return rez;

@@ -25,22 +25,11 @@ import java.util.Map;
 import com.ebay.bascomtask.flexeq.FlexEq;
 
 /**
- * Expresses timing results from profiling.
+ * Timing results from profiling.
  * 
  * @author bremccarthy
  */
 public class TaskStat {
-    
-    /*
-    private Comparator<TaskMethodClosure> comparator = new Comparator<TaskMethodClosure>() {
-        @Override
-		public int compare(TaskMethodClosure c1, TaskMethodClosure c2) {
-			long t1 = c1.getDurationMs();
-			long t2 = c2.getDurationMs();
-			return t1==t2 ? 0 : t1<t2 ? -1 : 1;
-		}        
-    };
-    */
     
     public List<Graph> graphs = new ArrayList<>();
     public List<Segment> tasks = new ArrayList<>();
@@ -57,40 +46,9 @@ public class TaskStat {
         
         @FlexEq.LongInRange(40)
         public long maxTime;
-        
-        public Timing called(int called) {
-            this.called = called;
-            return this;
-        }
-        public Timing agg(long agg) {
-            this.aggregateTime = agg;
-            return this;
-        }
-        public Timing min(long min) {
-            this.minTime = min;
-            return this;
-        }
-        /*
-        public Timing avg(long avg) {
-            this.avgTime = avg;
-            return this;
-        }
-        */
-        public Timing max(long max) {
-            this.maxTime = max;
-            return this;
-        }
-        
+
         public long getAvgTime() {
             return aggregateTime / called;
-        }
-        
-        void setFrom(Timing timing) {
-            this.called = timing.called;
-            this.aggregateTime = timing.aggregateTime;
-            this.minTime = timing.minTime;
-            //this.avgTime = timing.avgTime;
-            this.maxTime = timing.maxTime;
         }
         
         void update(long duration) {
@@ -102,13 +60,6 @@ public class TaskStat {
             if (duration > maxTime) {
                 maxTime = duration;
             }
-        }
-        
-        Segment segmentFrom(String task, Timing timing) {
-            Segment segment = new Segment(task);
-            //segment.task = task;
-            segment.setFrom(timing);
-            return segment;
         }
     }
     
@@ -124,61 +75,14 @@ public class TaskStat {
         }
         
         public List<Path> getPaths() {
-            //return paths.values();
             return paths;
         }
-        
-        public void setPaths(Collection<Path> paths) {
-            if (paths==null) {
-                this.paths.clear();
-            }
-            else {
-                for (Path next: paths) {
-                    //this.paths.put(next.name,next);
-                    this.paths.add(next);
-                }
-            }
-        }
-        
-        /*
-        Path ensurePath(String name) {
-            Path path = paths.get(name);
-            if (path == null) {
-                path = new Path();
-                path.name = name;
-                paths.put(name,path);
-            }
-            return path;
-        }
-        */
-        
+
         public Path path() {
             Path path = new Path();
             paths.add(path);
             return path;
         }
-        
-        /*
-        public Path path(String name) {
-            Path path = new Path();
-            path.name = name;
-            paths.put(name,path);
-            return path;
-        }
-        */
-        /*
-        public Graph copy() {
-            Graph graph = new Graph(this.name);
-            graph.paths = new ArrayList<>(this.paths);
-            /*
-            graph.paths = new HashMap<>();
-            for (Path next: this.paths.values()) {
-                graph.paths.put(next.name,next.copy());
-            }
-             *\/
-            return graph;
-        }
-    */
     }
     
     /**
@@ -194,28 +98,15 @@ public class TaskStat {
      * </ul>
      */
     static public class Path extends Timing {
-        //public String name;
-        public List<Segment> segments = null; // = new ArrayList<>();
+        public List<Segment> segments = null;
         
         public Segment segment(String task) {
             Segment segment = new Segment(task);
-            //segment.task = task;
             if (segments==null) {
                 segments = new ArrayList<>();
             }
             segments.add(segment);
             return segment;
-        }
-        
-        public Path copy() {
-            Path path = new Path();
-            //path.name = this.name;
-            path.setFrom(this);
-            path.segments = new ArrayList<>();
-            for (Segment next: segments) {
-                path.segments.add(next.copy());
-            }
-            return path;
         }
     }
     
@@ -229,26 +120,14 @@ public class TaskStat {
         Segment(String task) {
             this.task = task;
         }
-        
-        public Segment copy() {
-            Segment segment  = new Segment(this.task);
-            //segment.task = task;
-            segment.setFrom(this);
-            return segment;
-        }
     }
     
     /**
      * Convenience method for tests.
      * @param name of graph
-     * @return existing or newly-created graph
+     * @return newly-created graph
      */
     Graph graph(String name) {
-        for (Graph next: graphs) {
-            if (next.name.equals(name)) {
-                return next;
-            }
-        }
         Graph graph = new Graph(name);
         graphs.add(graph);
         return graph;

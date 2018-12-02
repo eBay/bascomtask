@@ -246,6 +246,10 @@ public class FlexEqTest {
         f1.bars.get(7).x--; // restore equality
         f1.addBar(11);  // Maps now different size
         assertFalse(feq.apxOut(f1,f2));
+        
+        f2.addBar(11); // restore equality
+        f1.bars.clear();
+        assertFalse(feq.apxOut(f1,f2));
     }
     
     
