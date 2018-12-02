@@ -319,7 +319,7 @@ public class NestingTest extends PathTaskTestBase {
             }
         });
 
-        verify(2);
+        verify(2,3);
 
         sleep(LONG_WAIT + 15);
         assertTrue(record.taskLongWait.followed(record.taskShortWait));

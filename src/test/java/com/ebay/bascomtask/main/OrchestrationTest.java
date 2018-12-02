@@ -18,6 +18,10 @@ package com.ebay.bascomtask.main;
 
 import static org.junit.Assert.*;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+
+import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -66,6 +70,21 @@ public class OrchestrationTest extends PathTaskTestBase {
     }
 
     @Test
+    public void testTaskName() {
+        class A {}
+        Orchestrator orc = Orchestrator.create();
+        ITask task = orc.addWork(new A());
+        String nm = "foobarbaz";
+        assertSame(task.name(nm),task);
+        assertEquals(nm,task.getName());
+        assertThat(task.toString(),containsString(nm));
+        nm = "bazbarfoo";
+        assertSame(task.name(nm),task);
+        assertEquals(nm,task.getName());
+        assertThat(task.toString(),containsString(nm));
+    }
+
+    @Test
     public void test1SimpleActive() {
         class A extends PathTask {
             @Work
@@ -88,7 +107,27 @@ public class OrchestrationTest extends PathTaskTestBase {
         }
         A a = new A();
         PathTask taskA = track.passThru(a);
+        assertNotNull(taskA);
         verify(0);
+    }
+
+    @Test
+    public void testPassThruNoWork() {
+        class A extends PathTask {
+            boolean work = false;
+            boolean passThru = false;
+            @Work public void work() {
+                work = true;
+            }
+            @PassThru public void pass() {
+                passThru = true;
+            }
+        }
+        A a = new A();
+        PathTask taskA = track.passThru(a);
+        verify(0);
+        assertFalse(a.work);
+        assertTrue(a.passThru);
     }
 
     @Test(expected = InvalidTask.AlreadyAdded.class)
@@ -379,7 +418,32 @@ public class OrchestrationTest extends PathTaskTestBase {
             assertTrue(gs.contains(OnlyATestException.class.getSimpleName()));
         }
     }
-
+    
+    @Test(expected=OnlyATestException.class)
+    public void testExceptionStopsFiring() {
+        class A extends PathTask {
+            @Work void exec() {
+                throw new OnlyATestException("foo");
+            }
+        }
+        class B extends PathTask {
+            boolean hit = false;
+            @Work void exec(A a) {
+                hit = true;
+            }
+        }
+        A a = new A();
+        B b = new B();
+        PathTask taskA = track.work(a);
+        PathTask taskB = track.work(b);
+        try {
+            verify(0);
+        }
+        finally {
+            assertFalse(b.hit);
+        }
+    }
+    
     @Test
     public void testTwoExceptions() {
         class A extends PathTask {
@@ -464,7 +528,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         verify(3);
     }
 
-    @Test(expected = OnlyATestException.class)
+    @Test(expected = RuntimeGraphError.Multi.class)
     public void testMultiExceptionKeepA1() {
         testMultiException(false,true,true);
     }
@@ -477,6 +541,38 @@ public class OrchestrationTest extends PathTaskTestBase {
     @Test(expected = RuntimeGraphError.Multi.class)
     public void testMultiExceptionKeepNone() {
         testMultiException(true,true,true);
+    }
+    
+    /**
+     * Ensure exception in main thread behaves the same as exceptions in spawned threads
+     */
+    @Test(expected = OnlyATestException.class)
+    public void testMainThreadExceptionWaits() {
+        class A extends PathTask {
+            @Work
+            public void exec() {
+                throw new OnlyATestException();
+            }
+        }
+        class B extends PathTask {
+            boolean hit = false;
+            @Work
+            public void exec() {
+                sleep(50);
+                got();
+                hit = true;
+            }
+        }
+        A a = new A();
+        B b = new B();
+        PathTask taskA = track.work(a);
+        PathTask taskB = track.work(b).fork();
+        try {
+            verify(1);
+        }
+        finally {
+            assertTrue(b.hit);
+        }
     }
 
     @Test
@@ -562,6 +658,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         }
         A a = new A();
         PathTask taskA = track.ignoreTaskMethods(a);
+        assertNotNull(taskA);
         verify(0);
         assertFalse(a.hit);
     }
@@ -798,6 +895,18 @@ public class OrchestrationTest extends PathTaskTestBase {
         PathTask taskB = track.work(b).exp(a);
         verify(0);
     }
+    
+    @Test
+    public void testSetWait() {
+        class A {}
+        Orchestrator orc = Orchestrator.create();
+        ITask task = orc.addWork(new A());
+        assertTrue(task.isWait());
+        assertSame(task.noWait(),task);
+        assertFalse(task.isWait());
+        assertSame(task.wait(true),task);
+        assertTrue(task.isWait());
+    }
 
     @Test
     public void testParexStats() {
@@ -1015,6 +1124,33 @@ public class OrchestrationTest extends PathTaskTestBase {
     @Test
     public void testBothPathsExecuted() {
         testPathExecutedConditionally(true);
+    }
+
+    @Test(expected=RuntimeGraphError.Timeout.class)
+    public void testTimeout() {
+        class A extends PathTask {
+            @Work void exec() {
+                sleep(20);
+                got();
+            }
+        }
+        class B extends PathTask {
+            boolean hit = false;
+            @Work void exec(A a) {
+                hit = true;
+                got();
+            }
+        }
+        A a = new A();
+        B b = new B();
+        PathTask taskA = track.work(a);
+        PathTask taskB = track.work(b);
+        try {
+            track.orc.execute(5L);
+        }
+        finally {
+            assertFalse(b.hit);
+        }
     }
 
     private void testReturn(final boolean which) {

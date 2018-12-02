@@ -25,6 +25,7 @@
         <tag>master</tag>
         <url>https://github.com/eBay/bascomtask</url>
     </scm>
+    
     <developers>
         <developer>
             <id>bremccarthy</id>
