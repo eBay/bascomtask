@@ -93,7 +93,7 @@ public class FlexEq {
         boolean eq(T x, T y, ANN ann);
     }
     
-    private class RuleHolder<T,ANN> {
+    private static class RuleHolder<T,ANN> {
         final Class<? extends Annotation> ann;
         final Rule<T,ANN> rule;
         final Class<T> paramType;
@@ -106,7 +106,7 @@ public class FlexEq {
         }
     }
     
-    private class BoundRule<T,ANN> {
+    private static class BoundRule<T,ANN> {
         final RuleHolder<T,ANN> holder;
         final Annotation ann;
         BoundRule(RuleHolder<T,ANN> holder, Annotation ann) {
@@ -115,13 +115,13 @@ public class FlexEq {
         }
     }
     
-    abstract private class Member {
+    abstract static private class Member {
         abstract String getName();
         abstract Annotation[] getAnnotations();
         abstract Object getValue(Object owner);
     }
     
-    private class FieldMember extends Member {
+    private static class FieldMember extends Member {
         private final Field field;
         FieldMember(Field field) {
             this.field = field;

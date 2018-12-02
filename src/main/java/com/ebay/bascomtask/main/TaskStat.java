@@ -17,10 +17,7 @@ limitations under the License.
 package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.ebay.bascomtask.flexeq.FlexEq;
 
@@ -32,8 +29,6 @@ import com.ebay.bascomtask.flexeq.FlexEq;
 public class TaskStat {
     
     public List<Graph> graphs = new ArrayList<>();
-    public List<Segment> tasks = new ArrayList<>();
-    public int nonReportableOrchestrations;
 
     public static abstract class Timing {
         public int called = 0;
