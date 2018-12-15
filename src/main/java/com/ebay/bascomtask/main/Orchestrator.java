@@ -255,16 +255,16 @@ public class Orchestrator {
         return new Orchestrator(false);
     }
 
-    private static StatKeeper keeper = null;    
+    private static ProfilingTracker keeper = null;    
     
     /**
      * Returns an object for reporting stats across all orchestrators.
      * @return stat profiling object
      */
-    public static StatKeeper stat() {
+    public static ProfilingTracker stat() {
         synchronized (Orchestrator.class) {
             if (keeper == null) {
-                keeper = new StatKeeper();
+                keeper = new ProfilingTracker();
             }
         }
         return keeper;
@@ -1487,8 +1487,8 @@ public class Orchestrator {
 
                 TaskMethodClosure originalClosureToInvoke = closureToInvoke;
                 closureToInvoke = processPostExecution(rec,callInstance,taskOfCallInstance,closureToInvoke);
-                if (originalClosureToInvoke.isEndPath()) {
-                    StatKeeper keeper = Orchestrator.stat();
+                if (originalClosureToInvoke.isEndPath() && config.isProfilerActive()) {
+                    ProfilingTracker keeper = Orchestrator.stat();
                     // Invoked in this non-synchronized method so that any synchronization it does will not lead to race condition
                     keeper.record(this,originalClosureToInvoke);
                 }
@@ -1514,16 +1514,18 @@ public class Orchestrator {
     private void setForRollBack(TaskMethodClosure closureToInvoke) {
         Call.Instance callInstance = closureToInvoke.getCallInstance();
         if (!isRollBack) {
-            if (rollback == null) {
-                rollback = new Orchestrator(true);
-            }
-            ITask rollBackTask = rollback.add(closureToInvoke.getTargetPojoTask(),TaskMethodBehavior.ROLLBACK);
-            Iterator<Call.Param.Instance> itr = callInstance.iterator();
-            while (itr.hasNext()) {
-                Call.Param.Instance next = itr.next();
-                List<TaskMethodClosure> alreadyExecuted = next.bindings;
-                for (TaskMethodClosure prev : alreadyExecuted) {
-                    rollBackTask.before(prev.getTargetPojoTask());
+            synchronized (this) {
+                if (rollback == null) {
+                    rollback = new Orchestrator(true);
+                }
+                ITask rollBackTask = rollback.add(closureToInvoke.getTargetPojoTask(),TaskMethodBehavior.ROLLBACK);
+                Iterator<Call.Param.Instance> itr = callInstance.iterator();
+                while (itr.hasNext()) {
+                    Call.Param.Instance next = itr.next();
+                    List<TaskMethodClosure> alreadyExecuted = next.bindings;
+                    for (TaskMethodClosure prev : alreadyExecuted) {
+                        rollBackTask.before(prev.getTargetPojoTask());
+                    }
                 }
             }
         }

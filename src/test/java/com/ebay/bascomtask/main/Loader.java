@@ -28,6 +28,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author brendanmccarthy
  */
 public class Loader {
+    
+    private final boolean outputLineNumbers;
+    
+    /**
+     * @param outputLineNumbers should output include line numbers or not
+     */
+    public Loader(boolean outputLineNumbers) {
+        this.outputLineNumbers = outputLineNumbers;
+    }
 
     public interface Runner {
         void run() throws Exception;
@@ -35,7 +44,6 @@ public class Loader {
 
     private class Pass {
         final int pass;
-        // final int seconds;
         final double avg;
         final long tput;
 
@@ -101,7 +109,17 @@ public class Loader {
         passes.add(new Pass(runLoop,targetDurationSeconds,avg,throughput));
     }
 
-    private void runForEachThreadCount(int targetDurationSeconds, int maxThreadsPerLoop, Runner runner) {
+    /**
+     * Repeatedly invokes the target Runner in a loop for the specified
+     * duration. Within each loop, spawn the specified number of additional
+     * threads to also invoke Runner (without waiting for them to complete).
+     * 
+     * @param targetDurationSeconds how long to run for
+     * @param maxThreadsPerLoop how many threads to use -- if 1 then no
+     *            additional threads are used
+     * @param runner containing test code to invoke
+     */
+    public void run(int targetDurationSeconds, int maxThreadsPerLoop, Runner runner) {
 
         ExecutorService pool = Executors.newCachedThreadPool();
 
@@ -118,22 +136,12 @@ public class Loader {
             pool.shutdown();
         }
         for (Pass pass : passes) {
-            System.out.printf("%d,%.2f,%d%n",pass.pass,pass.avg,pass.tput);
+            if (outputLineNumbers) {
+                System.out.printf("%d,%.2f,%d%n",pass.pass,pass.avg,pass.tput);
+            }
+            else {
+                System.out.printf("%.2f,%d%n",pass.avg,pass.tput);
+            }
         }
-    }
-
-    /**
-     * Repeatedly invokes the target Runner in a loop for the specified
-     * duration. Within each loop, spawn the specified number of additional
-     * threads to also invoke Runner (without waiting for them to complete).
-     * 
-     * @param targetDurationSeconds how long to run for
-     * @param maxThreadsPerLoop how many threads to use -- if 1 then no
-     *            additional threads are used
-     * @param runner containing test code to invoke
-     */
-    public static void run(int targetDurationSeconds, int maxThreadsPerLoop, Runner runner) {
-        Loader loader = new Loader();
-        loader.runForEachThreadCount(targetDurationSeconds,maxThreadsPerLoop,runner);
     }
 }

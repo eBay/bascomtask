@@ -20,7 +20,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
-public class StatKeeper {
+/**
+ * Records path execution times and provides summary profiling data when profiler
+ * is active (true by default; can be overridden by returning false from
+ * {@link com.ebay.bascomtask.config.IBascomConfig#isProfilerActive}  
+ * 
+ * @author bremccarthy
+ */
+public class ProfilingTracker {
     private Map<String,PathTree> trackers = new HashMap<>();
 
     public synchronized void clear() {
@@ -70,7 +77,6 @@ public class StatKeeper {
      * @param closure
      */
     synchronized void record(Orchestrator orc, TaskMethodClosure closure) {
-        System.out.println("Record " + orc.getName());
         String name = orc.getName();
         if (name != null) {
             PathTree basePathTree = trackers.get(name);

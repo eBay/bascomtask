@@ -91,4 +91,11 @@ public interface IBascomConfig {
      * @return generator
      */
     ITaskClosureGenerator getExecutionHook(Orchestrator orc, String pass);
+    
+    /**
+     * Profiling is only active when this method returns true. Setting to false provides
+     * a minor performance advantage since the profiling data is never recorded.
+     * @return true iff profile is active
+     */
+    boolean isProfilerActive();
 }

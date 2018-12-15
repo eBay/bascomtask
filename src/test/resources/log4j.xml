@@ -9,7 +9,7 @@
 	</appender>
 	
 	<logger name="com.ebay">
-		<level value="DEBUG" />
+		<level value="INFO" />
 		<appender-ref ref="console" />
 	</logger>
 	

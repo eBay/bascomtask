@@ -183,4 +183,9 @@ public class DefaultBascomConfig implements IBascomConfig {
     public ITaskClosureGenerator getExecutionHook(Orchestrator orc, String pass) {
         return defaultTaskClosureGenerator;
     }
+
+    @Override
+    public boolean isProfilerActive() {
+        return true;  // Profile by default
+    }
 }

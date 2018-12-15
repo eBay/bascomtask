@@ -449,6 +449,9 @@ public class OrchestrationTest extends PathTaskTestBase {
         class A extends PathTask {
             @Work
             public void exec() {
+                // If one task runs too fast, orch may see the exception and prevent the other from running,
+                // but the point of this test is to run both tasks and generate an exception from each
+                sleep(10);  
                 throw new OnlyATestException();
             }
         }
@@ -551,7 +554,8 @@ public class OrchestrationTest extends PathTaskTestBase {
         class A extends PathTask {
             @Work
             public void exec() {
-                throw new OnlyATestException();
+                sleep(10); // Ensure enough time for B to run, because the exception we throw might prevent that
+                throw new OnlyATestException("tmtew");
             }
         }
         class B extends PathTask {
@@ -1626,11 +1630,11 @@ public class OrchestrationTest extends PathTaskTestBase {
         B b1 = new B();
         B b2 = new B();
         C c = new C();
-        PathTask taskA1 = track.work(a1);
-        PathTask taskA2 = track.work(a2);
-        PathTask taskB1 = track.work(b1);
-        PathTask taskB2 = track.work(b2);
-        PathTask taskC = track.work(c).exp(list(a1,a2),b1).exp(list(a1,a2),b2);
+        PathTask taskA1 = track.work(a1).name("a1");
+        PathTask taskA2 = track.work(a2).name("a2");
+        PathTask taskB1 = track.work(b1).name("b1");
+        PathTask taskB2 = track.work(b2).name("b2");
+        PathTask taskC = track.work(c).exp(list(a1,a2),b1).exp(list(a1,a2),b2).name("C");
         verify(2,4);
     }
 

@@ -28,7 +28,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 public class LoadTest {
 
     public static void main(String[] args) {
-        Loader.run(3,100,new Loader.Runner() {
+        new Loader(true).run(3,100,new Loader.Runner() {
             @Override
             public void run() throws Exception {
                 int r = loadDiamond();
@@ -47,10 +47,6 @@ public class LoadTest {
             Top(int v) {
                 this.v = v;
             }
-
-            @Work
-            public void exec() {
-            } // Not even really needed
         }
         class Left {
             private final int v;
@@ -92,7 +88,7 @@ public class LoadTest {
         orc.addWork(new Right(100));
         Bottom bottom = new Bottom();
         orc.addWork(bottom);
-        orc.execute(999999);
+        orc.execute();
         return bottom.out;
     }
 

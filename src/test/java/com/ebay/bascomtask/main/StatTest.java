@@ -22,6 +22,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.ebay.bascomtask.annotations.Work;
+import com.ebay.bascomtask.config.BascomConfigFactory;
+import com.ebay.bascomtask.config.DefaultBascomConfig;
+import com.ebay.bascomtask.config.IBascomConfig;
 import com.ebay.bascomtask.flexeq.FlexEq;
 
 
@@ -347,6 +350,34 @@ public class StatTest {
         void setExpectRightFirst() {
             graph.getPaths().set(0,right);
             graph.getPaths().set(1,left);
+        }
+    }
+
+    @Test
+    public void testProfilerOffWhenConfiguredThatWay() {
+        IBascomConfig config = BascomConfigFactory.getConfig();
+        BascomConfigFactory.setConfig(new DefaultBascomConfig() {
+            @Override
+            public boolean isProfilerActive() {
+                return false;
+            }
+        });
+        try {
+            class A extends Sleeper {
+                @Work public void exec() {
+                    sleep(20);
+                }
+            }
+            final String ORC_NAME = "foo";
+            Orchestrator orc = Orchestrator.create().name(ORC_NAME);
+            orc.addWork(new A());
+            orc.execute();
+
+            TaskStat got = Orchestrator.stat().getStats();
+            assertEquals(0,got.graphs.size());
+        }
+        finally {
+            BascomConfigFactory.setConfig(config);
         }
     }
 }

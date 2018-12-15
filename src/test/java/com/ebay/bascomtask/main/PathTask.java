@@ -213,7 +213,7 @@ abstract class PathTask {
         return this.timestamp > other.timestamp;
     }
 
-    PathTask got(PathTask... tasks) {
+    synchronized PathTask got(PathTask... tasks) {
         timestamp = System.nanoTime();
         if (tasks.length > 0) {
             List<PathTask.Arg> args = toArgs(tasks);
@@ -236,8 +236,9 @@ abstract class PathTask {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < os.size(); i++) {
             Object next = os.get(i);
-            if (i == 0)
+            if (i > 0) {
                 sb.append(',');
+            }
             sb.append(next.toString());
         }
         return sb.toString();
