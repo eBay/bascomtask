@@ -22,12 +22,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 import java.nio.channels.AsynchronousServerSocketChannel;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
+import com.ebay.bascomtask.annotations.Ordered;
 import com.ebay.bascomtask.annotations.PassThru;
 import com.ebay.bascomtask.annotations.Scope;
 import com.ebay.bascomtask.annotations.Work;
@@ -1341,7 +1343,170 @@ public class OrchestrationTest extends PathTaskTestBase {
         verify(1);
         assertEquals(2,b.maxNesting);
     }
+    
+    abstract class RootSleeper extends PathTask {
+        final int sleep;
+        private final int pos;
+        RootSleeper(int sleep, int pos) {this.sleep = sleep;this.pos = pos;}
+        @Override public String toString() {return getClass().getName() + "("+sleep+','+pos+')';}
+        @Work
+        public void exec() {
+            sleep(sleep);
+            got();
+        }
+    }
 
+    /**
+     * Runs with a root instance for each parameter which sleeps for the specified value,
+     * and ensures that they all arrive in insertion order independently of how long each
+     * slept for.
+     * 
+     * @param sleepValues
+     */
+    private void runOrderedParameter(int...sleepValues) {
+        init();
+        class A extends RootSleeper {
+            A(int sleep, int pos) {super(sleep,pos);}
+        }
+        class B extends ParTask {
+            final List<A> as = new ArrayList<>();
+            @Work
+            public synchronized void exec(@Ordered A a) {
+                got(a);
+                as.add(a);
+            }
+        }
+        
+        B b = new B();
+        PathTask taskB = track.work(b);
+        
+        final int nv = sleepValues.length;
+        final Object[] as = new Object[nv];
+
+        for (int i=0; i<nv; i++) {
+            A a = new A(sleepValues[i],i);
+            as[i] = a;
+            PathTask task = track.work(a).name(a.toString());
+            taskB = taskB.exp(a);
+        }
+
+        verify(nv-1,nv);
+
+        for (int i=0; i<nv; i++) {
+            assertSame(as[i],b.as.get(i));
+        }
+    }
+    
+    /**
+     * Tests that a task method with an @Ordered parameter always preserves insertion order. 
+     */
+    @Test
+    public void testOrderedParamater() {
+        runOrderedParameter(100);
+        runOrderedParameter(100,0);
+        runOrderedParameter(100,50,0);
+        runOrderedParameter(0,50,100);
+        runOrderedParameter(0,100,50);
+        runOrderedParameter(50,0,100,75);
+        runOrderedParameter(50,25,100,75,0);
+    }
+    
+    /**
+     * Tests ordering on multiple @Ordered parameters
+     */
+    @Test
+    public void testMulipleOrderedParameters() {
+        class FirstOrdered extends RootSleeper {
+            FirstOrdered(int sleep, int pos) {super(sleep,pos);}
+        }
+        class SecondOrdered extends RootSleeper {
+            SecondOrdered(int sleep, int pos) {super(sleep,pos);}
+        }
+        class NotOrdered extends PathTask {
+            @Work
+            public void exec() {
+                got();
+            }
+        }
+        class Combiner extends ParTask {
+            List<RootSleeper[]> gots = new ArrayList<>();
+            @Work
+            public synchronized void exec(@Ordered FirstOrdered first, NotOrdered no, @Ordered SecondOrdered second) {
+                System.out.println("Got first="+first+", second="+second);
+                gots.add(new RootSleeper[] {first,second});
+                got(first,no,second);
+            }
+        }
+        
+        FirstOrdered firstHigh = new FirstOrdered(100,0);
+        FirstOrdered firstLow = new FirstOrdered(0,1);
+        
+        SecondOrdered secondHigh = new SecondOrdered(100,0);
+        SecondOrdered secondMid = new SecondOrdered(50,0);
+        SecondOrdered secondLow = new SecondOrdered(0,0);
+        
+        PathTask taskAHigh = track.work(firstHigh).name("firstHigh");
+        PathTask taskALow = track.work(firstLow).name("firstLow");
+
+        PathTask taskCHigh = track.work(secondHigh).name("secondHigh");
+        PathTask taskCMid = track.work(secondMid).name("secondMid");        
+        PathTask taskCLow = track.work(secondLow).name("secondLow");
+        
+        PathTask noTask = track.work(new NotOrdered());
+        Combiner combiner = new Combiner();
+        PathTask taskB = track.work(combiner)
+                .exp(firstHigh,noTask,secondHigh)
+                .exp(firstHigh,noTask,secondMid)
+                .exp(firstHigh,noTask,secondLow)
+                .exp(firstLow,noTask,secondHigh)
+                .exp(firstLow,noTask,secondMid)
+                .exp(firstLow,noTask,secondLow);
+
+        verify(4,6);
+        
+        RootSleeper[] initial = combiner.gots.get(0);
+        assertSame(initial[0],firstHigh);
+        assertSame(initial[1],secondHigh);
+        
+        RootSleeper[] last = combiner.gots.get(combiner.gots.size()-1);
+        assertSame(last[0],firstLow);
+        assertSame(last[1],secondLow);
+    }
+
+    @Test
+    public void testOrderedListParameter() {
+        class A extends RootSleeper {
+            A(int sleep, int pos) {super(sleep,pos);}
+        }
+        class B {
+            List<A> as = null;
+            @Work
+            public synchronized void exec(@Ordered List<A> as) {
+                this.as = as;
+            }
+        }
+        
+        A aMid = new A(50,0);
+        A aHigh = new A(100,1);
+        A aLow = new A(0,2);
+
+        Orchestrator orc = Orchestrator.create();
+        orc.addWork(aMid).name("aMid");
+        orc.addWork(aHigh).name("aHigh");
+        orc.addWork(aLow).name("aLow");
+        
+        B b = new B();
+        orc.addWork(b);
+        
+        orc.execute();
+
+        assertSame(aMid,b.as.get(0));
+        assertSame(aHigh,b.as.get(1));
+        assertSame(aLow,b.as.get(2));
+    }
+    
+    
+    
     @Test
     public void testMulti2Sequence() {
         class A extends PathTask {

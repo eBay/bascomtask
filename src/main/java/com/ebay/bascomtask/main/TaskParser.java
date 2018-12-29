@@ -17,12 +17,14 @@ limitations under the License.
 package com.ebay.bascomtask.main;
 
 import java.util.List;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.ebay.bascomtask.annotations.Ordered;
 import com.ebay.bascomtask.annotations.PassThru;
 import com.ebay.bascomtask.annotations.Rollback;
 import com.ebay.bascomtask.annotations.Scope;
@@ -98,7 +100,7 @@ class TaskParser {
             method.setAccessible(true); // Methods need not be public, allowing
                                         // for local classes
             verifyAccess(method);
-            int index = 0;
+            Annotation[][] parameterAnns = method.getParameterAnnotations();
             Type[] genericParameterTypes = method.getGenericParameterTypes();
             Class<?>[] pt = method.getParameterTypes();
             for (int i = 0; i < method.getParameterTypes().length; i++) {
@@ -120,10 +122,16 @@ class TaskParser {
                             + nextMethodParamClass.getSimpleName());
                 }
                 Task paramTask = parse2(nextMethodParamClass);
-                Call.Param param = call.new Param(paramTask,index,isList);
+                boolean ordered = false;
+                for (Annotation next: parameterAnns[i]) {
+                    Class<? extends Annotation> at = next.annotationType();
+                    if (Ordered.class.isAssignableFrom(at)) {
+                        ordered = true;
+                    }
+                }
+                Call.Param param = call.new Param(paramTask,i,isList,ordered);
                 call.add(param);
                 paramTask.backLink(param);
-                index++; // Increment for all params whether task or not
             }
         }
     }

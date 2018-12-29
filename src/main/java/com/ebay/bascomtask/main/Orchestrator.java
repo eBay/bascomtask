@@ -1008,7 +1008,7 @@ public class Orchestrator {
                         // for anything having fired
                         TaskMethodClosure injectionClosure = new TaskMethodClosure();
                         injectionClosure.initCall(taskInstance);
-                        paramInstance.bindings.add(injectionClosure);
+                        paramInstance.addActual(injectionClosure);
                         callInstance.startingFreeze[i] = 1;
                     }
                     else {
@@ -1023,13 +1023,13 @@ public class Orchestrator {
                     if (numberAlreadyFired == 0) {
                         root = false;
                     }
-                    else if (paramInstance.getParam().isList && numberAlreadyFired < paramInstance.getThreshold()) {
+                    else if (paramInstance.getParam().accumulate() && numberAlreadyFired < paramInstance.getThreshold()) {
                         root = false;
                     }
                     // Add all tasks that have already fired
                     callInstance.startingFreeze[i] = numberAlreadyFired;
                     for (TaskMethodClosure fired : rec.fired) {
-                        paramInstance.bindings.add(fired);
+                        paramInstance.addActual(fired);
                     }
                 }
             }
@@ -1086,7 +1086,7 @@ public class Orchestrator {
                 backLink(next,paramInstance);
                 for (TaskMethodClosure fired : rec.fired) {
                     if (fired.getTargetPojoTask() == next.targetPojo) {
-                        paramInstance.bindings.add(fired);
+                        paramInstance.addActual(fired);
                         sz++;
                     }
                 }
@@ -1205,7 +1205,7 @@ public class Orchestrator {
                 boolean ccComplete = true;
                 for (Call.Param.Instance nextParam : nextCall) {
                     int pc = 0;
-                    if (nextParam.getParam().isList) {
+                    if (nextParam.getParam().accumulate()) {
                         pc = 1;
                     }
                     else if (isInjectable(nextParam)) {
@@ -1522,10 +1522,7 @@ public class Orchestrator {
                 Iterator<Call.Param.Instance> itr = callInstance.iterator();
                 while (itr.hasNext()) {
                     Call.Param.Instance next = itr.next();
-                    List<TaskMethodClosure> alreadyExecuted = next.bindings;
-                    for (TaskMethodClosure prev : alreadyExecuted) {
-                        rollBackTask.before(prev.getTargetPojoTask());
-                    }
+                    next.addBefore(rollBackTask);
                 }
             }
         }

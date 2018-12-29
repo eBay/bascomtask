@@ -54,7 +54,7 @@ class Call {
      * Marks a task method that should be fast so should be executed directly
      * when encountered rather than spawning a new thread for it.
      */
-    private final boolean light;
+    private boolean light;
 
     /**
      * Governs behavior when invoked multiple times.
@@ -226,7 +226,7 @@ class Call {
             }
             Param param = hiddenParamMap.get(task);
             if (param == null) {
-                param = new Param(task,-1,false);
+                param = new Param(task,-1,false,false);
                 hiddenParamMap.put(task,param);
             }
             Param.Instance paramInstance = param.new Instance(this);
@@ -307,8 +307,7 @@ class Call {
          * @param userTaskInstance instance of user's task
          * @param parameterIndex index of parameter that is being bound
          * @param pendingClosure current invocation, null if none
-         * @return same or possibly new invocation for the calling thread to
-         *         invoke
+         * @return same or possibly new invocation for the calling thread to invoke
          */
         TaskMethodClosure bind(Orchestrator orc, String context, Object userTaskInstance, TaskMethodClosure firing,
                 Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
@@ -325,25 +324,33 @@ class Call {
                 synchronized (this) {
                     scoreIncoming(firing);
                     ordinalOfFiringParameter = firingParameter.bindings.size();
-                    firingParameter.bindings.add(firing);
+                    if (firingParameter.getParam().isOrdered) {
+                        ordinalOfFiringParameter = firing.getCallInstance().getTaskInstance().getIndexInType();
+                        firingParameter.setActual(firing,ordinalOfFiringParameter);
+                        firing = firingParameter.bindings.get(0);
+                        ordinalOfFiringParameter = 0;
+                    }
+                    else {
+                        firingParameter.addActual(firing);
+                    }
                     for (Param.Instance next : paramInstances) {
                         if (!next.ready()) {
-                            return pendingClosure; // If not all parameters ready (non-list params
-                                                   // must have at least one binding), not ready to
-                                                   // execute call
+                            return pendingClosure; // If not all parameters ready (non-list params must have
+                                                   // at least one binding), not ready to execute call
                         }
                     }
                     if (hiddenParameters != null) {
                         for (Param.Instance next : hiddenParameters) {
                             if (!next.ready()) {
-                                return pendingClosure; // If not all hidden parameters ready, not
-                                                       // ready to execute call
+                                return pendingClosure; // If not all hidden parameters ready, not ready to execute call
                             }
                         }
                     }
                     freeze = new int[paramInstances.length];
                     for (int i = 0; i < paramInstances.length; i++) {
-                        freeze[i] = paramInstances[i].bindings.size();
+                        freeze[i] = paramInstances[i].bindings.size();  
+                        //freeze[i] = paramInstances[i].getParam().isOrdered ? 0 : paramInstances[i].bindings.size();  
+                        //freeze[i] = paramInstances[i].indexOfHighestDelivered; // .bindings.size();
                     }
                 }
             }
@@ -371,8 +378,7 @@ class Call {
         TaskMethodClosure crossInvoke(TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
             Object[] args = new Object[paramInstances.length];
-            return crossInvoke(0,args,true,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,
-                    context);
+            return crossInvoke(0,args,true,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context,false);
         }
 
         /**
@@ -382,13 +388,13 @@ class Call {
          */
         private TaskMethodClosure crossInvoke(int px, Object[] args, boolean fire, TaskMethodClosure firing,
                 TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter,
-                int ordinalOfFiringParameter, Orchestrator orc, String context) {
+                int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
             if (px == args.length) {
                 TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args,longestIncoming); // makes a copy of args!
                 if (!fire) {
                     orc.invokeAndFinish(newInvocation,"non-fire",false);
                 }
-                else if (light) {
+                else if (light || immediate) {
                     orc.invokeAndFinish(newInvocation,"light",fire);
                 }
                 else if (isNoWait() && orc.isCallingThread()) {
@@ -416,16 +422,29 @@ class Call {
                     // Don't change 'fire' value -- args only contains values
                     // that have fired; may even be empty but fire anyway
                     pendingClosure = crossInvoke(px + 1,args,fire,firing,pendingClosure,freeze,firingParameter,
-                            ordinalOfFiringParameter,orc,context);
-                }
-                else if (paramAtIndex == firingParameter) {
-                    pendingClosure = crossInvokeNext(px,args,fire,ordinalOfFiringParameter,firing,pendingClosure,freeze,
-                            firingParameter,ordinalOfFiringParameter,orc,context);
+                            ordinalOfFiringParameter,orc,context,immediate);
                 }
                 else {
-                    for (int i = 0; i < freeze[px]; i++) {
+                    int from = 0;
+                    int to = freeze[px];
+                    if (paramAtIndex == firingParameter) {
+                        if (paramAtIndex.getParam().isOrdered) {
+                            to = paramAtIndex.bindings.size();
+                            immediate = true;
+                            if (pendingClosure != null) {
+                                orc.spawn(pendingClosure);
+                                pendingClosure = null;
+                            }
+                        }
+                        else {
+                            from = ordinalOfFiringParameter;
+                            to = from+1;
+                        }
+                    }
+                    for (int i = from; i < to; i++) {
+                        firing = paramAtIndex.bindings.get(i);
                         pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
-                                ordinalOfFiringParameter,orc,context);
+                                ordinalOfFiringParameter,orc,context,immediate);
                     }
                 }
             }
@@ -450,13 +469,13 @@ class Call {
          */
         private TaskMethodClosure crossInvokeNext(int px, Object[] args, boolean fire, int bindingIndex,
                 TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
-                Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+                Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
             Param.Instance paramAtIndex = paramInstances[px];
             TaskMethodClosure paramClosure = paramAtIndex.bindings.get(bindingIndex);
             args[px] = paramClosure.getTargetPojoTask();
             boolean fireAtLevel = fire && paramClosure.getReturned();
             return crossInvoke(px + 1,args,fireAtLevel,firing,pendingClosure,freeze,firingParameter,
-                    ordinalOfFiringParameter,orc,context);
+                    ordinalOfFiringParameter,orc,context,immediate);
         }
 
         /**
@@ -550,16 +569,26 @@ class Call {
     class Param {
 
         final Task taskParam;
+
         /**
          * Ordinal position of this parameter
          */
-
         final int paramaterPosition;
+
         /**
-         * true iff List<X> rather than X
+         * True iff List<X> rather than X
          */
         final boolean isList;
-
+        
+        /**
+         * True if @Ordered
+         */
+        final boolean isOrdered;
+        
+        public boolean accumulate() {
+            return isList || isOrdered;
+        }
+        
         class Instance {
             /**
              * The call which contains this parameter
@@ -570,7 +599,15 @@ class Call {
              * The actual arguments in proper order, all of which will be POJOs
              * added to the orchestrator as tasks
              */
-            final List<TaskMethodClosure> bindings = new ArrayList<>();
+            private final List<TaskMethodClosure> bindings = new ArrayList<>();
+            
+            private int countOfReadyParamters = 0;
+            
+            /**
+             * The last parameter delivered -- to preserve @Ordered parameters, higher-indexed
+             * items are not delivered even though they have been added to {@link #bindings}
+             */
+            //private int indexOfHighestDelivered = -1;
 
             /**
              * All tasks, auto-wired and explicit/hidden, that backlist to this
@@ -609,8 +646,7 @@ class Call {
             }
 
             boolean ready() {
-                int bc = bindings.size();
-                return isList ? bc >= threshold : bc > 0;
+                return accumulate() ? countOfReadyParamters >= threshold : countOfReadyParamters > 0;
             }
 
             void bumpThreshold() {
@@ -643,13 +679,43 @@ class Call {
 
             void setExplicitlyWired() {
                 explicitlyWired = true;
-            }          
+            }
+            
+            void addActual(TaskMethodClosure closure) {
+                bindings.add(closure);
+                countOfReadyParamters++;
+            }
+
+            /**
+             * Sets an actual parameter at the specified position, filling in
+             * the list with nulls if necessary so that the list is big enough.
+             * @param closure to set
+             * @param pos in list
+             */
+            private void setActual(TaskMethodClosure closure, int pos) {
+                for (int i = bindings.size(); i<=pos; i++) {
+                    bindings.add(null);
+                }
+                bindings.set(pos,closure);
+                countOfReadyParamters++;
+            }
+
+            /**
+             * Adds a task to be executed before this one.
+             * @param task to add before
+             */
+            void addBefore(ITask task) {
+                for (TaskMethodClosure next: bindings) {
+                    task.before(next.getTargetPojoTask());
+                }
+            }
         }
 
-        Param(Task task, int parameterPosition, boolean isList) {
+        Param(Task task, int parameterPosition, boolean isList, boolean ordered) {
             this.taskParam = task;
             this.paramaterPosition = parameterPosition;
             this.isList = isList;
+            this.isOrdered = ordered;
         }
 
         Call getCall() {

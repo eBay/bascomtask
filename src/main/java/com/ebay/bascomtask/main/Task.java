@@ -174,6 +174,11 @@ class Task {
          */
         private List<Class<?>> providing = null;
 
+        /**
+         * Unique ordinal position of this instance among all instances of a given type for an orchestrator. 
+         */
+        private int indexInType = -1;
+
         Instance(Orchestrator orc, Object targetTask, TaskMethodBehavior taskMethodBehavior) {
             this.orc = orc;
             this.targetPojo = targetTask;
@@ -209,8 +214,14 @@ class Task {
             }
             throw new RuntimeException("Unexpected fall-thru");
         }
+        
+        int getIndexInType() {
+            return indexInType;
+        }
 
+        // TBR synchronized
         synchronized void setIndexInType(int indexInType) {
+            this.indexInType = indexInType;
             if (!userSuppliedName) {
                 // No conflict check here, since this should be unique and
                 // anyway would later be caught
