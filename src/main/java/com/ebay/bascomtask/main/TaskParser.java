@@ -67,7 +67,7 @@ class TaskParser {
     }
 
     private void parse(Task task) {
-        Class<?> cls = task.taskClass;
+        Class<?> cls = task.producesClass;
         do {
             for (Method method : cls.getDeclaredMethods()) {
                 parse(task,method);
@@ -99,7 +99,8 @@ class TaskParser {
         if (call != null) {
             method.setAccessible(true); // Methods need not be public, allowing
                                         // for local classes
-            verifyAccess(method);
+            //verifyAccess(method);
+            //Class<?> rt = method.getReturnType();
             Annotation[][] parameterAnns = method.getParameterAnnotations();
             Type[] genericParameterTypes = method.getGenericParameterTypes();
             Class<?>[] pt = method.getParameterTypes();
@@ -140,10 +141,12 @@ class TaskParser {
         return method.getDeclaringClass().getSimpleName() + "." + method.getName();
     }
 
+    /*
     private void verifyAccess(Method method) {
         Class<?> rt = method.getReturnType();
         if (rt != Void.TYPE && rt != Boolean.TYPE) {
             throw new InvalidTask.BadReturn("Task method " + mn(method) + " must return void or boolean");
         }
     }
+    */
 }

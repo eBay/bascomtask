@@ -43,18 +43,13 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
     private Object[] args;
 
     private Object pojoTargetTask;
+    private Object output;
 
     private String context;
     private String kind;
 
     private long durationMs;
     private long durationNs;
-
-    /**
-     * Defaults to true unless set otherwise, usually as a result of a task
-     * method returning false
-     */
-    private boolean returned = true;
 
     private boolean called = false;
 
@@ -75,14 +70,16 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
             return what + callInstance.formatState();
         }
     }
-
-    boolean getReturned() {
-        return returned;
+    
+    Object getOutput() {
+        return output;
     }
 
+    /*
     void setReturned(boolean which) {
         this.returned = which;
     }
+    */
 
     TaskMethodClosure getParent() {
         return parent;
@@ -140,7 +137,8 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
      * @param args
      * @param longestIncoming 
      */
-    void initCall(final Call.Instance callInstance, final Object[] args, TaskMethodClosure longestIncoming) {
+    void initCall(/*DataFlowSource.Instance source, */final Call.Instance callInstance, final Object[] args, TaskMethodClosure longestIncoming) {
+        //this.dataFlowSource = source;
         this.callInstance = callInstance;
         this.pojoTargetTask = callInstance.taskInstance.targetPojo;
         if (longestIncoming != null) {
@@ -243,8 +241,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
      * @param orc
      * @param context string for debug messages
      * @param fire if false, the actual task method will not be invoked
-     * @return false iff the java method returned a boolean false indicating
-     *         that the method should not fire
+     * @return result from target method
      */
     void invoke(Orchestrator orc, String context, boolean fire) {
         if (!ready()) {
@@ -265,13 +262,12 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
                 this.kind = kind;
                 // This call may safely generate an exception, which will be processed
                 // further up the chain.
-                returned = executeTaskMethod();
+                output = executeTaskMethod();
                 orc.validateProvided(taskInstance);
             }
         }
         else {
             LOG.debug("Skipping {} {} {}",context,kind,this);
-            returned = false;
         }
         // For Scope.SEQUENTIAL, only one thread will be active at a time, so it
         // is safe for all threads to just reset this to false.
@@ -308,10 +304,10 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
      * This method can be overridden but this super method should be invoked
      * from the overridden method to actually perform the call.
      * 
-     * @return boolean result of invoking task method
+     * @return Object of target method
      */
-    protected boolean executeTaskMethod() {
-        boolean returnValue = true;
+    protected Object executeTaskMethod() {
+        Object methodResult = null;
         long startMs = System.currentTimeMillis();
         long startNs = System.nanoTime();
         String msg = null;
@@ -321,10 +317,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
             threadStat.setActive(true);
             LOG.debug("Invoking {} {} on {}",context,kind,targetPojo);
             Method method = callInstance.getCall().getMethod();
-            Object methodResult = method.invoke(targetPojo,(Object[]) args);
-            if (Boolean.FALSE.equals(methodResult)) {
-                returnValue = false;
-            }
+            methodResult = method.invoke(targetPojo,(Object[]) args);
         }
         catch (InvocationTargetException e) {
             Throwable target = e.getTargetException();
@@ -349,7 +342,7 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
                 LOG.debug("Completed {} {} on {} in {}ms result: {}{}",context,kind,targetPojo,durationMs,rez,am);
             }
         }
-        return returnValue;
+        return methodResult;
     }
 
     /**

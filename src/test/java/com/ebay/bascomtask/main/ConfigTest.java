@@ -93,7 +93,7 @@ public class ConfigTest {
             public TaskMethodClosure getClosure() {
                 return new TaskMethodClosure() {
                     @Override
-                    public boolean executeTaskMethod() {
+                    public Object executeTaskMethod() {
                         Object target = getTargetPojoTask();
                         if (target == avoidExecutingThis) {
                             return true; // Do not execute, but make available
@@ -266,13 +266,13 @@ public class ConfigTest {
                         }
                     }
 
-                    public boolean executeTaskMethod() {
+                    public Object executeTaskMethod() {
                         Object pojo = getTargetPojoTask();
                         if (pojo instanceof X) {
                             X x = (X) pojo;
                             x.execThread = Thread.currentThread();
                         }
-                        return true;
+                        return pojo;
                     }
                 };
             }
@@ -320,10 +320,10 @@ public class ConfigTest {
                         prepares.add(pojo);
                     }
 
-                    public boolean executeTaskMethod() {
+                    public Object executeTaskMethod() {
                         Object pojo = getTargetPojoTask();
                         execs.add(pojo);
-                        return true;
+                        return pojo;
                     }
                 };
             }
@@ -359,7 +359,7 @@ public class ConfigTest {
         }
 
         @Override
-        public boolean executeTaskMethod() {
+        public Object executeTaskMethod() {
             Object pojo = getTargetPojoTask();
             if (pojo instanceof BaseTask) {
                 BaseTask task = (BaseTask) pojo;
@@ -369,7 +369,7 @@ public class ConfigTest {
             else {
                 fail("Not a BaseTask:  + pojo");
             }
-            return true;
+            return pojo;
         }
 
         @Override

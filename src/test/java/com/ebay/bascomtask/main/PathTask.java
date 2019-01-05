@@ -107,6 +107,38 @@ abstract class PathTask {
             // + "}";
         }
     }
+    
+    static class NonTaskArg extends PathTask.Arg {
+        //final PathTask arg;
+        final Object value;
+
+        NonTaskArg(Object v) {
+            this.value = v;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(value);
+        }
+
+        @Override
+        public boolean equals(Object x) {
+            if (this == x)
+                return true;
+            if (x instanceof PathTask.NonTaskArg) {
+                PathTask.NonTaskArg that = (PathTask.NonTaskArg) x;
+                return this.value == that.value;
+            }
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            return value.toString();
+        }
+    }
+
+    
 
     @Override
     public String toString() {
@@ -172,10 +204,17 @@ abstract class PathTask {
         return new SingleArg(this);
     }
 
-    static List<PathTask.Arg> toArgs(PathTask... tasks) {
+    static List<PathTask.Arg> toArgs(Object...tasks) {
         List<PathTask.Arg> args = new ArrayList<>();
-        for (PathTask next : Arrays.asList(tasks)) {
-            args.add(next.asArg());
+        for (Object next : Arrays.asList(tasks)) {
+            PathTask.Arg task;
+            if (next instanceof PathTask) {
+                task = ((PathTask)next).asArg();
+            }
+            else {
+                task = new NonTaskArg(next);
+            }
+            args.add(task);
         }
         return args;
     }
@@ -188,11 +227,9 @@ abstract class PathTask {
      * @param tasks
      * @return
      */
-    PathTask exp(PathTask... tasks) {
-        if (tasks.length > 0) {
-            List<PathTask.Arg> args = toArgs(tasks);
-            // List<PathTask.Arg> args = Arrays.asList(tasks).stream().map(t ->
-            // t.asArg()).collect(Collectors.toList());
+    PathTask exp(Object...values) {
+        if (values.length > 0) {
+            List<PathTask.Arg> args = toArgs(values);
             exp.add(args);
         }
         return this;
@@ -213,10 +250,10 @@ abstract class PathTask {
         return this.timestamp > other.timestamp;
     }
 
-    synchronized PathTask got(PathTask... tasks) {
+    synchronized PathTask got(Object... values) {
         timestamp = System.nanoTime();
-        if (tasks.length > 0) {
-            List<PathTask.Arg> args = toArgs(tasks);
+        if (values.length > 0) {
+            List<PathTask.Arg> args = toArgs(values);
             got.add(args);
         }
         if (sleepFor > 0) {

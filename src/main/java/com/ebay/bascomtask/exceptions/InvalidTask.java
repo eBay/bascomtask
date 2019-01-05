@@ -52,11 +52,13 @@ public class InvalidTask extends RuntimeException {
      * Thrown when a task method has a return type that is neither void nor
      * boolean.
      */
+    /*
     public static class BadReturn extends InvalidTask {
         public BadReturn(String message) {
             super(message);
         }
     }
+    */
 
     public static class NotPublic extends InvalidTask {
         public NotPublic(String message) {

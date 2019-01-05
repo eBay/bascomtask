@@ -89,8 +89,8 @@ public class Orchestrator {
     static final Logger LOG = LoggerFactory.getLogger(Orchestrator.class);
 
     private static class TaskRec {
-        final List<Task.Instance> added = new ArrayList<>(); // Unique elements
-        final List<TaskMethodClosure> fired = new ArrayList<>(); // May have dups
+        final List<DataFlowSource.Instance> added = new ArrayList<>(); // Unique elements
+        final List<Binding> fired = new ArrayList<>(); // May have dups
     }
 
     /**
@@ -852,8 +852,7 @@ public class Orchestrator {
      */
     private List<Call.Instance> linkGraph(List<Task.Instance> taskInstances) {
         Map<Class<?>, Task.Instance> toBeProvided = null;
-        // First establish all references from the orchestrator to
-        // taskInstances.
+        // First establish all references from the orchestrator to taskInstances.
         // Later steps depend on these references having been set.
         for (Task.Instance taskInstance : taskInstances) {
             addAncestryMapping(taskInstance);
@@ -907,33 +906,42 @@ public class Orchestrator {
         }
         pojoMap.put(taskInstance.targetPojo,taskInstance);
         allTasks.add(taskInstance);
+        TaskRec rec = mapAncestry(taskInstance);
+        setTaskInstanceName(taskInstance,rec);
         recordCallsAndParameterInstances(taskInstance);
-        Task task = taskInstance.getTask();
-        
-        for (Class<?> next: task.ancestry) {
-            addTypeMapping(taskInstance,task,next);
-        }
     }
     
-    private void addTypeMapping(Task.Instance taskInstance, Task task, Class<?> taskClass) {
+    private void setTaskInstanceName(Task.Instance taskInstance, TaskRec rec) {
+        taskInstance.setIndexInType(rec.added.size());
+        String tn = taskInstance.getName();
+        checkUniqueTaskInstanceName(tn);
+        taskMapByName.put(tn,taskInstance);
+    }
+    
+    private TaskRec mapAncestry(DataFlowSource.Instance source) {
+        TaskRec firstRec = null;
+        for (Class<?> next: source.getSource().ancestry) {
+            TaskRec nextRec = addTypeMapping(source,next);
+            if (firstRec==null) {
+                firstRec = nextRec;
+            }
+        }
+        return firstRec;
+    }
+
+    private TaskRec addTypeMapping(DataFlowSource.Instance taskInstance, /*Task task, */ Class<?> taskClass) {
         TaskRec rec = taskMapByType.get(taskClass);
         if (rec == null) {
             rec = new TaskRec();
             taskMapByType.put(taskClass,rec);
         }
-        if (taskClass == task.taskClass) {
-            // Set index and name only for the direct type
-            taskInstance.setIndexInType(rec.added.size());
-            String tn = taskInstance.getName();
-            checkUniqueTaskInstanceName(tn);
-            taskMapByName.put(tn,taskInstance);
-        }
         rec.added.add(taskInstance);
+        return rec;
     }
     
-
     private void recordCallsAndParameterInstances(Task.Instance task) {
         for (Call.Instance callInstance : task.calls) {
+            mapAncestry(callInstance);
             Call call = callInstance.getCall();
             List<Call.Instance> callInstances = callMap.get(call);
             if (callInstances == null) {
@@ -1008,7 +1016,8 @@ public class Orchestrator {
                         // for anything having fired
                         TaskMethodClosure injectionClosure = new TaskMethodClosure();
                         injectionClosure.initCall(taskInstance);
-                        paramInstance.addActual(injectionClosure);
+                        Binding binding = new Binding(injectionClosure,taskInstance);
+                        paramInstance.addActual(binding);
                         callInstance.startingFreeze[i] = 1;
                     }
                     else {
@@ -1016,7 +1025,7 @@ public class Orchestrator {
                     }
                 }
                 else {
-                    for (Task.Instance supplierTaskInstance : rec.added) {
+                    for (DataFlowSource.Instance supplierTaskInstance : rec.added) {
                         backLink(supplierTaskInstance,paramInstance);
                     }
                     int numberAlreadyFired = rec.fired.size();
@@ -1028,7 +1037,7 @@ public class Orchestrator {
                     }
                     // Add all tasks that have already fired
                     callInstance.startingFreeze[i] = numberAlreadyFired;
-                    for (TaskMethodClosure fired : rec.fired) {
+                    for (Binding fired : rec.fired) {
                         paramInstance.addActual(fired);
                     }
                 }
@@ -1066,7 +1075,7 @@ public class Orchestrator {
     }
 
     private boolean isInjectable(Param.Instance paramInstance) {
-        return ITask.class.equals(paramInstance.getTask().taskClass);
+        return ITask.class.equals(paramInstance.getTask().producesClass);
     }
 
     /**
@@ -1079,13 +1088,13 @@ public class Orchestrator {
         boolean root = true;
         for (Task.Instance next : explicitsBefore) {
             Task task = next.getTask();
-            TaskRec rec = taskMapByType.get(task.taskClass);
+            TaskRec rec = taskMapByType.get(task.producesClass);
             for (Call.Instance call : taskInstance.calls) {
                 Call.Param.Instance paramInstance = call.addHiddenParameter(task);
                 int sz = 0;
                 backLink(next,paramInstance);
-                for (TaskMethodClosure fired : rec.fired) {
-                    if (fired.getTargetPojoTask() == next.targetPojo) {
+                for (Binding fired : rec.fired) {
+                    if (fired.closure.getTargetPojoTask() == next.targetPojo) {
                         paramInstance.addActual(fired);
                         sz++;
                     }
@@ -1108,19 +1117,21 @@ public class Orchestrator {
      * @return record of all tasks that must fire before <code>paramInstance</code>
      */
     private TaskRec enumerateDependentTaskParameters(Call.Param.Instance paramInstance, List<Task.Instance> explicitsBefore) {
-        Task task = paramInstance.getTask();
-        TaskRec rec = taskMapByType.get(task.taskClass);
+        //Task task = paramInstance.getTask();
+        DataFlowSource source = paramInstance.getDataFlowSource();
+        TaskRec rec = taskMapByType.get(source.producesClass);
         if (explicitsBefore != null) { // If no explicit parameters than all known instances are auto-wired
             for (int i=explicitsBefore.size()-1; i>=0; i--) {
                 Task.Instance next = explicitsBefore.get(i);
-                Class<?> nextClass = next.getTask().taskClass;
-                if (task.taskClass.isAssignableFrom(nextClass)) {
+                Class<?> nextClass = next.getTask().producesClass;
+                if (source.producesClass.isAssignableFrom(nextClass)) {
                     TaskRec alt = new TaskRec();
                     alt.added.add(next);
                     explicitsBefore.remove(i); // Not a 'hidden' param if it's an explicit formal param
-                    for (TaskMethodClosure firing : rec.fired) {
-                        if (firing.getTargetPojoTask() == next.targetPojo) {
-                            alt.fired.add(firing);
+                    for (Binding fired : rec.fired) {
+                        if (fired.closure.getTargetPojoTask() == next.targetPojo) {
+                            alt.fired.add(fired);
+                            // xxx review
                         }
                     }
                     rec = alt;
@@ -1156,11 +1167,9 @@ public class Orchestrator {
      * @param taskInstance
      * @param paramInstance
      */
-    private void backLink(Task.Instance taskInstance, Param.Instance paramInstance) {
-        // The relationship might already have been established because we link
-        // incoming *and*
-        // outgoing in the same batch, i.e. between an "A" and a "B(A)" this
-        // method is
+    private void backLink(DataFlowSource.Instance taskInstance, Param.Instance paramInstance) {
+        // The relationship might already have been established because we link incoming *and*
+        // outgoing in the same batch, i.e. between an "A" and a "B(A)" this method is
         // called twice but should only be counted once.
         if (!taskInstance.backList.contains(paramInstance)) {
             taskInstance.backList.add(paramInstance);
@@ -1189,11 +1198,17 @@ public class Orchestrator {
         return computeThreshold(taskInstance,level,taskInstance,toBeProvided);
     }
 
-    private int computeThreshold(final Task.Instance base, final int level, final Task.Instance taskInstance,
-            final Map<Class<?>, Task.Instance> toBeProvided) {
-        if (taskInstance.recomputeForLevel(level)) {
+    private int computeThreshold(
+            final DataFlowSource.Instance base, 
+            final int level, 
+            final DataFlowSource.Instance dataFlowSource,
+            final Map<Class<?>, 
+            Task.Instance> toBeProvided) {
+            boolean hasCalls = false;        
+        if (dataFlowSource.recomputeForLevel(level)) {
             int tc = 0;
-            for (Call.Instance nextCall : taskInstance.calls) {
+            for (Call.Instance nextCall : dataFlowSource.calls()) {
+                hasCalls = true;
                 int cc = 1;
                 // Allowing for provides() tasks means we can't count on setting
                 // thresholds based on existing instances, because
@@ -1212,18 +1227,19 @@ public class Orchestrator {
                         pc = 1;
                     }
                     else {
-                        for (Task.Instance nextTaskInstance : nextParam.incoming) {
-                            if (base == nextTaskInstance) {
+                        for (DataFlowSource.Instance nextSourceInstance : nextParam.incoming) {
+                            if (base == nextSourceInstance) {
                                 throw new InvalidGraph.Circular(
-                                        "Circular reference " + taskInstance.getName() + " and " + base.getName());
+                                        "Circular reference " + dataFlowSource.getShortName() + " and " + base.getShortName());
                             }
-                            pc += computeThreshold(base,level,nextTaskInstance,toBeProvided);
+                            DataFlowSource.Instance completableSource = nextSourceInstance.getCompletableSource();
+                            pc += computeThreshold(base,level,completableSource,toBeProvided);
                         }
                     }
                     cc *= pc;
                     if (pc == 0) {
                         Task.Instance providingTask = toBeProvided == null ? null
-                                : toBeProvided.get(nextParam.getTask().taskClass);
+                                : toBeProvided.get(nextParam.getTask().producesClass);
                         if (providingTask == null) {
                             ccComplete = false;
                         }
@@ -1239,10 +1255,11 @@ public class Orchestrator {
                     // When a call is not immediately completable but can be
                     // with provides(), flag this here so that task
                     // does not get rejected as uncompletable
-                    taskInstance.setForceCompletable();
+                    dataFlowSource.setForceCompletable();
                 }
             }
-            if (taskInstance.setCompletionThreshold(tc)) {
+            if (dataFlowSource.setCompletionThreshold(tc)) {
+                Task.Instance taskInstance = dataFlowSource.getTaskInstance();
                 if (taskInstance.wait) {
                     // Ensure that a task that may have already completed is
                     // added back into wait list
@@ -1250,13 +1267,14 @@ public class Orchestrator {
                 }
             }
         }
-        int result = taskInstance.getCompletionThreshold();
-        if (taskInstance.calls.size() == 0) {
-            // With no calls, the taskInstance has no threshold but we return a
-            // 1 here
+        else {
+            hasCalls = true; // If we're not recomputingFor level, ensure check below doesn't apply
+        }
+        int result = dataFlowSource.getCompletionThreshold();
+        if (!hasCalls) {
+            // With no calls, the taskInstance has no threshold but we return a 1 here
             // to indicate that a thread will still go through this taskInstance
-            // and
-            // invoke dependents.
+            // and invoke dependents.
             result += 1;
         }
         return result;
@@ -1316,7 +1334,7 @@ public class Orchestrator {
             outer: for (Class<?> nextExp : exp) {
                 if (got != null) {
                     for (Task.Instance nextGot : got) {
-                        if (nextGot.getTask().taskClass == nextExp) {
+                        if (nextGot.getTask().producesClass == nextExp) {
                             continue outer;
                         }
                     }
@@ -1362,6 +1380,9 @@ public class Orchestrator {
                         if (wfc != 1)
                             msg = "these " + wfc + " tasks";
                         msg = "Stalled on " + msg + ": " + Arrays.toString(waitForTasks.toArray());
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Stalled graph state:\n{}",getGraphState());
+                        }
                         throw new RuntimeGraphError.Stall(msg);
                     }
                     if (++waitLoopDebugCounter > 10) {
@@ -1456,8 +1477,12 @@ public class Orchestrator {
 
     private TaskMethodClosure fireRoots(List<Call.Instance> roots, TaskMethodClosure inv) {
         for (Call.Instance nextBackCallInstance : roots) {
+            //propagateForward(null,nextBackCallInstance.taskInstance,null,inv);
             int[] freeze = nextBackCallInstance.startingFreeze;
             inv = nextBackCallInstance.crossInvoke(null,inv,freeze,null,-1,this,"root");
+            //inv = nextBackCallInstance.crossInvoke(null,nextBackCallInstance.taskInstance,inv,freeze,null,-1,this,"root");
+            //Call call = nextBackCallInstance.getCall();
+            //inv = nextBackCallInstance.crossInvoke(null,call,inv,freeze,null,-1,this,"root");
         }
         return inv;
     }
@@ -1482,7 +1507,7 @@ public class Orchestrator {
                 closureToInvoke.invoke(this,context,fire);
                 setForRollBack(closureToInvoke);
 
-                TaskRec rec = taskMapByType.get(task.taskClass);
+                TaskRec rec = taskMapByType.get(task.producesClass);
                 TaskMethodClosure parent = closureToInvoke.getParent();
 
                 TaskMethodClosure originalClosureToInvoke = closureToInvoke;
@@ -1591,7 +1616,6 @@ public class Orchestrator {
      * changing fields in this class and is therefore synchronized. However, call invocations are either spawned and or
      * one is provided as a return result to be executed after the lock on this class has been released. (TBD... light
      * tasks are executed while the lock is still held).
-     * 
      */
     private synchronized TaskMethodClosure processPostExecution(TaskRec rec, Call.Instance callInstance,
             Task.Instance taskOfCallInstance, TaskMethodClosure firing) {
@@ -1601,7 +1625,7 @@ public class Orchestrator {
             waitStats.update(duration);
         }
         boolean complete = false;
-        fireTree(taskOfCallInstance.getTask(),firing);
+        //fireTree(taskOfCallInstance.getTask(),firing);
 
         // Both taskInstance and callInstance need to be marked as completable,
         // but here we're only interested in whether the task has completed
@@ -1616,24 +1640,28 @@ public class Orchestrator {
         if (newTaskInstances != null) {
             inv = executeTasks(newTaskInstances,"nested",null);
         }
-        List<Call.Param.Instance> backList = taskOfCallInstance.backList;
-        int backSize = backList.size();
-        if (backSize==0) {
-            firing.setIsEndPath();
-        }
         if (LOG.isDebugEnabled()) {
+            int taskSize = taskOfCallInstance.backList.size();
+            int callSize = callInstance.backList.size();
             String cmsg = complete ? "" : "in";
-            String plural = backSize != 1 ? "s" : "";
-            LOG.debug("On {}complete exit from {} eval {} backLink{} ",cmsg,callInstance,backSize,plural);
+            String plural = (taskSize+callSize)!= 1 ? "s" : "";
+            LOG.debug("On {}complete exit from {} eval task={}/method={} backLink{} ",cmsg,callInstance,taskSize,callSize,plural);
         }
-        inv = continueOrSpawn(taskOfCallInstance,firing,"back",inv);
+        inv = propagateForward(callInstance,taskOfCallInstance,firing,inv);
+        return inv;
+    }
+
+    private TaskMethodClosure propagateForward(Call.Instance callInstance, Task.Instance taskOfCallInstance,
+            TaskMethodClosure firing, TaskMethodClosure inv) {
+        inv = continueOrSpawn(taskOfCallInstance,taskOfCallInstance.targetPojo,firing,"back-task",inv);
+        inv = continueOrSpawn(callInstance,firing.getOutput(),firing,"back-method",inv);
         return inv;
     }
     
-    private void fireTree(Task task, TaskMethodClosure firing) {
+    private void fireTree(DataFlowSource task, Binding binding) {
         for (Class<?> next: task.ancestry) {
             TaskRec rec = taskMapByType.get(next);
-            rec.fired.add(firing);
+            rec.fired.add(binding);
         }
     }
 
@@ -1642,13 +1670,19 @@ public class Orchestrator {
         return nt == null ? 0 : nt.size();
     }
 
-    private synchronized TaskMethodClosure continueOrSpawn(Task.Instance taskInstance, TaskMethodClosure firing,
+    private synchronized TaskMethodClosure continueOrSpawn(DataFlowSource.Instance dataFlowSource, Object output, TaskMethodClosure firing,
             String context, TaskMethodClosure inv) {
-        List<Call.Param.Instance> backList = taskInstance.backList;
-        for (Call.Param.Instance nextBackParam : backList) {
-            Call.Instance nextCallInstance = nextBackParam.callInstance;
-            Object actualParam = taskInstance.targetPojo;
-            inv = nextCallInstance.bind(this,context,actualParam,firing,nextBackParam,inv);
+        Binding binding = new Binding(firing,output);
+        fireTree(dataFlowSource.getSource(),binding);
+        List<Call.Param.Instance> backList = dataFlowSource.backList;        
+        if (backList.isEmpty()) {
+            firing.setIsEndPath();
+        }
+        else {
+            for (Call.Param.Instance nextBackParam : backList) {
+                Call.Instance nextCallInstance = nextBackParam.callInstance;
+                inv = nextCallInstance.bind(this,context,firing,binding,nextBackParam,inv);
+            }
         }
         return inv;
     }

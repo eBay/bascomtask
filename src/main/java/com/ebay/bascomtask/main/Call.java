@@ -35,7 +35,7 @@ import com.ebay.bascomtask.annotations.Scope;
  * 
  * @author brendanmccarthy
  */
-class Call {
+class Call extends DataFlowSource {
 
     static final Logger LOG = LoggerFactory.getLogger(Call.class);
 
@@ -83,7 +83,17 @@ class Call {
     String getMethodName() {
         return method.getName();
     }
+    
 
+    @Override
+    String getShortName() {
+         return task.getShortName() + '.' + getMethodName();
+    }
+    
+    @Override Object chooseOutput(Object targetPojo, Object methodResult) {
+        return methodResult;
+    }
+    
     void add(Param param) {
         signature = null; // Force recompute
         params.add(param);
@@ -103,7 +113,7 @@ class Call {
      * 
      * @author brendanmccarthy
      */
-    class Instance extends Completable implements Iterable<Param.Instance> {
+    class Instance extends DataFlowSource.Instance implements Iterable<Param.Instance> {
 
         /**
          * Owner of this call
@@ -157,13 +167,54 @@ class Call {
         public String toString() {
             return formatState();
         }
+        
+        @Override
+        String getShortName() {
+            return taskInstance.getShortName() + '.' + getMethodName();
+        }
+        
+        @Override
+        public DataFlowSource.Instance getCompletableSource() {
+            return taskInstance;
+        }
 
         Call getCall() {
             return Call.this;
         }
 
+        @Override
         Task.Instance getTaskInstance() {
             return taskInstance;
+        }
+        
+        private class Itr implements Iterable<Instance>, Iterator<Instance> {
+            private boolean accessed = true;  // XXX TBD/TODO remove this itr
+            
+            @Override
+            public Iterator<Instance> iterator() {
+                return this;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return !accessed;
+            }
+
+            @Override
+            public Instance next() {
+                accessed = true;
+                return Instance.this;
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        }
+        
+        @Override
+        Iterable<Call.Instance> calls() {
+            return new Itr();
         }
 
         @Override
@@ -198,7 +249,7 @@ class Call {
                     first = false;
                     String nm;
                     if (next.incoming.size()==1) { // It should be this, but checking anyway
-                        nm = next.incoming.get(0).getName();
+                        nm = next.incoming.get(0).getShortName();
                     }
                     else {
                         nm = next.toString();  // Not expected, but return best alternative
@@ -309,8 +360,8 @@ class Call {
          * @param pendingClosure current invocation, null if none
          * @return same or possibly new invocation for the calling thread to invoke
          */
-        TaskMethodClosure bind(Orchestrator orc, String context, Object userTaskInstance, TaskMethodClosure firing,
-                Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
+        TaskMethodClosure bind(Orchestrator orc, String context, TaskMethodClosure firing,
+                Binding binding, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
             int[] freeze;
             int ordinalOfFiringParameter;
             if (firingParameter == null) { // A root task call, i.e. one with no task parameters?
@@ -326,12 +377,12 @@ class Call {
                     ordinalOfFiringParameter = firingParameter.bindings.size();
                     if (firingParameter.getParam().isOrdered) {
                         ordinalOfFiringParameter = firing.getCallInstance().getTaskInstance().getIndexInType();
-                        firingParameter.setActual(firing,ordinalOfFiringParameter);
-                        firing = firingParameter.bindings.get(0);
+                        firingParameter.setActual(binding,ordinalOfFiringParameter);
+                        firing = firingParameter.bindings.get(0).closure;
                         ordinalOfFiringParameter = 0;
                     }
                     else {
-                        firingParameter.addActual(firing);
+                        firingParameter.addActual(binding);
                     }
                     for (Param.Instance next : paramInstances) {
                         if (!next.ready()) {
@@ -349,8 +400,6 @@ class Call {
                     freeze = new int[paramInstances.length];
                     for (int i = 0; i < paramInstances.length; i++) {
                         freeze[i] = paramInstances[i].bindings.size();  
-                        //freeze[i] = paramInstances[i].getParam().isOrdered ? 0 : paramInstances[i].bindings.size();  
-                        //freeze[i] = paramInstances[i].indexOfHighestDelivered; // .bindings.size();
                     }
                 }
             }
@@ -375,7 +424,7 @@ class Call {
          * @return an invocation to be invoked by caller, possibly null or
          *         possibly the input inv parameter unchanged
          */
-        TaskMethodClosure crossInvoke(TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
+        TaskMethodClosure crossInvoke(TaskMethodClosure firing, /*DataFlowSource.Instance source, Object output, */TaskMethodClosure pendingClosure, int[] freeze,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
             Object[] args = new Object[paramInstances.length];
             return crossInvoke(0,args,true,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context,false);
@@ -387,7 +436,7 @@ class Call {
          * (and if) all args are assigned.
          */
         private TaskMethodClosure crossInvoke(int px, Object[] args, boolean fire, TaskMethodClosure firing,
-                TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter,
+                /*DataFlowSource.Instance source, Object output, */TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter,
                 int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
             if (px == args.length) {
                 TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args,longestIncoming); // makes a copy of args!
@@ -442,7 +491,7 @@ class Call {
                         }
                     }
                     for (int i = from; i < to; i++) {
-                        firing = paramAtIndex.bindings.get(i);
+                        firing = paramAtIndex.bindings.get(i).closure;
                         pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
                                 ordinalOfFiringParameter,orc,context,immediate);
                     }
@@ -471,9 +520,8 @@ class Call {
                 TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
             Param.Instance paramAtIndex = paramInstances[px];
-            TaskMethodClosure paramClosure = paramAtIndex.bindings.get(bindingIndex);
-            args[px] = paramClosure.getTargetPojoTask();
-            boolean fireAtLevel = fire && paramClosure.getReturned();
+            args[px] = paramAtIndex.bindings.get(bindingIndex).output;
+            boolean fireAtLevel = fire; // && paramClosure.getReturned();
             return crossInvoke(px + 1,args,fireAtLevel,firing,pendingClosure,freeze,firingParameter,
                     ordinalOfFiringParameter,orc,context,immediate);
         }
@@ -520,6 +568,7 @@ class Call {
     private String signature = null;
 
     Call(Task task, Method method, Scope scope, boolean light) {
+        super(method==null?null:method.getReturnType());
         this.task = task;
         this.method = method;
         this.light = light;
@@ -568,7 +617,7 @@ class Call {
      */
     class Param {
 
-        final Task taskParam;
+        final DataFlowSource dataFlowSource;
 
         /**
          * Ordinal position of this parameter
@@ -599,7 +648,7 @@ class Call {
              * The actual arguments in proper order, all of which will be POJOs
              * added to the orchestrator as tasks
              */
-            private final List<TaskMethodClosure> bindings = new ArrayList<>();
+            private final List<Binding> bindings = new ArrayList<>();
             
             private int countOfReadyParamters = 0;
             
@@ -613,7 +662,7 @@ class Call {
              * All tasks, auto-wired and explicit/hidden, that backlist to this
              * param instance.
              */
-            final List<Task.Instance> incoming = new ArrayList<>();
+            final List<DataFlowSource.Instance> incoming = new ArrayList<>();
 
             /**
              * How we know, for list arguments, when all parameters are ready
@@ -632,15 +681,13 @@ class Call {
 
             @Override
             public String toString() {
-                return taskParam.taskClass.getSimpleName() + ':' + bindings.size() + '/' + threshold;
+                return dataFlowSource.getShortName() + ':' + bindings.size() + '/' + threshold;
             }
-
+            
             List<Object> asListArg() {
                 List<Object> result = new ArrayList<>(bindings.size());
-                for (TaskMethodClosure next : bindings) {
-                    if (next.getReturned()) {
-                        result.add(next.getTargetPojoTask());
-                    }
+                for (Binding next: bindings) {
+                    result.add(next.output);
                 }
                 return result;
             }
@@ -658,7 +705,11 @@ class Call {
             }
 
             Task getTask() {
-                return taskParam;
+                return dataFlowSource.getTask();
+            }
+            
+            DataFlowSource getDataFlowSource() {
+                return dataFlowSource;
             }
 
             Call.Instance getCall() {
@@ -681,8 +732,8 @@ class Call {
                 explicitlyWired = true;
             }
             
-            void addActual(TaskMethodClosure closure) {
-                bindings.add(closure);
+            void addActual(Binding binding) {
+                bindings.add(binding);
                 countOfReadyParamters++;
             }
 
@@ -692,11 +743,11 @@ class Call {
              * @param closure to set
              * @param pos in list
              */
-            private void setActual(TaskMethodClosure closure, int pos) {
+            private void setActual(Binding binding, int pos) {
                 for (int i = bindings.size(); i<=pos; i++) {
                     bindings.add(null);
                 }
-                bindings.set(pos,closure);
+                bindings.set(pos,binding);
                 countOfReadyParamters++;
             }
 
@@ -705,14 +756,14 @@ class Call {
              * @param task to add before
              */
             void addBefore(ITask task) {
-                for (TaskMethodClosure next: bindings) {
-                    task.before(next.getTargetPojoTask());
+                for (Binding next: bindings) {
+                    task.before(next.closure.getTargetPojoTask());
                 }
             }
         }
 
-        Param(Task task, int parameterPosition, boolean isList, boolean ordered) {
-            this.taskParam = task;
+        Param(DataFlowSource source, int parameterPosition, boolean isList, boolean ordered) {
+            this.dataFlowSource = source;
             this.paramaterPosition = parameterPosition;
             this.isList = isList;
             this.isOrdered = ordered;
@@ -723,12 +774,12 @@ class Call {
         }
 
         String getTypeName() {
-            return taskParam.taskClass.getSimpleName();
+            return dataFlowSource.getShortName();
         }
 
         @Override
         public String toString() {
-            return "Param(" + taskParam.taskClass.getSimpleName() + ')';
+            return "Param(" + dataFlowSource.getShortName() + ')';
         }
     }
 }

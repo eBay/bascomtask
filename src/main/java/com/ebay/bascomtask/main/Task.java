@@ -35,19 +35,9 @@ import com.ebay.bascomtask.annotations.Scope;
  * 
  * @author brendanmccarthy
  */
-class Task {
+class Task extends DataFlowSource {
 
     static final Logger LOG = LoggerFactory.getLogger(Orchestrator.class);
-
-    /**
-     * Class of POJO.
-     */
-    final Class<?> taskClass;
-    
-    /**
-     * De-duped set of supers+interface tasks, including taskClass but excluding Object.class
-     */
-    final Class<?>[] ancestry;
 
     /**
      * For logging and debugging.
@@ -96,7 +86,7 @@ class Task {
      * created for each added user task, even if multiple tasks instances are
      * added that are the same Java type.
      */
-    class Instance extends Completable implements ITask {
+    class Instance extends DataFlowSource.Instance implements ITask {
 
         final Orchestrator orc;
 
@@ -143,14 +133,9 @@ class Task {
         final List<Call.Instance> calls = new ArrayList<>();
 
         /**
-         * All parameters of all calls that have the type of our targetTask
-         */
-        final List<Param.Instance> backList = new ArrayList<>();
-
-        /**
          * All explicitly-added tasks that must complete before this one
          */
-        private List<Instance> explicitBeforeDependencies = null;
+        private Set<Instance> explicitBeforeDependencies = null;
         
         /**
          * Explicitly added, not yet processed, tasks which must execute <i>before</i> this
@@ -197,9 +182,14 @@ class Task {
             return getName() + '(' + taskMethodBehavior + ") ==> " + targetPojo.toString();
         }
         
+        @Override
+        Task.Instance getTaskInstance() {
+            return this;
+        }
+
         public Object getTargetPojo() {
             return targetPojo;
-        }
+        }        
 
         List<Call> getCandidateCalls() {
             switch (taskMethodBehavior) {
@@ -355,14 +345,16 @@ class Task {
         }
 
         void addExplicitDependency(Instance other) {
+            System.out.println("AddXB " + this + " ===> " + other);
             if (explicitBeforeDependencies == null) {
-                explicitBeforeDependencies = new ArrayList<>();
+                explicitBeforeDependencies = new HashSet<>();
             }
-            explicitBeforeDependencies.add(other);
-            for (Call.Instance nextCall : this.calls) {
-                for (Param.Instance nextParam : nextCall.paramInstances) {
-                    if (nextParam.getTask() == other.getTask()) {
-                        nextParam.setExplicitlyWired();
+            if (explicitBeforeDependencies.add(other)) {
+                for (Call.Instance nextCall : this.calls) {
+                    for (Param.Instance nextParam : nextCall.paramInstances) {
+                        if (nextParam.getTask() == other.getTask()) {
+                            nextParam.setExplicitlyWired();
+                        }
                     }
                 }
             }
@@ -394,6 +386,16 @@ class Task {
         List<Exception> getExecutionExceptions() {
             return executionExceptions;
         }
+        
+        @Override
+        String getShortName() {
+            return instanceName;
+        }
+        
+        @Override
+        Iterable<Call.Instance> calls() {
+            return calls;
+        }
     }
 
     /**
@@ -404,7 +406,7 @@ class Task {
     private static final Map<Class<?>, String> ANON_MAP = new HashMap<>();
 
     Task(Class<?> clazz) {
-        this.taskClass = clazz;
+        super(clazz);
         String nm = clazz.getSimpleName();
         if ("".equals(nm)) {
             synchronized (ANON_MAP) {
@@ -417,23 +419,8 @@ class Task {
         }
         this.taskName = nm;
         
-        Set<Class<?>> ancestrySet = new HashSet<>();
-        computeAncestors(taskClass,ancestrySet);
-        this.ancestry = new Class<?>[ancestrySet.size()];
-        ancestrySet.toArray(ancestry);
     }
     
-    private void computeAncestors(Class<?> clazz, Set<Class<?>> set) {
-        if (clazz != null && clazz != Object.class) {
-            set.add(clazz);
-            for (Class<?> next: clazz.getInterfaces()) {
-                computeAncestors(next,set);
-            }
-            clazz = clazz.getSuperclass();
-            computeAncestors(clazz,set);
-        }
-    }
-
     String getName() {
         return taskName;
     }
@@ -445,5 +432,19 @@ class Task {
 
     void backLink(Param param) {
         backList.add(param);
+    }
+
+    @Override
+    String getShortName() {
+        return producesClass.getSimpleName();
+    }
+
+    @Override
+    Task getTask() {
+        return this;
+    }
+    
+    @Override Object chooseOutput(Object targetPojo, Object methodResult) {
+        return targetPojo;
     }
 }
