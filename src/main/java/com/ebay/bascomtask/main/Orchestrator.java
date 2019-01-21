@@ -912,7 +912,7 @@ public class Orchestrator {
     }
     
     private void setTaskInstanceName(Task.Instance taskInstance, TaskRec rec) {
-        taskInstance.setIndexInType(rec.added.size());
+        taskInstance.setIndexInType(rec.added.size()-1);
         String tn = taskInstance.getName();
         checkUniqueTaskInstanceName(tn);
         taskMapByName.put(tn,taskInstance);
@@ -934,6 +934,9 @@ public class Orchestrator {
         if (rec == null) {
             rec = new TaskRec();
             taskMapByType.put(taskClass,rec);
+        }
+        else {
+            System.out.println("here: " + taskInstance + " ==> " + taskClass);
         }
         rec.added.add(taskInstance);
         return rec;
@@ -1267,17 +1270,9 @@ public class Orchestrator {
                 }
             }
         }
-        else {
-            hasCalls = true; // If we're not recomputingFor level, ensure check below doesn't apply
-        }
         int result = dataFlowSource.getCompletionThreshold();
-        if (!hasCalls) {
-            // With no calls, the taskInstance has no threshold but we return a 1 here
-            // to indicate that a thread will still go through this taskInstance
-            // and invoke dependents.
-            result += 1;
-        }
-        return result;
+        // Always return at least 1, so that dependent tasks thresholds will be computed properly.
+        return Math.max(1,result);
     }
 
     /**

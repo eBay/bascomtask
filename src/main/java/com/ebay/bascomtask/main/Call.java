@@ -377,8 +377,11 @@ class Call extends DataFlowSource {
                     ordinalOfFiringParameter = firingParameter.bindings.size();
                     if (firingParameter.getParam().isOrdered) {
                         ordinalOfFiringParameter = firing.getCallInstance().getTaskInstance().getIndexInType();
+                        Task.Instance ti = firing.getCallInstance().getTaskInstance();
+                        System.out.println("-- TI="+ti+", ix="+ti.getIndexInType());
                         firingParameter.setActual(binding,ordinalOfFiringParameter);
-                        firing = firingParameter.bindings.get(0).closure;
+                        //firing = firingParameter.bindings.get(0).closure;
+                        firing = binding.closure;
                         ordinalOfFiringParameter = 0;
                     }
                     else {
@@ -491,6 +494,9 @@ class Call extends DataFlowSource {
                         }
                     }
                     for (int i = from; i < to; i++) {
+                        if (paramAtIndex.bindings.get(i) == null) {
+                            System.out.println("NOPE");
+                        }
                         firing = paramAtIndex.bindings.get(i).closure;
                         pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
                                 ordinalOfFiringParameter,orc,context,immediate);

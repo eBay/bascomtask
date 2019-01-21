@@ -734,14 +734,14 @@ public class OrchestrationTest extends PathTaskTestBase {
         }
     }
 
-    class Left extends PathTask {
+    class LeftFromTop extends PathTask {
         @Work
         public void exec(Top top) {
             got(top);
         }
     }
 
-    class Right extends PathTask {
+    class RightFromTop extends PathTask {
         @Work
         public void exec(Top top) {
             got(top);
@@ -750,15 +750,15 @@ public class OrchestrationTest extends PathTaskTestBase {
 
     class Bottom extends PathTask {
         @Work
-        public void exec(Left left, Right right) {
+        public void exec(LeftFromTop left, RightFromTop right) {
             got(left,right);
         }
     }
 
     private void testDiamondWithDelays(int td, int ld, int rd, int bd) {
         PathTask top = track.work(new Top()).sleepFor(td);
-        PathTask left = track.work(new Left()).sleepFor(ld).exp(top);
-        PathTask right = track.work(new Right()).sleepFor(rd).exp(top);
+        PathTask left = track.work(new LeftFromTop()).sleepFor(ld).exp(top);
+        PathTask right = track.work(new RightFromTop()).sleepFor(rd).exp(top);
         PathTask bottom = track.work(new Bottom()).sleepFor(bd).exp(left,right);
         verify(1);
     }
@@ -1080,48 +1080,49 @@ public class OrchestrationTest extends PathTaskTestBase {
         verify(1,2);
     }
 
+    /* boolean result no longer applies
     private void testPathExecutedConditionally(final boolean bReturnsTrue) {
-        class A extends PathTask {
+        class Root extends PathTask {
             @Work
             public void exec() {
                 got();
             }
         }
-        class B extends PathTask {
+        class Leftward extends PathTask {
             @Work
-            public boolean exec(A a) {
-                got(a);
+            public boolean exec(Root root) {
+                got(root);
                 return bReturnsTrue;
             }
         }
-        class C extends PathTask {
+        class Rightward extends PathTask {
             @Work
-            public void exec(A a) {
-                got(a);
+            public void exec(Root root) {
+                got(root);
             }
         }
-        class D extends PathTask {
+        class LeftOrRight extends PathTask {
             @Work
-            public void exec(B b) {
-                got(b);
+            public void exec(Leftward left) {
+                got(left);
             }
 
             @Work
-            public void exec(C c) {
-                got(c);
+            public void exec(Rightward right) {
+                got(right);
             }
         }
 
-        A a = new A();
-        B b = new B();
-        C c = new C();
-        D d = new D();
-        PathTask taskA = track.work(a);
-        PathTask taskB = track.work(b).exp(a);
-        PathTask taskC = track.work(c).exp(a);
-        PathTask taskD = track.work(d).exp(c).multiMethodOk();
+        Root root = new Root();
+        Leftward left = new Leftward();
+        Rightward right = new Rightward();
+        LeftOrRight lor = new LeftOrRight();
+        PathTask taskA = track.work(root);
+        PathTask taskB = track.work(left).exp(root);
+        PathTask taskC = track.work(right).exp(root);
+        PathTask taskD = track.work(lor).exp(right).multiMethodOk();
         if (bReturnsTrue) {
-            taskD = taskD.exp(b);
+            taskD = taskD.exp(left);
         }
         verify(1);
     }
@@ -1135,6 +1136,7 @@ public class OrchestrationTest extends PathTaskTestBase {
     public void testBothPathsExecuted() {
         testPathExecutedConditionally(true);
     }
+    */
 
     @Test(expected=RuntimeGraphError.Timeout.class)
     public void testTimeout() {
@@ -1186,6 +1188,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         testReturn(false);
     }
 
+    /* boolean result no longer applies
     private void testReturnTwoDeep(final boolean which) {
         class A extends PathTask {
             @Work
@@ -1225,6 +1228,7 @@ public class OrchestrationTest extends PathTaskTestBase {
     public void testReturnTwoDeepFalse() {
         testReturnTwoDeep(false);
     }
+    */
 
     // @Test
     public void testReturnMixedIncoming() {

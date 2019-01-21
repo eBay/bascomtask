@@ -32,7 +32,7 @@ abstract class DataFlowSource {
     }
 
     private void computeAncestors(Class<?> clazz, Set<Class<?>> set) {
-        if (clazz != null && clazz != Object.class) {
+        if (clazz != null && clazz != Object.class && clazz != Void.TYPE) {
             set.add(clazz);
             for (Class<?> next: clazz.getInterfaces()) {
                 computeAncestors(next,set);
