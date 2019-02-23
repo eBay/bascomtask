@@ -277,7 +277,8 @@ class Call extends DataFlowSource {
             }
             Param param = hiddenParamMap.get(task);
             if (param == null) {
-                param = new Param(task,-1,false,false);
+                // TODO/TBR from/to on hidden parameters -- list?
+                param = new Param(task,-1,false,false,0,1);
                 hiddenParamMap.put(task,param);
             }
             Param.Instance paramInstance = param.new Instance(this);
@@ -629,6 +630,17 @@ class Call extends DataFlowSource {
          * Ordinal position of this parameter
          */
         final int paramaterPosition;
+        
+        /**
+         * Position, in list of instances of paramter type, of first parameter to link
+         */
+        private final int indexFrom;
+        
+        /**
+         * Position, in list of instances of paramter type, of last parameter to link
+         * Should always be greater than indexFrom
+         */
+        private final int indexTo;
 
         /**
          * True iff List<X> rather than X
@@ -642,6 +654,14 @@ class Call extends DataFlowSource {
         
         public boolean accumulate() {
             return isList || isOrdered;
+        }
+        
+        int getIndexFrom() {
+            return indexFrom;
+        }
+        
+        int getIndexTo() {
+            return indexTo;
         }
         
         class Instance {
@@ -767,12 +787,14 @@ class Call extends DataFlowSource {
                 }
             }
         }
-
-        Param(DataFlowSource source, int parameterPosition, boolean isList, boolean ordered) {
+        
+        Param(DataFlowSource source, int parameterPosition, boolean isList, boolean ordered, int indexFrom, int indexTo) {
             this.dataFlowSource = source;
             this.paramaterPosition = parameterPosition;
             this.isList = isList;
             this.isOrdered = ordered;
+            this.indexFrom = indexFrom;
+            this.indexTo = indexTo;
         }
 
         Call getCall() {

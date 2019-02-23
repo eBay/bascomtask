@@ -24,6 +24,7 @@ import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.ebay.bascomtask.annotations.Count;
 import com.ebay.bascomtask.annotations.Ordered;
 import com.ebay.bascomtask.annotations.PassThru;
 import com.ebay.bascomtask.annotations.Rollback;
@@ -76,7 +77,7 @@ class TaskParser {
         }
         while (cls != null && cls != Object.class);
     }
-
+    
     private void parse(Task task, Method method) {
         Call call = null;
         Work work = method.getAnnotation(Work.class);
@@ -97,56 +98,76 @@ class TaskParser {
         }
         
         if (call != null) {
-            method.setAccessible(true); // Methods need not be public, allowing
-                                        // for local classes
-            //verifyAccess(method);
-            //Class<?> rt = method.getReturnType();
-            Annotation[][] parameterAnns = method.getParameterAnnotations();
-            Type[] genericParameterTypes = method.getGenericParameterTypes();
-            Class<?>[] pt = method.getParameterTypes();
-            for (int i = 0; i < method.getParameterTypes().length; i++) {
-                boolean isList = false;
-                Type nextMethodParamType = genericParameterTypes[i];
-                Class<?> nextMethodParamClass = pt[i];
-                // If the parameter is a List<T>, treat it is a T but mark the
-                // parameter as a list
-                if (List.class.isAssignableFrom(nextMethodParamClass)) {
-                    isList = true;
-                    if (nextMethodParamType instanceof ParameterizedType) {
-                        ParameterizedType genericType = (ParameterizedType) nextMethodParamType;
-                        Type typeArg = genericType.getActualTypeArguments()[0];
-                        nextMethodParamClass = (Class<?>) typeArg;
-                    }
+            parseParmeters(call);
+        }
+    }
+
+    private class Claimer {
+        int indexOfLastClaimed = 0;
+    }
+
+    private void parseParmeters(Call call) {
+        Method method = call.getMethod();
+        method.setAccessible(true); // Methods need not be public, allowing for local classes
+        
+        Map<Class<?>,Claimer> claims = new HashMap<>();
+        
+        Annotation[][] parameterAnns = method.getParameterAnnotations();
+        Type[] genericParameterTypes = method.getGenericParameterTypes();
+        Class<?>[] pt = method.getParameterTypes();
+        for (int i = 0; i < method.getParameterTypes().length; i++) {
+            int consumes = -1;
+            boolean isList = false;
+            Type nextMethodParamType = genericParameterTypes[i];
+            Class<?> nextMethodParamClass = pt[i];
+            // If the parameter is a List<T>, treat it is a T but mark the
+            // parameter as a list
+            if (List.class.isAssignableFrom(nextMethodParamClass)) {
+                isList = true;
+                if (nextMethodParamType instanceof ParameterizedType) {
+                    ParameterizedType genericType = (ParameterizedType) nextMethodParamType;
+                    Type typeArg = genericType.getActualTypeArguments()[0];
+                    nextMethodParamClass = (Class<?>) typeArg;
                 }
-                if (nextMethodParamClass.isPrimitive()) {
-                    throw new InvalidTask.BadParam("Task method " + mn(method) + " has non-Object parameter of type "
-                            + nextMethodParamClass.getSimpleName());
-                }
-                Task paramTask = parse2(nextMethodParamClass);
-                boolean ordered = false;
-                for (Annotation next: parameterAnns[i]) {
-                    Class<? extends Annotation> at = next.annotationType();
-                    if (Ordered.class.isAssignableFrom(at)) {
-                        ordered = true;
-                    }
-                }
-                Call.Param param = call.new Param(paramTask,i,isList,ordered);
-                call.add(param);
-                paramTask.backLink(param);
             }
+            else {
+                consumes = 1;
+            }
+            if (nextMethodParamClass.isPrimitive()) {
+                throw new InvalidTask.BadParam("Task method " + mn(method) + " has non-Object parameter of type "
+                        + nextMethodParamClass.getSimpleName());
+            }
+            
+            Claimer claimer = claims.get(nextMethodParamClass);
+            if (claimer == null) {
+                claimer = new Claimer();
+                claims.put(nextMethodParamClass,claimer);
+            }
+            
+            Task taskOfParam = parse2(nextMethodParamClass);
+            boolean ordered = false;
+            for (Annotation next: parameterAnns[i]) {
+                if (next instanceof Count) {
+                    Count count = (Count)next;
+                    consumes = count.value();
+                }
+                
+                /*
+                if (Ordered.class.isAssignableFrom(at)) {
+                    ordered = true;
+                }
+                */
+            }
+            int from = claimer.indexOfLastClaimed;
+            int to = claimer.indexOfLastClaimed = consumes < 0 ? consumes : from + consumes;
+            
+            Call.Param param = call.new Param(taskOfParam,i,isList,ordered,from,to);
+            call.add(param);
+            taskOfParam.backLink(param);
         }
     }
 
     static String mn(Method method) {
         return method.getDeclaringClass().getSimpleName() + "." + method.getName();
     }
-
-    /*
-    private void verifyAccess(Method method) {
-        Class<?> rt = method.getReturnType();
-        if (rt != Void.TYPE && rt != Boolean.TYPE) {
-            throw new InvalidTask.BadReturn("Task method " + mn(method) + " must return void or boolean");
-        }
-    }
-    */
 }

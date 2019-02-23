@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.experimental.theories.internal.ParameterizedAssertionError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1008,10 +1009,12 @@ public class Orchestrator {
         int matchableCallCount = 0;
         List<Task.Instance> explicitsBefore = taskInstance.getExplicitsBefore();
         for (Call.Instance callInstance : taskInstance.calls) {
+            System.out.println("LinkAll call="+callInstance);
             boolean match = true;
             boolean root = true;
             for (int i = 0; i < callInstance.paramInstances.length; i++) {
                 Call.Param.Instance paramInstance = callInstance.paramInstances[i];
+                System.out.println("LinkAll param("+i+")="+paramInstance);
                 TaskRec rec = enumerateDependentTaskParameters(paramInstance,explicitsBefore);
                 if (rec == null) {
                     if (isInjectable(paramInstance)) {
@@ -1028,8 +1031,22 @@ public class Orchestrator {
                     }
                 }
                 else {
-                    for (DataFlowSource.Instance supplierTaskInstance : rec.added) {
-                        backLink(supplierTaskInstance,paramInstance);
+                    final int indexFrom = paramInstance.getParam().getIndexFrom();
+                    int indexTo = paramInstance.getParam().getIndexTo();
+                    if (indexTo < 0) {  // e.g. list
+                        indexTo = rec.added.size();
+                    }
+                    else if (indexTo > rec.added.size()) {
+                        throw new RuntimeException("TBD too many, expecting " + indexTo + " got " + indexTo);
+                    }
+                    //for (DataFlowSource.Instance supplierTaskInstance : rec.added) {
+                    for (int tix=indexFrom; tix < indexTo; tix++) {
+                        DataFlowSource.Instance supplierTaskInstance = rec.added.get(tix);
+                        boolean linked = backLink(supplierTaskInstance,paramInstance);
+                        System.out.println("Next DFS-" + linked + " " + supplierTaskInstance + " to " +paramInstance + ", from="+indexFrom +", to="+indexTo);
+                        if (!linked) {
+                            break;
+                        }
                     }
                     int numberAlreadyFired = rec.fired.size();
                     if (numberAlreadyFired == 0) {
@@ -1063,6 +1080,7 @@ public class Orchestrator {
         // Although new taskInstances are linked above, this final pass ensures that
         // taskInstance is backlinked to any previously-existing instances.
         // 
+        /* TBD needed? Breaks new logic
         for (Param backParam : taskInstance.getTask().backList) {
             List<Param.Instance> paramInstances = paramMap.get(backParam);
             if (paramInstances != null) {
@@ -1075,6 +1093,7 @@ public class Orchestrator {
                 }
             }
         }
+        */
     }
 
     private boolean isInjectable(Param.Instance paramInstance) {
@@ -1165,24 +1184,30 @@ public class Orchestrator {
     }
 
     /**
-     * Link a taskInstance to a parameter that expects it, also bumping the threshold on that parameter.
+     * Links a taskInstance to a parameter that expects it, also bumping the threshold on that parameter.
      * 
      * @param taskInstance
      * @param paramInstance
      */
-    private void backLink(DataFlowSource.Instance taskInstance, Param.Instance paramInstance) {
+    private boolean backLink(DataFlowSource.Instance taskInstance, Param.Instance paramInstance) {
+        System.out.println("backLink " + taskInstance + "-->"+paramInstance);
+        // TBD comment
         // The relationship might already have been established because we link incoming *and*
         // outgoing in the same batch, i.e. between an "A" and a "B(A)" this method is
         // called twice but should only be counted once.
-        if (!taskInstance.backList.contains(paramInstance)) {
-            taskInstance.backList.add(paramInstance);
-            paramInstance.incoming.add(taskInstance);
-            paramInstance.bumpThreshold();
-            Task.Instance backTaskInstance = paramInstance.getCall().taskInstance;
-            if (backTaskInstance.wait) {
-                waitForTasks.add(backTaskInstance);
+        for (Param.Instance next: taskInstance.backList) {
+            if (next.getCall() == paramInstance.getCall()) {
+                return false;
             }
         }
+        taskInstance.backList.add(paramInstance);
+        paramInstance.incoming.add(taskInstance);
+        paramInstance.bumpThreshold();
+        Task.Instance backTaskInstance = paramInstance.getCall().taskInstance;
+        if (backTaskInstance.wait) {
+            waitForTasks.add(backTaskInstance);
+        }
+        return true;
     }
 
     /**
