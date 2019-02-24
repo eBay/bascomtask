@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.ebay.bascomtask.annotations.Count;
-import com.ebay.bascomtask.annotations.Ordered;
 import com.ebay.bascomtask.annotations.PassThru;
 import com.ebay.bascomtask.annotations.Rollback;
 import com.ebay.bascomtask.annotations.Scope;

@@ -44,6 +44,16 @@ abstract class DataFlowSource {
 
     abstract class Instance extends Completable {
         
+        private int orderAddedIndex = -1;
+        
+        int getOrderAddedIndex() {
+            return orderAddedIndex;
+        }
+        
+        void setOrderAddedIndex(int ix) {
+            orderAddedIndex = ix;
+        }
+        
         DataFlowSource getSource() {return DataFlowSource.this;}
         
         abstract String getShortName();
