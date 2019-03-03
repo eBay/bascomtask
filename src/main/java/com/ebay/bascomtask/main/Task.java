@@ -19,6 +19,7 @@ package com.ebay.bascomtask.main;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +27,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.ebay.bascomtask.main.Call.Instance;
 import com.ebay.bascomtask.main.Call.Param;
 import com.ebay.bascomtask.annotations.Scope;
 
@@ -396,8 +398,46 @@ class Task extends DataFlowSource {
         Iterable<Call.Instance> calls() {
             return calls;
         }
+        
+        DataFlowSource.Instance asInjectable() {
+            DataFlowSource.Instance source = new DataFlowSource.Instance() {
+                
+                private final String name = "ITask("+getTaskInstance().getShortName() + ')';
+                
+                @Override
+                Instance getTaskInstance() {
+                    return Instance.this;
+                }
+                
+                @Override
+                String getShortName() {
+                    return name;
+                }
+                
+                @Override
+                Iterable<Call.Instance> calls() {
+                    return EMPTY_CALL_ITR;
+                }
+
+                @Override
+                Object chooseOutput(Fired fired) {
+                    return getTaskInstance();
+                }
+            };
+            TaskMethodClosure injectionClosure = new TaskMethodClosure();
+            injectionClosure.initCall(getTaskInstance());
+            source.fired.add(new Fired(this,injectionClosure));
+            return source;
+        }
+        
+        @Override
+        Object chooseOutput(Fired fired) {
+            return targetPojo;
+        }
     }
 
+    private static final Iterable<Call.Instance> EMPTY_CALL_ITR = new ArrayList<Call.Instance>();
+    
     /**
      * Name anonymous classes with a unique integer because an empty string
      * might result in name conflicts.
@@ -442,9 +482,5 @@ class Task extends DataFlowSource {
     @Override
     Task getTask() {
         return this;
-    }
-    
-    @Override Object chooseOutput(Object targetPojo, Object methodResult) {
-        return targetPojo;
     }
 }

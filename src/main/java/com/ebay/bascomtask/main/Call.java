@@ -89,10 +89,13 @@ class Call extends DataFlowSource {
     String getShortName() {
          return task.getShortName() + '.' + getMethodName();
     }
-    
+
+    /*
+abstract Object chooseOutput(Fired fired);    
     @Override Object chooseOutput(Object targetPojo, Object methodResult) {
         return methodResult;
     }
+    */
     
     void add(Param param) {
         signature = null; // Force recompute
@@ -185,6 +188,11 @@ class Call extends DataFlowSource {
         @Override
         Task.Instance getTaskInstance() {
             return taskInstance;
+        }
+        
+        @Override
+        Object chooseOutput(Fired fired) {
+            return fired.getClosure().getOutput();
         }
         
         private class Itr implements Iterable<Instance>, Iterator<Instance> {
@@ -358,10 +366,9 @@ class Call extends DataFlowSource {
          * @param pendingClosure current invocation, null if none
          * @return same or possibly new invocation for the calling thread to invoke
          */
-        TaskMethodClosure bind(Orchestrator orc, String context, TaskMethodClosure firing,
-                DataFlowSource.Instance dataFlowSource, Binding binding, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
+        TaskMethodClosure bind(Orchestrator orc, String context, Fired binding, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
             int[] freeze;
-            int ordinalOfFiringParameter;
+            int ordinalOfFiringParameter = -1;
             if (firingParameter == null) { // A root task call, i.e. one with no task parameters?
                 freeze = EMPTY_FREEZE;
                 ordinalOfFiringParameter = -1;
@@ -371,15 +378,26 @@ class Call extends DataFlowSource {
                 // other thread would get the same set. Once these are set, the actual execution can
                 // safely proceed outside the synchronized block.
                 synchronized (this) {
-                    scoreIncoming(firing);
-                    ordinalOfFiringParameter = dataFlowSource.getOrderAddedIndex() - firingParameter.getParam().indexFrom;
+                    scoreIncoming(binding.getClosure());
+                    // TBO put index in backlist
+                    for (int i=0; i< firingParameter.bindings.size(); i++) {
+                        DataFlowSource.Instance next = firingParameter.bindings.get(i);
+                        if (next==binding.getSource()) {
+                            ordinalOfFiringParameter = i;
+                            break;
+                        }
+                    }
+                    if (ordinalOfFiringParameter==-1) {
+                        throw new RuntimeException("no_ord"); // TBD/TODO
+                    }
                     if (ordinalOfFiringParameter > 0) {
-                        Binding predecessorBinding = firingParameter.bindings.get(ordinalOfFiringParameter);
-                        if (predecessorBinding == null || !predecessorBinding.isReadyToFire()) {
+                        //DataFlowSource.Instance predecessorBinding = firingParameter.bindings.get(ordinalOfFiringParameter);
+                        if (!firingParameter.ready()) {
+                        //if (predecessorBinding == null || !predecessorBinding.isReadyToFire()) {
                             return pendingClosure;
                         }
                     }
-                    firingParameter.addActual(ordinalOfFiringParameter,binding);
+                    //firingParameter.addActual(ordinalOfFiringParameter,binding); NOW ADDED IN ORC
                     /*
                     if (firingParameter.getParam().isOrdered) {
                         ordinalOfFiringParameter = firing.getCallInstance().getTaskInstance().getIndexInType();
@@ -409,12 +427,14 @@ class Call extends DataFlowSource {
                     }
                     freeze = new int[paramInstances.length];
                     for (int i = 0; i < paramInstances.length; i++) {
-                        freeze[i] = paramInstances[i].bindings.size();  
+                        for (DataFlowSource.Instance next: paramInstances[i].bindings) {
+                            freeze[i] += next.fired.size();  
+                        }
                     }
                 }
             }
 
-            return crossInvoke(firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context);
+            return crossInvoke(orc,context,binding,freeze,firingParameter,ordinalOfFiringParameter,pendingClosure);
         }
 
         /**
@@ -429,10 +449,10 @@ class Call extends DataFlowSource {
          * @param context descriptive text for logging
          * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
          */
-        TaskMethodClosure crossInvoke(TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
-                Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context) {
+        TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired, int[] freeze,
+                Param.Instance firingParameter, int ordinalOfFiringParameter, TaskMethodClosure pendingClosure) {
             Object[] args = new Object[paramInstances.length];
-            return crossInvoke(0,args,true,firing,pendingClosure,freeze,firingParameter,ordinalOfFiringParameter,orc,context,false);
+            return crossInvoke(orc,context,fired,freeze,firingParameter,ordinalOfFiringParameter,pendingClosure,0,args,false);
         }
 
         /**
@@ -440,16 +460,18 @@ class Call extends DataFlowSource {
          * parameter assignments in args, and performing the invocation when
          * (and if) all args are assigned.
          */
-        private TaskMethodClosure crossInvoke(int px, Object[] args, boolean fire, TaskMethodClosure firing,
-                TaskMethodClosure pendingClosure, int[] freeze, Param.Instance firingParameter,
-                int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
+        TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired, int[] freeze,
+                Param.Instance firingParameter, int ordinalOfFiringParameter, TaskMethodClosure pendingClosure, int px, Object[] args, boolean immediate) {
             if (px == args.length) {
-                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(firing,this,args,longestIncoming); // makes a copy of args!
+                TaskMethodClosure parent = fired==null ? null : fired.getClosure();
+                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(parent,this,args,longestIncoming); // makes a copy of args!
+                /*
                 if (!fire) {
                     orc.invokeAndFinish(newInvocation,"non-fire",false);
                 }
-                else if (light || immediate) {
-                    orc.invokeAndFinish(newInvocation,"light",fire);
+                */
+                if (light || immediate) {
+                    orc.invokeAndFinish(newInvocation,"light");
                 }
                 else if (isNoWait() && orc.isCallingThread()) {
                     // Don't assign main thread with tasks it should not wait for
@@ -475,8 +497,8 @@ class Call extends DataFlowSource {
                     args[px] = paramAtIndex.asListArg();
                     // Don't change 'fire' value -- args only contains values
                     // that have fired; may even be empty but fire anyway
-                    pendingClosure = crossInvoke(px + 1,args,fire,firing,pendingClosure,freeze,firingParameter,
-                            ordinalOfFiringParameter,orc,context,immediate);
+                    pendingClosure = crossInvoke(orc,context,fired,freeze,firingParameter,
+                            ordinalOfFiringParameter,pendingClosure,px + 1,args,immediate);
                 }
                 else {
                     int from = 0;
@@ -496,9 +518,20 @@ class Call extends DataFlowSource {
                         }
                     }
                     for (int i = from; i < to; i++) {
-                        firing = paramAtIndex.bindings.get(i).getClosure();
-                        pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
-                                ordinalOfFiringParameter,orc,context,immediate);
+                        DataFlowSource.Instance source = paramAtIndex.bindings.get(i);
+                        for (Fired nextFired: source.fired) {
+                            //Object output = nextFired.getClosure().getOutput(); 
+                            //args[px] = source.getSource().chooseOutput(targetPojo,output);
+                            args[px] = source.chooseOutput(nextFired);
+                            return crossInvoke(orc,context,fired,freeze,firingParameter,ordinalOfFiringParameter,
+                                    pendingClosure,px+1,args,immediate);
+                            //firing = paramAtIndex.bindings.get(i).getClosure();
+                            //pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
+                            //        ordinalOfFiringParameter,orc,context,immediate);
+                            //Param.Instance paramAtIndex = paramInstances[px];
+                            //args[px] = paramAtIndex.bindings.get(bindingIndex).getOutput();
+                            //boolean fireAtLevel = fire; // && paramClosure.getReturned();
+                        }
                     }
                 }
             }
@@ -521,6 +554,7 @@ class Call extends DataFlowSource {
          * @param context
          * @return
          */
+        /*
         private TaskMethodClosure crossInvokeNext(int px, Object[] args, boolean fire, int bindingIndex,
                 TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
@@ -530,6 +564,7 @@ class Call extends DataFlowSource {
             return crossInvoke(px + 1,args,fireAtLevel,firing,pendingClosure,freeze,firingParameter,
                     ordinalOfFiringParameter,orc,context,immediate);
         }
+        */
 
         /**
          * If this is a Scope.SEQUENTIAL call and another thread is operating on
@@ -672,7 +707,7 @@ class Call extends DataFlowSource {
              * The actual arguments, all of which will be POJOs added to the orchestrator as tasks.
              * the list is initially populated with nulls that get filled in with bindings in the proper order.
              */
-            private final List<Binding> bindings;
+            private final List<DataFlowSource.Instance> bindings;
             
             //private int countOfReadyParamters = 0;
             
@@ -712,14 +747,16 @@ class Call extends DataFlowSource {
             
             void accept(DataFlowSource.Instance source) {
                 //int ix = source.getOrderAddedIndex() - indexFrom;
-                //bindings.set(ix,new Binding(source));
-                bindings.add(new Binding(source));
+                //bindings.set(ix,new Fired(source));
+                bindings.add(source);
             }
             
             List<Object> asListArg() {
                 List<Object> result = new ArrayList<>(bindings.size());
-                for (Binding next: bindings) {
-                    result.add(next.getOutput());
+                for (DataFlowSource.Instance nextSource: bindings) {
+                    for (Fired nextFired: nextSource.fired) {
+                        result.add(nextFired.getClosure().getOutput());
+                    }
                 }
                 return result;
             }
@@ -733,8 +770,8 @@ class Call extends DataFlowSource {
                     bindingToCheck = 0;
                 }
                 else {
-                    for (Binding next: bindings) {
-                        if (next != null && next.isReadyToFire()) {
+                    for (DataFlowSource.Instance nextSource: bindings) {
+                        if (nextSource.fired.size() > 0) {
                             return true;
                         }
                     }
@@ -744,8 +781,10 @@ class Call extends DataFlowSource {
                     return true;  // TBD/TODO
                 }
                 else {
-                    Binding check = bindings.get(bindingToCheck);
-                    return check != null & check.isReadyToFire();
+                    DataFlowSource.Instance source = bindings.get(bindingToCheck);
+                    return source.fired.size() > 0;
+                    //Fired check = bindings.get(bindingToCheck);
+                    //return check != null & check.isReadyToFire();
                 }
             }
 
@@ -771,7 +810,7 @@ class Call extends DataFlowSource {
                 return callInstance;
             }
             
-            List<Binding> getBindings() {
+            List<DataFlowSource.Instance> getBindings() {
                 return bindings;
             }
 
@@ -791,17 +830,17 @@ class Call extends DataFlowSource {
                 explicitlyWired = true;
             }
             
-            void addExplicitActual(Binding binding) {
-                bindings.add(binding);
-            }
-            
-            void addActual(int index, Binding binding) {
-                bindings.set(index,binding);
+            void addActual(DataFlowSource.Instance source) {
+                bindings.add(source);
                 //countOfReadyParamters++;
             }
 
             /*
-            void addActual(DataFlowSource.Instance dataFlowSource, Binding binding) {
+            void addExplicitActual(Fired binding) {
+                bindings.add(binding);
+            }
+            
+            void addActual(DataFlowSource.Instance dataFlowSource, Fired binding) {
                 int ix = dataFlowSource.getOrderAddedIndex();
                 bindings.set(ix,binding);
                 countOfReadyParamters++;
@@ -815,7 +854,7 @@ class Call extends DataFlowSource {
              * @param pos in list
              */
             /*
-            private void setActual(Binding binding, int pos) {
+            private void setActual(Fired binding, int pos) {
                 for (int i = bindings.size(); i<=pos; i++) {
                     bindings.add(null);
                 }
@@ -829,8 +868,8 @@ class Call extends DataFlowSource {
              * @param task to add before
              */
             void addBefore(ITask task) {
-                for (Binding next: bindings) {
-                    task.before(next.getClosure().getTargetPojoTask());
+                for (DataFlowSource.Instance next: bindings) {
+                    task.before(next.getTaskInstance().targetPojo); // getTargetPojoTask());
                 }
             }
             

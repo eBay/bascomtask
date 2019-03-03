@@ -21,7 +21,7 @@ abstract class DataFlowSource {
     
     abstract String getShortName();
     abstract Task getTask();
-    abstract Object chooseOutput(Object targetPojo, Object methodResult);
+    //abstract Object chooseOutput(Object targetPojo, Object methodResult);
 
     DataFlowSource(Class<?> producesClass) {
         this.producesClass = producesClass;
@@ -46,6 +46,8 @@ abstract class DataFlowSource {
         
         private int orderAddedIndex = -1;
         
+        final List<Fired> fired = new ArrayList<>();
+    
         int getOrderAddedIndex() {
             return orderAddedIndex;
         }
@@ -59,6 +61,7 @@ abstract class DataFlowSource {
         abstract String getShortName();
         abstract Task.Instance getTaskInstance();
         abstract Iterable<Call.Instance> calls();
+        abstract Object chooseOutput(Fired fired);
         
         /**
          * All parameters of all calls that have the type of our targetTask

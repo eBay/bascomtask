@@ -75,12 +75,6 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
         return output;
     }
 
-    /*
-    void setReturned(boolean which) {
-        this.returned = which;
-    }
-    */
-
     TaskMethodClosure getParent() {
         return parent;
     }
