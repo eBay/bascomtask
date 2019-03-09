@@ -367,6 +367,7 @@ abstract Object chooseOutput(Fired fired);
          * @return same or possibly new invocation for the calling thread to invoke
          */
         TaskMethodClosure bind(Orchestrator orc, String context, Fired binding, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
+            System.out.println("BIND " + this);
             int[] freeze;
             int ordinalOfFiringParameter = -1;
             if (firingParameter == null) { // A root task call, i.e. one with no task parameters?
@@ -491,7 +492,7 @@ abstract Object chooseOutput(Fired fired);
             else {
                 final Param.Instance paramAtIndex = paramInstances[px];
                 if (paramAtIndex.getParam().isList) {
-                    if (!paramAtIndex.ready()) {
+                    if (!paramAtIndex.ready()) { // XXX not synchrzd
                         return pendingClosure; // List arg not ready
                     }
                     args[px] = paramAtIndex.asListArg();
@@ -736,7 +737,13 @@ abstract Object chooseOutput(Fired fired);
 
             Instance(Call.Instance callInstance) {
                 this.callInstance = callInstance;
-                bindings = new ArrayList<>(indexTo-indexFrom);
+                if (indexTo < 0) {
+                    bindings = new ArrayList<>();
+                }
+                else {
+                    bindings = new ArrayList<>(indexTo-indexFrom);
+                }
+                    
                 //Collections.fill(bindings,null);
             }
 
@@ -752,10 +759,10 @@ abstract Object chooseOutput(Fired fired);
             }
             
             List<Object> asListArg() {
-                List<Object> result = new ArrayList<>(bindings.size());
+                List<Object> result = new ArrayList<>();
                 for (DataFlowSource.Instance nextSource: bindings) {
                     for (Fired nextFired: nextSource.fired) {
-                        result.add(nextFired.getClosure().getOutput());
+                        result.add(nextSource.chooseOutput(nextFired));
                     }
                 }
                 return result;

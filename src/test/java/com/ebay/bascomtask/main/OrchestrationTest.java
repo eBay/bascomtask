@@ -1812,6 +1812,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         class B extends PathTask {
             @Work
             public void exec(List<A> as) {
+                System.out.println("Got: " + as);
                 got(list(as));
             }
         }
