@@ -512,26 +512,35 @@ abstract Object chooseOutput(Fired fired);
                     if (fired==null) {
                         System.out.println("HERE null");
                     }
-                    final int bindingVersion = fired.getVersion();
+                    
+                    final int bindingVersion = fired==null ? -1 : fired.getVersion();
                     for (DataFlowSource.Instance source: paramAtIndex.bindings) {
                         //DataFlowSource.Instance source = paramAtIndex.bindings.get(i);
                         final int numberFired = source.fired.size();
-                        for (int i=0; i<numberFired; i++) {
-                            Fired nextFired = source.fired.get(i);
-                            if (nextFired.getVersion() > bindingVersion) {
-                                break; // Such a Fired would have occurred after that of our own binding
-                            }
-                            //Object output = nextFired.getClosure().getOutput(); 
-                            //args[px] = source.getSource().chooseOutput(targetPojo,output);
-                            args[px] = source.chooseOutput(nextFired);
+
+                        if (numberFired==0) {
+                            args[px] = source.chooseOutput(null);
                             pendingClosure = crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
                                     pendingClosure,px+1,args,immediate);
-                            //firing = paramAtIndex.bindings.get(i).getClosure();
-                            //pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
-                            //        ordinalOfFiringParameter,orc,context,immediate);
-                            //Param.Instance paramAtIndex = paramInstances[px];
-                            //args[px] = paramAtIndex.bindings.get(bindingIndex).getOutput();
-                            //boolean fireAtLevel = fire; // && paramClosure.getReturned();
+                        }
+                        else {
+                            for (int i=0; i<numberFired; i++) {
+                                Fired nextFired = source.fired.get(i);
+                                if (nextFired.getVersion() > bindingVersion) {
+                                    break; // Such a Fired would have occurred after that of our own binding
+                                }
+                                //Object output = nextFired.getClosure().getOutput(); 
+                                //args[px] = source.getSource().chooseOutput(targetPojo,output);
+                                args[px] = source.chooseOutput(nextFired);
+                                pendingClosure = crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
+                                        pendingClosure,px+1,args,immediate);
+                                //firing = paramAtIndex.bindings.get(i).getClosure();
+                                //pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
+                                //        ordinalOfFiringParameter,orc,context,immediate);
+                                //Param.Instance paramAtIndex = paramInstances[px];
+                                //args[px] = paramAtIndex.bindings.get(bindingIndex).getOutput();
+                                //boolean fireAtLevel = fire; // && paramClosure.getReturned();
+                            }
                         }
                     }
                 }
@@ -573,12 +582,22 @@ abstract Object chooseOutput(Fired fired);
             }
             return null;
         }
+
+        @Override
+        boolean hasCalls() {
+            return true;
+        }
     }
 
     /**
      * Cache signature since does not change after params added
      */
     private String signature = null;
+
+    /**
+     * True iff call has no or only injectable parameters
+     */
+    private boolean alwaysReadyToFire = false;
 
     Call(Task task, Method method, Scope scope, boolean light) {
         super(method==null?null:method.getReturnType());
@@ -747,6 +766,9 @@ abstract Object chooseOutput(Fired fired);
             }
 
             boolean ready() {
+                if (isAlwaysReadyToFire()) {
+                    return true;
+                }
                 int bindingToCheck;
                 if (isList) {
                     bindingToCheck = bindings.size()-1;
@@ -756,7 +778,10 @@ abstract Object chooseOutput(Fired fired);
                 }
                 else {
                     for (DataFlowSource.Instance nextSource: bindings) {
-                        if (nextSource.fired.size() > 0) {
+                        if (!nextSource.hasCalls()) {
+                            return true;
+                        }
+                        else if (nextSource.fired.size() > 0) {
                             return true;
                         }
                     }
@@ -884,5 +909,13 @@ abstract Object chooseOutput(Fired fired);
         public String toString() {
             return "Param(" + dataFlowSource.getShortName() + ')';
         }
+    }
+
+    void setAlwaysReadyToFire() {
+        alwaysReadyToFire = true;
+    }
+    
+    boolean isAlwaysReadyToFire() {
+        return alwaysReadyToFire;
     }
 }

@@ -104,12 +104,13 @@ class TaskParser {
     private class Claimer {
         int indexOfLastClaimed = 0;
     }
-
+    
     private void parseParmeters(Call call) {
         Method method = call.getMethod();
         method.setAccessible(true); // Methods need not be public, allowing for local classes
         
         Map<Class<?>,Claimer> claims = new HashMap<>();
+        boolean isAlwaysReadyToFire = true;
         
         Annotation[][] parameterAnns = method.getParameterAnnotations();
         Type[] genericParameterTypes = method.getGenericParameterTypes();
@@ -144,6 +145,9 @@ class TaskParser {
             }
             
             Task taskOfParam = parse2(nextMethodParamClass);
+            if (!taskOfParam.isInjectable()) {
+                isAlwaysReadyToFire = false;
+            }
             boolean ordered = false;
             for (Annotation next: parameterAnns[i]) {
                 if (next instanceof Count) {
@@ -163,6 +167,10 @@ class TaskParser {
             Call.Param param = call.new Param(taskOfParam,i,isList,ordered,from,to);
             call.add(param);
             taskOfParam.backLink(param);
+        }
+        
+        if (isAlwaysReadyToFire) {
+            call.setAlwaysReadyToFire();
         }
     }
 

@@ -63,6 +63,7 @@ abstract class DataFlowSource {
         abstract String getShortName();
         abstract Task.Instance getTaskInstance();
         abstract Iterable<Call.Instance> calls();
+        abstract boolean hasCalls();
         abstract Object chooseOutput(Fired fired);
         
         /**

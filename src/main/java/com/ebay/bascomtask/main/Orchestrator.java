@@ -889,6 +889,7 @@ public class Orchestrator {
         List<Call.Instance> roots = new ArrayList<>();
         // Now the taskInstances themselves can be linked
         for (Task.Instance taskInstance : taskInstances) {
+                /*
             if (taskInstance.calls.size() == 0) {
                 // If no calls at all, the task is trivially available to all who depend on it.
                 // We create a dummy call so the task can then be processed like any other root.
@@ -899,8 +900,9 @@ public class Orchestrator {
                 taskInstance.clearExplicits();
             }
             else {
+            */
                 linkAll(taskInstance,roots);
-            }
+            //}
         }
         // With all linkages in place, thresholds can be (re)computed, and final verification performed
         List<Call.Param.Instance> badParams = recomputeAllThresholdsAndVerify(toBeProvided);
@@ -1122,7 +1124,7 @@ public class Orchestrator {
         */
     }
 
-    private boolean isInjectable(Param.Instance paramInstance) {
+    private static boolean isInjectable(Param.Instance paramInstance) {
         return ITask.class.equals(paramInstance.getTask().producesClass);
     }
     

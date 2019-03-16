@@ -82,6 +82,10 @@ class Task extends DataFlowSource {
 
     private static List<Call> EMPTY_CALLS = new ArrayList<>();
 
+    boolean isInjectable() {
+        return ITask.class.equals(producesClass);
+    }
+
     /**
      * From a user perspective, a 'task' is what they add @Work methods to;
      * BascomTask shadows that task with a Task.Instance. A Task.Instance is
@@ -327,9 +331,11 @@ class Task extends DataFlowSource {
             return providing;
         }
 
+        /*
         Call.Instance genNoCall() {
             return no_call.genInstance(this);
         }
+        */
 
         void updateExplicitDependencies(Map<Object, Instance> pojoMap) {
             if (pendingBeforeDependencies != null) {
@@ -423,6 +429,11 @@ class Task extends DataFlowSource {
                 Object chooseOutput(Fired fired) {
                     return getTaskInstance();
                 }
+
+                @Override
+                boolean hasCalls() {
+                    return false;
+                }
             };
             TaskMethodClosure injectionClosure = new TaskMethodClosure();
             injectionClosure.initCall(getTaskInstance());
@@ -433,6 +444,11 @@ class Task extends DataFlowSource {
         @Override
         Object chooseOutput(Fired fired) {
             return targetPojo;
+        }
+
+        @Override
+        boolean hasCalls() {
+            return calls.size() > 0;
         }
     }
 
