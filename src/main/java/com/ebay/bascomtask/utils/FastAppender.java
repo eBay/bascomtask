@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Fast append-only list (though we don't call it a list since it doesn't implement standard List interface). 
- * For read times within its pre-allocated optimization range, 30% faster than ArrayList but more than more 
- * than 20x faster than a synchronized ArrayList while still remaining threadsafe. 
+ * For read times within its pre-allocated optimization range, has comparable performance to non-synchronised list
+ * which is about 20x faster than a synchronized List while still remaining threadsafe. 
  * 
  * @param <T> type of list element
  */

@@ -399,7 +399,7 @@ class Task extends DataFlowSource {
             return calls;
         }
         
-        DataFlowSource.Instance asInjectable() {
+        DataFlowSource.Instance asInjectable(Orchestrator orc) {
             DataFlowSource.Instance source = new DataFlowSource.Instance() {
                 
                 private final String name = "ITask("+getTaskInstance().getShortName() + ')';
@@ -426,7 +426,7 @@ class Task extends DataFlowSource {
             };
             TaskMethodClosure injectionClosure = new TaskMethodClosure();
             injectionClosure.initCall(getTaskInstance());
-            source.fired.add(new Fired(this,injectionClosure));
+            source.fired.add(new Fired(orc,this,injectionClosure));
             return source;
         }
         

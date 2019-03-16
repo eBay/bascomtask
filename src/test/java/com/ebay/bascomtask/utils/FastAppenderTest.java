@@ -102,7 +102,7 @@ public class FastAppenderTest {
                 }
             }
         }
-        return report("Java",start);
+        return report("Java-"+sync,start);
     }
     
     private long runAList(String[] ss, int loops) {

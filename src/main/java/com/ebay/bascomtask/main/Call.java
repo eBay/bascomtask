@@ -106,8 +106,6 @@ abstract Object chooseOutput(Fired fired);
         return new Instance(taskInstance);
     }
 
-    private static final int[] EMPTY_FREEZE = new int[0];
-
     /**
      * A representation of a {@link Call} for a Task.Instance. Collects
      * parameters in preparation for invoking the Call method. Note that
@@ -129,15 +127,6 @@ abstract Object chooseOutput(Fired fired);
         final Param.Instance[] paramInstances = new Param.Instance[params.size()];
 
         List<Param.Instance> hiddenParameters = null;
-
-        /**
-         * The positions of active parameters at the time of creation of this
-         * instance. This allows for task instances that have already fired to
-         * be replayed for this task when added dynamically (i.e. other tasks
-         * were already started and may therefore have already fired prior to
-         * this instance being added or even created).
-         */
-        final int[] startingFreeze = new int[params.size()];
 
         /**
          * Non-null if Scope.Sequential has been set, and if so this accumulates
@@ -368,10 +357,8 @@ abstract Object chooseOutput(Fired fired);
          */
         TaskMethodClosure bind(Orchestrator orc, String context, Fired binding, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
             System.out.println("BIND " + this);
-            int[] freeze;
             int ordinalOfFiringParameter = -1;
             if (firingParameter == null) { // A root task call, i.e. one with no task parameters?
-                freeze = EMPTY_FREEZE;
                 ordinalOfFiringParameter = -1;
             }
             else {
@@ -426,16 +413,18 @@ abstract Object chooseOutput(Fired fired);
                             }
                         }
                     }
+                    /*
                     freeze = new int[paramInstances.length];
                     for (int i = 0; i < paramInstances.length; i++) {
                         for (DataFlowSource.Instance next: paramInstances[i].bindings) {
                             freeze[i] += next.fired.size();  
                         }
                     }
+                    */
                 }
             }
 
-            return crossInvoke(orc,context,binding,freeze,firingParameter,ordinalOfFiringParameter,pendingClosure);
+            return crossInvoke(orc,context,binding,firingParameter,ordinalOfFiringParameter,pendingClosure);
         }
 
         /**
@@ -450,10 +439,10 @@ abstract Object chooseOutput(Fired fired);
          * @param context descriptive text for logging
          * @return an invocation to be invoked by caller, possibly null or possibly the input inv parameter unchanged
          */
-        TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired, int[] freeze,
+        TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, TaskMethodClosure pendingClosure) {
             Object[] args = new Object[paramInstances.length];
-            return crossInvoke(orc,context,fired,freeze,firingParameter,ordinalOfFiringParameter,pendingClosure,0,args,false);
+            return crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,pendingClosure,0,args,false);
         }
 
         /**
@@ -461,7 +450,7 @@ abstract Object chooseOutput(Fired fired);
          * parameter assignments in args, and performing the invocation when
          * (and if) all args are assigned.
          */
-        TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired, int[] freeze,
+        TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, TaskMethodClosure pendingClosure, int px, Object[] args, boolean immediate) {
             if (px == args.length) {
                 TaskMethodClosure parent = fired==null ? null : fired.getClosure();
@@ -495,16 +484,17 @@ abstract Object chooseOutput(Fired fired);
                     if (!paramAtIndex.ready()) { // XXX not synchrzd
                         return pendingClosure; // List arg not ready
                     }
-                    args[px] = paramAtIndex.asListArg();
-                    // Don't change 'fire' value -- args only contains values
-                    // that have fired; may even be empty but fire anyway
-                    pendingClosure = crossInvoke(orc,context,fired,freeze,firingParameter,
+                    args[px] = paramAtIndex.asListArg(fired);
+                    pendingClosure = crossInvoke(orc,context,fired,firingParameter,
                             ordinalOfFiringParameter,pendingClosure,px + 1,args,immediate);
                 }
                 else {
-                    int from = 0;
-                    int to = freeze[px];
                     if (paramAtIndex == firingParameter) {
+                            DataFlowSource.Instance source = fired.getSource();
+                            args[px] = source.chooseOutput(fired);
+                            return crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
+                                    pendingClosure,px+1,args,immediate);
+                            /*
                         if (paramAtIndex.getParam().isOrdered) {
                             to = paramAtIndex.bindings.size();
                             immediate = true;
@@ -517,14 +507,24 @@ abstract Object chooseOutput(Fired fired);
                             from = ordinalOfFiringParameter;
                             to = from+1;
                         }
+                        */
                     }
-                    for (int i = from; i < to; i++) {
-                        DataFlowSource.Instance source = paramAtIndex.bindings.get(i);
-                        for (Fired nextFired: source.fired) {
+                    if (fired==null) {
+                        System.out.println("HERE null");
+                    }
+                    final int bindingVersion = fired.getVersion();
+                    for (DataFlowSource.Instance source: paramAtIndex.bindings) {
+                        //DataFlowSource.Instance source = paramAtIndex.bindings.get(i);
+                        final int numberFired = source.fired.size();
+                        for (int i=0; i<numberFired; i++) {
+                            Fired nextFired = source.fired.get(i);
+                            if (nextFired.getVersion() > bindingVersion) {
+                                break; // Such a Fired would have occurred after that of our own binding
+                            }
                             //Object output = nextFired.getClosure().getOutput(); 
                             //args[px] = source.getSource().chooseOutput(targetPojo,output);
                             args[px] = source.chooseOutput(nextFired);
-                            return crossInvoke(orc,context,fired,freeze,firingParameter,ordinalOfFiringParameter,
+                            pendingClosure = crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
                                     pendingClosure,px+1,args,immediate);
                             //firing = paramAtIndex.bindings.get(i).getClosure();
                             //pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
@@ -538,34 +538,6 @@ abstract Object chooseOutput(Fired fired);
             }
             return pendingClosure;
         }
-
-        /**
-         * Assigns an actual parameter value to the accumulating args array and
-         * proceeds to the next parameter position to the right.
-         * 
-         * @param px
-         * @param args
-         * @param fire
-         * @param bindingIndex
-         * @param pendingClosure
-         * @param freeze
-         * @param firingParameterIndex
-         * @param ordinalOfFiringParameter
-         * @param orc
-         * @param context
-         * @return
-         */
-        /*
-        private TaskMethodClosure crossInvokeNext(int px, Object[] args, boolean fire, int bindingIndex,
-                TaskMethodClosure firing, TaskMethodClosure pendingClosure, int[] freeze,
-                Param.Instance firingParameter, int ordinalOfFiringParameter, Orchestrator orc, String context, boolean immediate) {
-            Param.Instance paramAtIndex = paramInstances[px];
-            args[px] = paramAtIndex.bindings.get(bindingIndex).getOutput();
-            boolean fireAtLevel = fire; // && paramClosure.getReturned();
-            return crossInvoke(px + 1,args,fireAtLevel,firing,pendingClosure,freeze,firingParameter,
-                    ordinalOfFiringParameter,orc,context,immediate);
-        }
-        */
 
         /**
          * If this is a Scope.SEQUENTIAL call and another thread is operating on
@@ -758,10 +730,16 @@ abstract Object chooseOutput(Fired fired);
                 bindings.add(source);
             }
             
-            List<Object> asListArg() {
+            List<Object> asListArg(Fired binding) {
                 List<Object> result = new ArrayList<>();
                 for (DataFlowSource.Instance nextSource: bindings) {
-                    for (Fired nextFired: nextSource.fired) {
+                    final int numberFired = nextSource.fired.size();
+                    for (int i=0; i< numberFired; i++) {
+                        Fired nextFired = nextSource.fired.get(i);
+                        final int bindingVersion = nextFired.getVersion();
+                        if (nextFired.getVersion() > bindingVersion) {
+                            break; // Such a Fired would have occurred after that of our own binding
+                        }
                         result.add(nextSource.chooseOutput(nextFired));
                     }
                 }

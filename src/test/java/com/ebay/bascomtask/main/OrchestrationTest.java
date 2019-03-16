@@ -2078,6 +2078,27 @@ public class OrchestrationTest extends PathTaskTestBase {
         
         verify(0);
     }
+    
+    @Test
+    public void testDoubleRoot() {
+        class Root1 extends PathTask {
+        }
+        class Root2 extends PathTask {
+        }
+        class RootEater extends PathTask {
+            @Work
+            public void exec(Root1 root1, Root2 root2) {
+                got(root1,root2);
+            }
+        }
+        Root1 root1 = new Root1();
+        Root2 root2 = new Root2();
+        RootEater re = new RootEater();
+        PathTask t1 = track.work(root1);
+        PathTask t2 = track.work(root2);
+        PathTask te = track.work(re).exp(root1,root2);
+        verify(0);
+    }
 
     @Test
     public void testTaskInjection() {

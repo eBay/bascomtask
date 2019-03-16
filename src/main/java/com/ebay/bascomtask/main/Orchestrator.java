@@ -232,6 +232,12 @@ public class Orchestrator {
      * True iff this is an internally-created rollback orchestrator.
      */
     private final boolean isRollBack;
+    
+    private final AtomicInteger versionGenerator = new AtomicInteger(0);
+    
+    int genVersion() {
+        return versionGenerator.getAndIncrement();
+    }
 
     @Override
     public String toString() {
@@ -1022,7 +1028,7 @@ public class Orchestrator {
                 TaskRec rec = enumerateDependentTaskParameters(paramInstance,explicitsBefore);
                 if (rec == null) {
                     if (isInjectable(paramInstance)) {
-                        DataFlowSource.Instance injection = taskInstance.asInjectable();
+                        DataFlowSource.Instance injection = taskInstance.asInjectable(this);
                         paramInstance.addActual(injection);
                         /*
                         // Perform the same effects as below without accounting
@@ -1033,7 +1039,7 @@ public class Orchestrator {
                         Fired binding = new Fired(taskInstance);
                         paramInstance.addActual(0,binding);  // TBD/TBR/TODO -- zero always?
                         */
-                        callInstance.startingFreeze[i] = 1;
+                        //callInstance.startingFreeze[i] = 1;
                     }
                     else {
                         match = root = false;
@@ -1525,8 +1531,7 @@ public class Orchestrator {
     private TaskMethodClosure fireRoots(List<Call.Instance> roots, TaskMethodClosure inv) {
         for (Call.Instance nextBackCallInstance : roots) {
             //propagateForward(null,nextBackCallInstance.taskInstance,null,inv);
-            int[] freeze = nextBackCallInstance.startingFreeze;
-            inv = nextBackCallInstance.crossInvoke(this,"root",null,freeze,null,-1,inv);
+            inv = nextBackCallInstance.crossInvoke(this,"root",null,null,-1,inv);
             //inv = nextBackCallInstance.crossInvoke(null,nextBackCallInstance.taskInstance,inv,freeze,null,-1,this,"root");
             //Call call = nextBackCallInstance.getCall();
             //inv = nextBackCallInstance.crossInvoke(null,call,inv,freeze,null,-1,this,"root");
@@ -1723,7 +1728,7 @@ public class Orchestrator {
             TaskMethodClosure closureFired,
             String context, 
             TaskMethodClosure inv) {
-        Fired binding = new Fired(dataFlowSource,closureFired);
+        Fired binding = new Fired(this,dataFlowSource,closureFired);
         dataFlowSource.fired.add(binding);
         fireTree(dataFlowSource.getSource(),binding);
         List<Call.Param.Instance> backList = dataFlowSource.backList;        

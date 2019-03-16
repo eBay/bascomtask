@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.ebay.bascomtask.main.Call.Param;
+import com.ebay.bascomtask.utils.FastAppender;
 
 abstract class DataFlowSource {
     
@@ -46,7 +47,8 @@ abstract class DataFlowSource {
         
         private int orderAddedIndex = -1;
         
-        final List<Fired> fired = new ArrayList<>();
+        //final List<Fired> fired = new ArrayList<>();
+        final FastAppender<Fired> fired = new FastAppender<>(new Fired[4]);
     
         int getOrderAddedIndex() {
             return orderAddedIndex;
