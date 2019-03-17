@@ -17,7 +17,6 @@ limitations under the License.
 package com.ebay.bascomtask.main;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -26,7 +25,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -41,6 +39,7 @@ import com.ebay.bascomtask.exceptions.RuntimeGraphError;
 import com.ebay.bascomtask.main.Call.Param;
 import com.ebay.bascomtask.main.Task.Instance;
 import com.ebay.bascomtask.main.Task.TaskMethodBehavior;
+import com.ebay.bascomtask.utils.ExecutorLatch;
 
 /**
  * A dataflow-driven collector and executor of tasks that implicitly honors all dependencies while pursuing maximum
@@ -156,10 +155,12 @@ public class Orchestrator {
     final AtomicInteger threadsCreated = new AtomicInteger(0);
 
     /**
-     * Number of spawned threads that have not yet terminated, increased when a thread is pulled from the pool, and
-     * decreased when returned.
+     * Number of spawned threads, including nowait threads, that have not yet terminated, increased when a thread 
+     * is pulled from the pool, and decreased when returned.
      */
     private int threadBalance = 0;
+    
+    private final ExecutorLatch executorLatch;
 
     /**
      * How {@link #execute()} knows to exit: when this list is empty. NoWait tasks are never added to this list.
@@ -170,12 +171,12 @@ public class Orchestrator {
      * Set before spawning a new thread, when it is detected that the main thread is idle and may as well do the work
      * itself.
      */
-    private TaskMethodClosure invocationPickup = null;
+    //private TaskMethodClosure invocationPickup = null;
 
     /**
      * How a non-main thread knows the main thread's invocationPickup can be set
      */
-    private boolean waiting = false;
+    //private boolean waiting = false;
 
     /**
      * Accumulates instances prior to execute() -- thread-specific to avoid conflicts between two separate threads
@@ -286,6 +287,7 @@ public class Orchestrator {
     private Orchestrator(boolean isRollBack) {
         this.isRollBack = isRollBack;
         this.id = String.valueOf(hashCode());
+        executorLatch = new ExecutorLatch(config.getExecutor());
     }
 
     private ExecutionStats waitStats = new ExecutionStats();
@@ -490,7 +492,7 @@ public class Orchestrator {
      * @return count of created threads
      */
     public int getNumberOfThreadsCreated() {
-        return threadsCreated.get();
+        return executorLatch.getNumberOfThreadsCreated();
     }
 
     /**
@@ -759,7 +761,8 @@ public class Orchestrator {
         if (currentThreadIsCallingThread) { // Can only happen once for top-level calling thread
             try {
                 executeTasks(taskInstances,"top-level");
-                waitForCompletion();
+                executorLatch.workWait();
+                //waitForCompletion();
                 checkForExceptions();
             }
             finally {
@@ -1239,7 +1242,7 @@ public class Orchestrator {
         paramInstance.accept(source);
         //paramInstance.bumpThreshold();
         Task.Instance backTaskInstance = paramInstance.getCall().taskInstance;
-        if (backTaskInstance.wait) {
+        if (backTaskInstance.isWait()) {
             waitForTasks.add(backTaskInstance);
         }
         return true;
@@ -1323,7 +1326,7 @@ public class Orchestrator {
             }
             if (dataFlowSource.setCompletionThreshold(tc)) {
                 Task.Instance taskInstance = dataFlowSource.getTaskInstance();
-                if (taskInstance.wait) {
+                if (taskInstance.isWait()) {
                     // Ensure that a task that may have already completed is
                     // added back into wait list
                     waitForTasks.add(taskInstance);
@@ -1404,6 +1407,7 @@ public class Orchestrator {
      * waiting, another thread might give it work (rather than incur the cost of another thread startup while the main
      * thread sits idle).
      */
+    /*
     private void waitForCompletion() {
         outer: while (true) {
             while (invocationPickup != null) {
@@ -1471,6 +1475,7 @@ public class Orchestrator {
             }
         }
     }
+    */
 
     private void checkForTimeout() {
         long now = System.currentTimeMillis();
@@ -1480,6 +1485,7 @@ public class Orchestrator {
         }
     }
 
+    /*
     synchronized boolean requestMainThreadComplete(TaskMethodClosure inv) {
         if (waiting && invocationPickup == null) {
             if (inv.getCallInstance().taskInstance.wait) { // Don't put nowait
@@ -1493,6 +1499,7 @@ public class Orchestrator {
         }
         return false;
     }
+    */
 
     /**
      * Returns a newline-separated list of all calls of all tasks.
@@ -1559,6 +1566,7 @@ public class Orchestrator {
 
             try {
                 closureToInvoke.invoke(this,context,true);
+                
                 setForRollBack(closureToInvoke);
 
                 TaskRec rec = taskMapByType.get(task.producesClass);
@@ -1608,62 +1616,61 @@ public class Orchestrator {
     }
 
     synchronized void spawn(final TaskMethodClosure invocation) {
-        if (!requestMainThreadComplete(invocation)) {
-            LOG.debug("Spawning \"{}\"",invocation);
-            final Orchestrator lock = this;
-            threadBalance++;
-            ExecutorService executor = config.getExecutor();
-            final Thread parent = Thread.currentThread();
-            final TaskThreadStat parentStat = threadMap.get(parent);
-            // Offsetting by 1 ensures that 0 is left to refer to thread that invokes execute()
-            final int globalThreadIndex = threadsCreated.incrementAndGet() + 1;
-            invocation.prepare();
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    Thread currentThread = Thread.currentThread();
-                    TaskThreadStat threadStat;
-                    synchronized (threadMap) {
-                        int localThreadIndex = threadMap.size();
-                        threadStat = new TaskThreadStat(lock,localThreadIndex,globalThreadIndex,parentStat);
-                        lock.setThreadStatForCurrentThread(threadStat);
-                    }
-                    config.notifyThreadStart(threadStat);
-                    Exception err = null;
-                    try {
-                        invokeAndFinish(invocation,"spawned");
-                    }
-                    catch (Exception e) {
-                        // The exception will have been recorded at a deeper level if thrown from a pojo task
-                        // method; ensure it is recorded here in case it was generated outside a pojo method
-                        recordException(e);
-                        err = e;
-                    }
-                    finally {
-                        int tb;
-                        synchronized (lock) {
-                            tb = --lock.threadBalance;
-                            if (tb == 0) {
-                                // This could possibly be overwritten if
-                                // threadBalance is driven to
-                                // zero more than once during an execution
-                                lock.noWaitStats.endTime = System.currentTimeMillis();
-                            }
-                            lock.notifyAll();
-                        }
-                        if (LOG.isDebugEnabled()) {
-                            String how = err == null ? "normally" : "with exception";
-                            LOG.debug("Thread completed {} {} and returning to pool, {} open threads remaining",
-                                    invocation,how,tb);
-                        }
-                        lock.threadMap.remove(currentThread);
-                        config.notifyThreadEnd(threadStat);
-                    }
+        LOG.debug("Spawning \"{}\"",invocation);
+        final Orchestrator lock = this;
+        final Thread parent = Thread.currentThread();
+        final TaskThreadStat parentStat = threadMap.get(parent);
+        // Offsetting by 1 ensures that 0 is left to refer to thread that invokes execute()
+        final int globalThreadIndex = threadsCreated.incrementAndGet() + 1;
+        invocation.prepare();
+        threadBalance++;
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                Thread currentThread = Thread.currentThread();
+                TaskThreadStat threadStat;
+                synchronized (threadMap) {
+                    int localThreadIndex = threadMap.size();
+                    threadStat = new TaskThreadStat(lock,localThreadIndex,globalThreadIndex,parentStat);
+                    lock.setThreadStatForCurrentThread(threadStat);
                 }
-            });
-        }
+                config.notifyThreadStart(threadStat);
+                Exception err = null;
+                try {
+                    invokeAndFinish(invocation,"spawned");
+                }
+                catch (Exception e) {
+                    // The exception will have been recorded at a deeper level if thrown from a pojo task
+                    // method; ensure it is recorded here in case it was generated outside a pojo method
+                    recordException(e);
+                    err = e;
+                }
+                finally {
+                    int tb;
+                    synchronized (lock) {
+                        tb = --lock.threadBalance;
+                        if (tb == 0) {
+                            // This could possibly be overwritten if
+                            // threadBalance is driven to
+                            // zero more than once during an execution
+                            lock.noWaitStats.endTime = System.currentTimeMillis();
+                        }
+                        lock.notifyAll();
+                    }
+                    if (LOG.isDebugEnabled()) {
+                        String how = err == null ? "normally" : "with exception";
+                        LOG.debug("Thread completed {} {} and returning to pool, {} open threads remaining",
+                                invocation,how,tb);
+                    }
+                    lock.threadMap.remove(currentThread);
+                    config.notifyThreadEnd(threadStat);
+                }
+            }
+        };
+        boolean wait = invocation.getCallInstance().getTaskInstance().isWait();
+        executorLatch.executeFrom(runnable,wait);
     }
-
+    
     /**
      * After a task method has been invoked, look for more work, spawning more threads if there is more than one
      * ready-to-go non-light method (execute the light methods directly by this thread). The work here involves possibly

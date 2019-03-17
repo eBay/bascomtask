@@ -109,7 +109,7 @@ class Task extends DataFlowSource {
         /**
          * Should orchestrator wait for task to finish?
          */
-        boolean wait = true;
+        private boolean wait = true;
 
         /**
          * For logging/debugging; never null

@@ -220,7 +220,7 @@ abstract Object chooseOutput(Fired fired);
         }
 
         boolean isNoWait() {
-            return !taskInstance.wait;
+            return !taskInstance.isWait();
         }
 
         String formatState() {
@@ -509,10 +509,6 @@ abstract Object chooseOutput(Fired fired);
                         }
                         */
                     }
-                    if (fired==null) {
-                        System.out.println("HERE null");
-                    }
-                    
                     final int bindingVersion = fired==null ? -1 : fired.getVersion();
                     for (DataFlowSource.Instance source: paramAtIndex.bindings) {
                         //DataFlowSource.Instance source = paramAtIndex.bindings.get(i);

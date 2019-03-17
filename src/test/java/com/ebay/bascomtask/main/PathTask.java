@@ -333,6 +333,5 @@ abstract class PathTask {
         catch (InterruptedException e) {
             e.printStackTrace();
         }
-        ;
     }
 }

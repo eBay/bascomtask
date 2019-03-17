@@ -1410,7 +1410,7 @@ public class OrchestrationTest extends PathTaskTestBase {
      * Tests that a task method with an @Ordered parameter always preserves insertion order. 
      */
     @Test
-    public void testOrderedParamater() {
+    public void testOrderedParameter() {
         runOrderedParameter(100);
         runOrderedParameter(100,0);
         runOrderedParameter(100,50,0);
@@ -1770,6 +1770,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         class A extends PathTask {
             @Work
             public void exec() {
+                sleep(2*DELAY); // Provide time for B to complete
                 got();
             }
         }
@@ -1796,8 +1797,6 @@ public class OrchestrationTest extends PathTaskTestBase {
         PathTask taskB = track.work(b).noWait();
         PathTask taskC = track.work(c).exp(a,b);
 
-        // Orchestrator on its own wouldn't wait for B, but since it waits for C
-        // it must by implication wait for B
         verify(1);
     }
 
@@ -1894,20 +1893,20 @@ public class OrchestrationTest extends PathTaskTestBase {
 
     @Test
     public void testExplicitDependency() {
-        class RootAFollowsB extends PathTask {
+        class AFollowsB extends PathTask {
             @Work
             public void exec() {
                 got();
             }
         }
-        class RootBFollowsC extends PathTask {
+        class BFollowsC extends PathTask {
             @Work
             public void exec() {
                 got();
                 sleep(25);
             }
         }
-        class RootC extends PathTask {
+        class CFollowsNobody extends PathTask {
             @Work
             public void exec() {
                 got();
@@ -1915,9 +1914,9 @@ public class OrchestrationTest extends PathTaskTestBase {
             }
         }
 
-        RootAFollowsB a = new RootAFollowsB();
-        RootBFollowsC b = new RootBFollowsC();
-        RootC c = new RootC();
+        AFollowsB a = new AFollowsB();
+        BFollowsC b = new BFollowsC();
+        CFollowsNobody c = new CFollowsNobody();
         PathTask taskA = track.work(a).after(b);
         PathTask taskB = track.work(b).after(c);
         PathTask taskC = track.work(c);
