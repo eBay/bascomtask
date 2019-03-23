@@ -1660,32 +1660,35 @@ public class OrchestrationTest extends PathTaskTestBase {
         class A extends PathTask {
             @Work
             public void exec() {
+                System.out.println("GOT_A " + Thread.currentThread());
                 got();
             }
         }
         class B extends PathTask {
             @Work
             public void exec() {
+                System.out.println("GOT_B " + Thread.currentThread());
                 got();
             }
         }
         class C extends PathTask {
             @Work
             public void exec(@Count A a, @Count B b) {
+                System.out.println("GOT_C " + a + ", " + b +") " +  Thread.currentThread());
                 got(a,b);
             }
         }
 
+        A a0 = new A();
         A a1 = new A();
-        A a2 = new A();
+        B b0 = new B();
         B b1 = new B();
-        B b2 = new B();
         C c = new C();
-        PathTask taskA1 = track.work(a1);
-        PathTask taskA2 = track.work(a2);
-        PathTask taskB1 = track.work(b1).name("b1");
-        PathTask taskB2 = track.work(b2).name("b2");
-        PathTask taskC = track.work(c).exp(a1,b1).exp(a1,b2).exp(a2,b1).exp(a2,b2);
+        PathTask taskA1 = track.work(a0);
+        PathTask taskA2 = track.work(a1);
+        PathTask taskB1 = track.work(b0).name("b0");
+        PathTask taskB2 = track.work(b1).name("b1");
+        PathTask taskC = track.work(c).exp(a0,b0).exp(a0,b1).exp(a1,b0).exp(a1,b1);
         verify(3,5);
     }
 
@@ -2113,6 +2116,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         class A extends PathTask {
             @Work
             public void exec(ITask task) {
+                System.out.println("GOT_A");
                 got();
                 holder.aTask = task;
             }
@@ -2120,6 +2124,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         class B extends PathTask {
             @Work
             public void exec(A a, ITask task) {
+                System.out.println("GOT_B");
                 got(a);
                 holder.bTask = task;
             }
@@ -2127,6 +2132,7 @@ public class OrchestrationTest extends PathTaskTestBase {
         class C extends PathTask {
             @Work
             public void exec(ITask task, A a) {
+                System.out.println("GOT_C");
                 got(a);
                 holder.cTask = task;
             }

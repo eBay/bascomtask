@@ -234,15 +234,14 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
      * 
      * @param orc
      * @param context string for debug messages
-     * @param fire if false, the actual task method will not be invoked
      * @return result from target method
      */
-    void invoke(Orchestrator orc, String context, boolean fire) {
+    void invoke(Orchestrator orc, String context) {
         if (!ready()) {
             throw new RuntimeException("TaskMethodClosure not ready: " + this);
         }
         Method method = callInstance.getCall().getMethod();
-        if (fire && method != null) {
+        if (method != null) {
             prepare();
         }
         called = true;
@@ -250,19 +249,15 @@ public class TaskMethodClosure implements ITaskClosureGenerator {
         String kind = taskInstance.taskMethodBehavior == Task.TaskMethodBehavior.WORK ? "@Work" : "@PassThru";
 
         callInstance.startOneCall();
-        if (fire) {
-            if (method != null) {
-                this.context = context;
-                this.kind = kind;
-                // This call may safely generate an exception, which will be processed
-                // further up the chain.
-                output = executeTaskMethod();
-                orc.validateProvided(taskInstance);
-            }
+        if (method != null) {
+            this.context = context;
+            this.kind = kind;
+            // This call may safely generate an exception, which will be processed
+            // further up the chain.
+            output = executeTaskMethod();
+            orc.validateProvided(taskInstance);
         }
-        else {
-            LOG.debug("Skipping {} {} {}",context,kind,this);
-        }
+
         // For Scope.SEQUENTIAL, only one thread will be active at a time, so it
         // is safe for all threads to just reset this to false.
         callInstance.setReserve(false);

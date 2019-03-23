@@ -4,9 +4,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * An ExecutorService (although we've only bothered to implement one method thereof) that is also a latch,
- * and makes use of a single top-level thread instead of pulling from the pool rather than keeping that
- * top-level thread blocked.
+ * An ExecutorService (although we've only bothered to implement one method thereof) that is also a latch
+ * in that a caller to workWait() will not return until there are no more threads from this pool that have
+ * not completed. In addition, the caller thread to workWait() will be made available as one of the worker
+ * threads -- instead of leaving it blocked while a separate thread is pulled from the pool.
  * 
  * @author bremccarthy
  */
@@ -85,7 +86,8 @@ public class ExecutorLatch {
     
     /**
      * Thread-waits until there are no other active threads (i.e. threads create from {@link #execute(Runnable)}
-     * on this object). While waiting, the calling thread may be put to useful work.
+     * on this object). While waiting, the calling thread may be put to useful work. Does not support more than
+     * one simultaneous caller to this method.
      */
     public void workWait() {
         do {

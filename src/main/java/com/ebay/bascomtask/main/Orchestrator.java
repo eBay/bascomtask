@@ -1026,7 +1026,7 @@ public class Orchestrator {
         for (Call.Instance callInstance : taskInstance.calls) {
             System.out.println("LinkAll call="+callInstance);
             boolean match = true;
-            boolean root = true;
+            boolean root = !taskInstance.hasExplicitsBefore();
             for (int i = 0; i < callInstance.paramInstances.length; i++) {
                 Call.Param.Instance paramInstance = callInstance.paramInstances[i];
                 System.out.println("LinkAll param("+i+")="+paramInstance);
@@ -1565,7 +1565,7 @@ public class Orchestrator {
             Task task = taskOfCallInstance.getTask();
 
             try {
-                closureToInvoke.invoke(this,context,true);
+                closureToInvoke.invoke(this,context);
                 
                 setForRollBack(closureToInvoke);
 

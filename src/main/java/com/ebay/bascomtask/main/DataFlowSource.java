@@ -49,6 +49,18 @@ abstract class DataFlowSource {
         
         //final List<Fired> fired = new ArrayList<>();
         final FastAppender<Fired> fired = new FastAppender<>(new Fired[4]);
+        
+        int numberFiredAtOrBefore(int version) {
+            int numberFired = fired.size();
+            for (int i=numberFired-1; i>=0; i--) {
+                Fired nextFired = fired.get(i);
+                if (nextFired.getVersion() <= version) {
+                    return i+1;
+
+                } // Else ignore since nextFired occurred after the provided version
+            }
+            return 0;
+        }
     
         int getOrderAddedIndex() {
             return orderAddedIndex;

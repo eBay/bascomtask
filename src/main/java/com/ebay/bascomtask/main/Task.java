@@ -185,7 +185,7 @@ class Task extends DataFlowSource {
 
         @Override
         public String toString() {
-            return getName() + '(' + taskMethodBehavior + ") ==> " + targetPojo.toString();
+            return getName() + '@' + taskMethodBehavior + "<" + targetPojo.toString() + '>';
         }
         
         @Override
@@ -353,7 +353,6 @@ class Task extends DataFlowSource {
         }
 
         void addExplicitDependency(Instance other) {
-            System.out.println("AddXB " + this + " ===> " + other);
             if (explicitBeforeDependencies == null) {
                 explicitBeforeDependencies = new HashSet<>();
             }
@@ -366,6 +365,10 @@ class Task extends DataFlowSource {
                     }
                 }
             }
+        }
+        
+        boolean hasExplicitsBefore() {
+            return explicitBeforeDependencies != null && explicitBeforeDependencies.size() > 0;
         }
 
         List<Instance> getExplicitsBefore() {
@@ -437,7 +440,7 @@ class Task extends DataFlowSource {
             };
             TaskMethodClosure injectionClosure = new TaskMethodClosure();
             injectionClosure.initCall(getTaskInstance());
-            source.fired.add(new Fired(orc,this,injectionClosure));
+            source.fired.add(new Fired(this,injectionClosure));
             return source;
         }
         

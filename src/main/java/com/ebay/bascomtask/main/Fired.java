@@ -30,10 +30,23 @@ class Fired {
     private final TaskMethodClosure closure;
     private final int version;
     
+    Fired(DataFlowSource.Instance source, TaskMethodClosure closure) {
+        this(-1,source,closure);
+    }
+    
     Fired(Orchestrator orc, DataFlowSource.Instance source, TaskMethodClosure closure) {
+        this(orc.genVersion(),source,closure);
+    }
+    
+    private Fired(int version, DataFlowSource.Instance source, TaskMethodClosure closure) {
         this.source = source;
         this.closure = closure;
-        version = orc.genVersion();
+        this.version = version;
+    }
+    
+    @Override
+    public String toString() {
+        return "Fired("+source.toString()+"[version="+version+"]==>" + closure.getOutput()+ ')';
     }
     
     DataFlowSource.Instance getSource() {

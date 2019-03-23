@@ -356,7 +356,7 @@ abstract Object chooseOutput(Fired fired);
          * @return same or possibly new invocation for the calling thread to invoke
          */
         TaskMethodClosure bind(Orchestrator orc, String context, Fired binding, Param.Instance firingParameter, TaskMethodClosure pendingClosure) {
-            System.out.println("BIND " + this);
+            System.out.println("BIND " + this + ", fired="+binding);
             int ordinalOfFiringParameter = -1;
             if (firingParameter == null) { // A root task call, i.e. one with no task parameters?
                 ordinalOfFiringParameter = -1;
@@ -452,31 +452,9 @@ abstract Object chooseOutput(Fired fired);
          */
         TaskMethodClosure crossInvoke(Orchestrator orc, String context, Fired fired,
                 Param.Instance firingParameter, int ordinalOfFiringParameter, TaskMethodClosure pendingClosure, int px, Object[] args, boolean immediate) {
+            System.out.println("CIV_ARG("+Thread.currentThread()+") px="+px + "/" + args.length + ", fired="+fired + ", fp="+firingParameter);
             if (px == args.length) {
-                TaskMethodClosure parent = fired==null ? null : fired.getClosure();
-                TaskMethodClosure newInvocation = orc.getTaskMethodClosure(parent,this,args,longestIncoming); // makes a copy of args!
-                /*
-                if (!fire) {
-                    orc.invokeAndFinish(newInvocation,"non-fire",false);
-                }
-                */
-                if (light || immediate) {
-                    orc.invokeAndFinish(newInvocation,"light");
-                }
-                else if (isNoWait() && orc.isCallingThread()) {
-                    // Don't assign main thread with tasks it should not wait for
-                    orc.spawn(newInvocation);
-                }
-                else if (taskInstance.isFork()) {
-                    // Spawn right away if taskInstance has been flagged this way
-                    orc.spawn(newInvocation);
-                }
-                else if (!postPending(newInvocation)) {
-                    if (pendingClosure != null) {
-                        orc.spawn(pendingClosure);
-                    }
-                    return newInvocation;
-                }
+                return resolve(orc,context,fired,pendingClosure,args,immediate);
             }
             else {
                 final Param.Instance paramAtIndex = paramInstances[px];
@@ -490,60 +468,63 @@ abstract Object chooseOutput(Fired fired);
                 }
                 else {
                     if (paramAtIndex == firingParameter) {
-                            DataFlowSource.Instance source = fired.getSource();
-                            args[px] = source.chooseOutput(fired);
-                            return crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
-                                    pendingClosure,px+1,args,immediate);
-                            /*
-                        if (paramAtIndex.getParam().isOrdered) {
-                            to = paramAtIndex.bindings.size();
-                            immediate = true;
-                            if (pendingClosure != null) {
-                                orc.spawn(pendingClosure);
-                                pendingClosure = null;
-                            }
-                        }
-                        else {
-                            from = ordinalOfFiringParameter;
-                            to = from+1;
-                        }
-                        */
+                        DataFlowSource.Instance source = fired.getSource();
+                        args[px] = source.chooseOutput(fired);
+                        System.out.println("FIR_ARG("+Thread.currentThread()+") args["+px+"]="+args[px]);
+                        return crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
+                                pendingClosure,px+1,args,immediate);
                     }
                     final int bindingVersion = fired==null ? -1 : fired.getVersion();
                     for (DataFlowSource.Instance source: paramAtIndex.bindings) {
-                        //DataFlowSource.Instance source = paramAtIndex.bindings.get(i);
-                        final int numberFired = source.fired.size();
+                        // Operate only against Fired instances that occurred at or before our own trigger
 
-                        if (numberFired==0) {
+                        if (fired==null) {
                             args[px] = source.chooseOutput(null);
+                            //System.out.println("F0_ARG("+Thread.currentThread()+") args["+px+"]="+args[px]+", nf="+numberFired);
                             pendingClosure = crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
                                     pendingClosure,px+1,args,immediate);
                         }
                         else {
+                            final int numberFired = source.numberFiredAtOrBefore(bindingVersion);
+                            System.out.println("DFS_ARG("+Thread.currentThread()+") nf="+numberFired + ", source="+source);
+                            
                             for (int i=0; i<numberFired; i++) {
                                 Fired nextFired = source.fired.get(i);
-                                if (nextFired.getVersion() > bindingVersion) {
-                                    break; // Such a Fired would have occurred after that of our own binding
-                                }
-                                //Object output = nextFired.getClosure().getOutput(); 
-                                //args[px] = source.getSource().chooseOutput(targetPojo,output);
                                 args[px] = source.chooseOutput(nextFired);
+                                System.out.println("NXT_ARG("+Thread.currentThread()+") args["+px+"]="+args[px]+", nf="+numberFired+", nf.v="+nextFired.getVersion()+", bv="+bindingVersion+", "+i+'/'+numberFired);
                                 pendingClosure = crossInvoke(orc,context,fired,firingParameter,ordinalOfFiringParameter,
                                         pendingClosure,px+1,args,immediate);
-                                //firing = paramAtIndex.bindings.get(i).getClosure();
-                                //pendingClosure = crossInvokeNext(px,args,fire,i,firing,pendingClosure,freeze,firingParameter,
-                                //        ordinalOfFiringParameter,orc,context,immediate);
-                                //Param.Instance paramAtIndex = paramInstances[px];
-                                //args[px] = paramAtIndex.bindings.get(bindingIndex).getOutput();
-                                //boolean fireAtLevel = fire; // && paramClosure.getReturned();
                             }
                         }
                     }
                 }
+                return pendingClosure;
+            }
+        }
+
+        TaskMethodClosure resolve(Orchestrator orc, String context, Fired fired, TaskMethodClosure pendingClosure, Object[] args, boolean immediate) {
+            TaskMethodClosure parent = fired==null ? null : fired.getClosure();
+            TaskMethodClosure newInvocation = orc.getTaskMethodClosure(parent,this,args,longestIncoming); // makes a copy of args!
+            if (light || immediate) {
+                orc.invokeAndFinish(newInvocation,"light");
+            }
+            else if (isNoWait() && orc.isCallingThread()) {
+                // Don't assign main thread with tasks it should not wait for
+                orc.spawn(newInvocation);
+            }
+            else if (taskInstance.isFork()) {
+                // Spawn right away if taskInstance has been flagged this way
+                orc.spawn(newInvocation);
+            }
+            else if (!postPending(newInvocation)) {
+                if (pendingClosure != null) {
+                    orc.spawn(pendingClosure);
+                }
+                return newInvocation;
             }
             return pendingClosure;
         }
-
+        
         /**
          * If this is a Scope.SEQUENTIAL call and another thread is operating on
          * our method, queue the invocation for later execution. Also sets the
