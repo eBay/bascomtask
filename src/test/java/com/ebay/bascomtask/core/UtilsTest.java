@@ -33,13 +33,13 @@ public class UtilsTest extends BaseOrchestratorTest {
     public void format() {
         final String base = "BASE";
         StringBuilder sb = new StringBuilder();
-        Object[] args= {
+        Object[] args = {
                 3,
                 "foo",
                 CompletableFuture.completedFuture(7),
                 CompletableFuture.supplyAsync(() -> sleepThen(40, 9))
         };
-        Utils.formatFullSignature(sb,base,args);
-        assertEquals(base+"(3,foo,+7,-)",sb.toString());
+        Utils.formatFullSignature(sb, base, args);
+        assertEquals(base + "(3,foo,+7,-)", sb.toString());
     }
 }

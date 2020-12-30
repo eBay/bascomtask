@@ -64,7 +64,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
 
     @Override
     public String toString() {
-        return "BascomTaskFuture[" + getBinding() + "]==>"+super.toString();
+        return "BascomTaskFuture[" + getBinding() + "]==>" + super.toString();
     }
 
     Binding<T> getBinding() {
@@ -73,10 +73,11 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
 
     /**
      * Registers this object as a listener on the provided CF which might or might not be another BascomTaskFuture.
+     *
      * @param cf to register on
      */
     void bind(CompletableFuture<T> cf) {
-        cf.thenAccept(this::finish).whenComplete((msg,ex)-> {
+        cf.thenAccept(this::finish).whenComplete((msg, ex) -> {
             if (ex != null) {
                 Throwable cause = ex.getCause(); // Unwrap from java.util.concurrent.CompletionException
                 binding.engine.recordAnyException();
@@ -91,8 +92,8 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     }
 
     void propagateException(Throwable t) {
-        for (Binding<?> nextBinding: this.listenerBindings) {
-            LOG.debug("Faulting forward {} ",nextBinding);
+        for (Binding<?> nextBinding : this.listenerBindings) {
+            LOG.debug("Faulting forward {} ", nextBinding);
             BascomTaskFuture<?> bascomTaskFuture = nextBinding.getOutput();
             bascomTaskFuture.faultForward(t);
         }
@@ -134,7 +135,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     private static RuntimeException rethrow(ExecutionException e) {
         Throwable t = e.getCause();
         if (t instanceof RuntimeException) {
-            return (RuntimeException)t;
+            return (RuntimeException) t;
         }
         return new RuntimeException(t);
     }
@@ -167,21 +168,21 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     }
 
     @Override
-    public <U> CompletableFuture<U> thenApply(Function<? super T,? extends U> fn) {
+    public <U> CompletableFuture<U> thenApply(Function<? super T, ? extends U> fn) {
         binding.engine.execute(this);
         return super.thenApply(fn);
     }
 
     @Override
-    public <U> CompletableFuture<U> thenApplyAsync(Function<? super T,? extends U> fn) {
+    public <U> CompletableFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn) {
         binding.engine.execute(this);
         return super.thenApplyAsync(fn);
     }
 
     @Override
-    public <U> CompletableFuture<U> thenApplyAsync(Function<? super T,? extends U> fn, Executor executor) {
+    public <U> CompletableFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn, Executor executor) {
         binding.engine.execute(this);
-        return super.thenApplyAsync(fn,executor);
+        return super.thenApplyAsync(fn, executor);
     }
 
     @Override
@@ -199,7 +200,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     @Override
     public CompletableFuture<Void> thenAcceptAsync(Consumer<? super T> action, Executor executor) {
         binding.engine.execute(this);
-        return super.thenAcceptAsync(action,executor);
+        return super.thenAcceptAsync(action, executor);
     }
 
     @Override
@@ -217,150 +218,151 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     @Override
     public CompletableFuture<Void> thenRunAsync(Runnable action, Executor executor) {
         binding.engine.execute(this);
-        return super.thenRunAsync(action,executor);
+        return super.thenRunAsync(action, executor);
     }
 
     @Override
-    public <U,V> CompletableFuture<V> thenCombine(
+    public <U, V> CompletableFuture<V> thenCombine(
             CompletionStage<? extends U> other,
-            BiFunction<? super T,? super U,? extends V> fn) {
-        binding.engine.execute(other,this);
-        return super.thenCombine(other,fn);
+            BiFunction<? super T, ? super U, ? extends V> fn) {
+        binding.engine.execute(other, this);
+        return super.thenCombine(other, fn);
     }
 
     @Override
-    public <U,V> CompletableFuture<V> thenCombineAsync(
+    public <U, V> CompletableFuture<V> thenCombineAsync(
             CompletionStage<? extends U> other,
-            BiFunction<? super T,? super U,? extends V> fn) {
-        binding.engine.execute(other,this);
-        return super.thenCombineAsync(other,fn);
+            BiFunction<? super T, ? super U, ? extends V> fn) {
+        binding.engine.execute(other, this);
+        return super.thenCombineAsync(other, fn);
     }
 
     @Override
-    public <U,V> CompletableFuture<V> thenCombineAsync(
+    public <U, V> CompletableFuture<V> thenCombineAsync(
             CompletionStage<? extends U> other,
-            BiFunction<? super T,? super U,? extends V> fn, Executor executor) {
-        binding.engine.execute(other,this);
-        return super.thenCombineAsync(other,fn,executor);
+            BiFunction<? super T, ? super U, ? extends V> fn, Executor executor) {
+        binding.engine.execute(other, this);
+        return super.thenCombineAsync(other, fn, executor);
     }
 
     @Override
     public <U> CompletableFuture<Void> thenAcceptBoth(
             CompletionStage<? extends U> other,
             BiConsumer<? super T, ? super U> action) {
-        binding.engine.execute(other,this);
-        return super.thenAcceptBoth(other,action);
+        binding.engine.execute(other, this);
+        return super.thenAcceptBoth(other, action);
     }
 
     @Override
     public <U> CompletableFuture<Void> thenAcceptBothAsync(
             CompletionStage<? extends U> other,
             BiConsumer<? super T, ? super U> action) {
-        binding.engine.execute(other,this);
-        return super.thenAcceptBothAsync(other,action);
+        binding.engine.execute(other, this);
+        return super.thenAcceptBothAsync(other, action);
     }
 
     @Override
     public <U> CompletableFuture<Void> thenAcceptBothAsync(
             CompletionStage<? extends U> other,
             BiConsumer<? super T, ? super U> action, Executor executor) {
-        binding.engine.execute(other,this);
-        return super.thenAcceptBothAsync(other,action,executor);
+        binding.engine.execute(other, this);
+        return super.thenAcceptBothAsync(other, action, executor);
     }
 
     @Override
     public CompletableFuture<Void> runAfterBoth(CompletionStage<?> other,
                                                 Runnable action) {
-        binding.engine.execute(other,this);
-        return super.runAfterBoth(other,action);
+        binding.engine.execute(other, this);
+        return super.runAfterBoth(other, action);
     }
 
     @Override
     public CompletableFuture<Void> runAfterBothAsync(CompletionStage<?> other,
                                                      Runnable action) {
-        binding.engine.execute(other,this);
-        return super.runAfterBothAsync(other,action);
+        binding.engine.execute(other, this);
+        return super.runAfterBothAsync(other, action);
     }
 
     @Override
     public CompletableFuture<Void> runAfterBothAsync(CompletionStage<?> other,
                                                      Runnable action,
                                                      Executor executor) {
-        binding.engine.execute(other,this);
-        return super.runAfterBothAsync(other,action,executor);
+        binding.engine.execute(other, this);
+        return super.runAfterBothAsync(other, action, executor);
     }
 
     @Override
     public <U> CompletableFuture<U> applyToEither(
             CompletionStage<? extends T> other, Function<? super T, U> fn) {
-        binding.engine.execute(other,this);
-        return super.applyToEither(other,fn);
+        binding.engine.execute(other, this);
+        return super.applyToEither(other, fn);
     }
 
     @Override
     public <U> CompletableFuture<U> applyToEitherAsync(
             CompletionStage<? extends T> other, Function<? super T, U> fn) {
-        binding.engine.execute(other,this);
-        return super.applyToEitherAsync(other,fn);
+        binding.engine.execute(other, this);
+        return super.applyToEitherAsync(other, fn);
     }
 
     @Override
     public <U> CompletableFuture<U> applyToEitherAsync(
             CompletionStage<? extends T> other, Function<? super T, U> fn,
             Executor executor) {
-        binding.engine.execute(other,this);
-        return super.applyToEitherAsync(other,fn,executor);
+        binding.engine.execute(other, this);
+        return super.applyToEitherAsync(other, fn, executor);
     }
 
     @Override
     public CompletableFuture<Void> acceptEither(
             CompletionStage<? extends T> other, Consumer<? super T> action) {
-        binding.engine.execute(other,this);
-        return super.acceptEither(other,action);
+        binding.engine.execute(other, this);
+        return super.acceptEither(other, action);
     }
 
     @Override
     public CompletableFuture<Void> acceptEitherAsync(
             CompletionStage<? extends T> other, Consumer<? super T> action) {
-        binding.engine.execute(other,this);
-        return super.acceptEitherAsync(other,action);
+        binding.engine.execute(other, this);
+        return super.acceptEitherAsync(other, action);
     }
 
     @Override
     public CompletableFuture<Void> acceptEitherAsync(
             CompletionStage<? extends T> other, Consumer<? super T> action,
             Executor executor) {
-        binding.engine.execute(other,this);
-        return super.acceptEitherAsync(other,action,executor);
+        binding.engine.execute(other, this);
+        return super.acceptEitherAsync(other, action, executor);
     }
 
     @Override
     public CompletableFuture<Void> runAfterEither(CompletionStage<?> other,
                                                   Runnable action) {
-        binding.engine.execute(other,this);
-        return super.runAfterEither(other,action);
+        binding.engine.execute(other, this);
+        return super.runAfterEither(other, action);
     }
 
     @Override
     public CompletableFuture<Void> runAfterEitherAsync(CompletionStage<?> other,
                                                        Runnable action) {
-        binding.engine.execute(other,this);
-        return super.runAfterEitherAsync(other,action);
+        binding.engine.execute(other, this);
+        return super.runAfterEitherAsync(other, action);
     }
 
     @Override
     public CompletableFuture<Void> runAfterEitherAsync(CompletionStage<?> other,
                                                        Runnable action,
                                                        Executor executor) {
-        binding.engine.execute(other,this);
-        return super.runAfterEitherAsync(other,action,executor);
+        binding.engine.execute(other, this);
+        return super.runAfterEitherAsync(other, action, executor);
     }
 
     /**
      * The execute() logic can't be fully applied on compose operations since the incoming parameter
      * is a function that hides in CF result until the function is applied. Such a CF must be started
      * separately with another call such as {@link #get()} or {@link Orchestrator#execute(CompletionStage[])}.
-     * @param fn to apply
+     *
+     * @param fn  to apply
      * @param <U> of return
      * @return CompletableFuture
      */
@@ -383,7 +385,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
             Function<? super T, ? extends CompletionStage<U>> fn,
             Executor executor) {
         binding.engine.execute(this);
-        return super.thenComposeAsync(fn,executor);
+        return super.thenComposeAsync(fn, executor);
     }
 
     @Override
@@ -404,7 +406,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     public CompletableFuture<T> whenCompleteAsync(
             BiConsumer<? super T, ? super Throwable> action, Executor executor) {
         binding.engine.execute(this);
-        return super.whenCompleteAsync(action,executor);
+        return super.whenCompleteAsync(action, executor);
     }
 
     @Override
@@ -425,7 +427,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     public <U> CompletableFuture<U> handleAsync(
             BiFunction<? super T, Throwable, ? extends U> fn, Executor executor) {
         binding.engine.execute(this);
-        return super.handleAsync(fn,executor);
+        return super.handleAsync(fn, executor);
     }
 
     @Override

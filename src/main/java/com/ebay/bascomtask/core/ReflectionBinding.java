@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author Brendan McCarthy
  */
-class ReflectionBinding<USERTASKTYPE,RETURNTYPE> extends Binding<RETURNTYPE> {
+class ReflectionBinding<USERTASKTYPE, RETURNTYPE> extends Binding<RETURNTYPE> {
     private final TaskWrapper<USERTASKTYPE> taskWrapper;
     private final Object userTask;
     private final Method method;
@@ -46,13 +46,13 @@ class ReflectionBinding<USERTASKTYPE,RETURNTYPE> extends Binding<RETURNTYPE> {
         // Only one of these should be set -- that is also true in TaskWrapper
         // An explicit call on the task overrules a @Light annotation if present
         this.runSpawned = taskWrapper.isRunSpawned();
-        this.light = taskWrapper.isLight() || (Utils.getAnnotation(userTask,method, Light.class) != null && !runSpawned);
+        this.light = taskWrapper.isLight() || (Utils.getAnnotation(userTask, method, Light.class) != null && !runSpawned);
 
         if (args != null) {
             for (Object next : args) {
                 if (next instanceof CompletableFuture) {
                     CompletableFuture<?> cf = (CompletableFuture<?>) next;
-                    ensureWrapped(cf,true);
+                    ensureWrapped(cf, true);
                 }
             }
         }
@@ -125,23 +125,23 @@ class ReflectionBinding<USERTASKTYPE,RETURNTYPE> extends Binding<RETURNTYPE> {
     protected Object invokeTaskMethod() {
         try {
             //method.setAccessible(true); // TBR, better place for this?
-            return method.invoke(userTask,args);
+            return method.invoke(userTask, args);
         } catch (InvocationTargetException itx) {
             Throwable actual = itx.getCause();
             RuntimeException re;
             if (actual instanceof RuntimeException) {
-                re = (RuntimeException)actual;
+                re = (RuntimeException) actual;
             } else {
                 re = new RuntimeException(actual);
             }
             throw re;
         } catch (IllegalAccessException e) {
-            throw engine.record(new RuntimeException("Unable to invoke method",e));
+            throw engine.record(new RuntimeException("Unable to invoke method", e));
         }
     }
 
     @Override
     public void formatActualSignature(StringBuilder sb) {
-        Utils.formatFullSignature(sb,getTaskPlusMethodName(),args);
+        Utils.formatFullSignature(sb, getTaskPlusMethodName(), args);
     }
 }

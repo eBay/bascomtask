@@ -30,18 +30,23 @@ import java.util.function.Supplier;
 public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
     /**
      * Creates a CompletableFuture around the lambda expression.
+     *
      * @return evaluated CompletableFuture
      */
     CompletableFuture<R> apply();
 
     /**
      * Convenience method that evaluates lambda expression right away.
+     *
      * @return evaluated value
      */
-    default R get() {return get(apply());}
+    default R get() {
+        return get(apply());
+    }
 
     /**
      * An SupplierTask that takes no arguments.
+     *
      * @param <R> type of return result
      */
     class SupplierTask0<R> implements SupplierTask<R> {
@@ -59,14 +64,15 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
 
     /**
      * An SupplierTask that takes 1 argument.
+     *
      * @param <IN> type of input
-     * @param <R> type of return result
+     * @param <R>  type of return result
      */
-    class SupplierTask1<IN,R> implements SupplierTask<R> {
-        private final Function<IN,R> fn;
+    class SupplierTask1<IN, R> implements SupplierTask<R> {
+        private final Function<IN, R> fn;
         private final CompletableFuture<IN> cf;
 
-        public SupplierTask1(CompletableFuture<IN> cf, Function<IN,R> fn) {
+        public SupplierTask1(CompletableFuture<IN> cf, Function<IN, R> fn) {
             this.cf = cf;
             this.fn = fn;
         }
@@ -80,16 +86,17 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
 
     /**
      * An SupplierTask that takes 2 arguments.
+     *
      * @param <IN1> type of first input
      * @param <IN2> type of second input
-     * @param <R> type of return result
+     * @param <R>   type of return result
      */
-    class SupplierTask2<IN1,IN2,R> implements SupplierTask<R> {
-        private final BiFunction<IN1,IN2,R> fn;
+    class SupplierTask2<IN1, IN2, R> implements SupplierTask<R> {
+        private final BiFunction<IN1, IN2, R> fn;
         private final CompletableFuture<IN1> cf1;
         private final CompletableFuture<IN2> cf2;
 
-        public SupplierTask2(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiFunction<IN1,IN2,R> fn) {
+        public SupplierTask2(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiFunction<IN1, IN2, R> fn) {
             this.cf1 = cf1;
             this.cf2 = cf2;
             this.fn = fn;
@@ -99,7 +106,7 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
         public CompletableFuture<R> apply() {
             IN1 v1 = get(cf1);
             IN2 v2 = get(cf2);
-            return complete(fn.apply(v1,v2));
+            return complete(fn.apply(v1, v2));
         }
     }
 }

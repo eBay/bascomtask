@@ -44,7 +44,7 @@ public class Engine implements Orchestrator {
     private boolean anyExceptions = false; // If at least one exception
 
     // BT-managed threads are flagged for bookeepping purposes
-    private final ThreadLocal<Boolean> isBtManagedThread = ThreadLocal.withInitial(()->false);
+    private final ThreadLocal<Boolean> isBtManagedThread = ThreadLocal.withInitial(() -> false);
 
     private SpawnMode spawnMode = null; // When null, takes on globally-configured state
 
@@ -53,9 +53,11 @@ public class Engine implements Orchestrator {
 
     // For passing work (i.e. running tasks) back to the main thread
     private final BlockingQueue<BlockingQueue<CrossThreadChannel>> idleThreads = new LinkedBlockingDeque<>();
+
     static class CrossThreadChannel {
         final Thread parentThread;
         final Runnable runnable;
+
         CrossThreadChannel(Thread parentThread, Runnable runnable) {
             this.parentThread = parentThread;
             this.runnable = runnable;
@@ -82,9 +84,9 @@ public class Engine implements Orchestrator {
 
     @Override
     public SpawnMode getEffectiveSpawnMode() {
-        if (spawnMode==null) {
+        if (spawnMode == null) {
             spawnMode = GlobalConfig.INSTANCE.getSpawnMode();
-            if (spawnMode==null) {
+            if (spawnMode == null) {
                 spawnMode = SpawnMode.WHEN_NEEDED;
             }
         }
@@ -94,7 +96,7 @@ public class Engine implements Orchestrator {
     private long timeoutMs = 0;
 
     private long getEffectiveTimeoutMs() {
-        if (timeoutMs==0) {
+        if (timeoutMs == 0) {
             return GlobalConfig.INSTANCE.getTimeoutMs();
         } else {
             return getTimeoutMs();
@@ -137,6 +139,7 @@ public class Engine implements Orchestrator {
      * If that CompletableFuture is !isDone() we make the calling thread available for work (i.e. running spawned
      * tasks) in the meantime since that thread would block on the the read call while we otherwise would have to
      * pull a new task from the thread pool.
+     *
      * @param cf to start are watch for completion
      */
     private void waitUntilComplete(CompletableFuture<?> cf) {
@@ -149,7 +152,7 @@ public class Engine implements Orchestrator {
                     // Complete a waiting thread if there is one and run() method hasn't already processed it
                     if (!waiting.offer(new CrossThreadChannel(null, null))) {
                         // This is ok, just log for information purposes
-                        LOG.debug("On completion of {}, offer preempted",Thread.currentThread().getName());
+                        LOG.debug("On completion of {}, offer preempted", Thread.currentThread().getName());
                     }
                 });
 
@@ -157,7 +160,7 @@ public class Engine implements Orchestrator {
                     if (idleThreads.offer(waiting)) {  // Publish the availability of this thread
                         CrossThreadChannel channel;
                         try {
-                            LOG.debug("Main thread {} waiting...",Thread.currentThread().getName());
+                            LOG.debug("Main thread {} waiting...", Thread.currentThread().getName());
                             channel = waiting.take();  // Waits for either a work task (runnable) or a termination marker
                         } catch (InterruptedException e) {
                             break;
@@ -178,7 +181,7 @@ public class Engine implements Orchestrator {
     void run(Runnable runnable, Thread parentThread) {
         BlockingQueue<CrossThreadChannel> waiting = idleThreads.poll();
         if (waiting != null) { // Check for a waiting thread first
-            CrossThreadChannel channel = new CrossThreadChannel(parentThread,runnable);
+            CrossThreadChannel channel = new CrossThreadChannel(parentThread, runnable);
             if (waiting.offer(channel)) {
                 return; // If we were able to offer to 1-sized queue, it will be picked up by main thread
             }
@@ -206,6 +209,7 @@ public class Engine implements Orchestrator {
      * Records an exception if not already recorded, and if there are no active BT threads then
      * terminate active CFs because other threads (or the main thread, which may have exited BT
      * and is waiting on one of those CFs) would otherwise hang.
+     *
      * @param e to record
      * @return exception to throw
      */
@@ -223,7 +227,7 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public void execute(CompletionStage<?>...futures) {
+    public void execute(CompletionStage<?>... futures) {
         final long ms = getEffectiveTimeoutMs();
         if (ms > 0 && !isBtManagedThread.get()) {
             // It would be wasteful to do this on BT-managed threads which during execution could easily
@@ -235,7 +239,7 @@ public class Engine implements Orchestrator {
     }
 
     private void executedTimed(long ms, CompletionStage<?>[] futures) {
-        GlobalConfig.INSTANCE.executorService.execute(()-> executeInternal(futures));
+        GlobalConfig.INSTANCE.executorService.execute(() -> executeInternal(futures));
         boolean timedOut;
         try {
             timedOut = !GlobalConfig.INSTANCE.executorService.awaitTermination(ms, TimeUnit.MILLISECONDS);
@@ -250,9 +254,9 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public void executeAndWait(CompletableFuture<?>...futures) {
+    public void executeAndWait(CompletableFuture<?>... futures) {
         execute(futures);
-        for (CompletableFuture<?> next: futures) {
+        for (CompletableFuture<?> next : futures) {
             try {
                 next.get();
             } catch (Exception ignored) {
@@ -262,11 +266,11 @@ public class Engine implements Orchestrator {
         }
     }
 
-    private void executeInternal(CompletionStage<?>...futures) {
+    private void executeInternal(CompletionStage<?>... futures) {
         Binding<?> pending = null;
-        for (CompletionStage<?> next: futures) {
+        for (CompletionStage<?> next : futures) {
             if (next instanceof BascomTaskFuture) {
-                BascomTaskFuture<?> bascomTaskFuture = (BascomTaskFuture<?>)next;
+                BascomTaskFuture<?> bascomTaskFuture = (BascomTaskFuture<?>) next;
                 pending = bascomTaskFuture.getBinding().activate(pending);
             }
         }
@@ -278,7 +282,7 @@ public class Engine implements Orchestrator {
     @Override
     public TaskMeta getTaskMeta(CompletableFuture<?> cf) {
         if (cf instanceof BascomTaskFuture) {
-            BascomTaskFuture<?> bascomTaskFuture = (BascomTaskFuture<?>)cf;
+            BascomTaskFuture<?> bascomTaskFuture = (BascomTaskFuture<?>) cf;
             return bascomTaskFuture.getBinding();
         }
         return null;
@@ -286,7 +290,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public String toString() {
-        return "Engine(ex="+anyExceptions+")";
+        return "Engine(ex=" + anyExceptions + ")";
     }
 
     @Override
@@ -299,12 +303,12 @@ public class Engine implements Orchestrator {
         Class<BASE> tc = extractTaskInterface(t);
 
         @SuppressWarnings("unchecked")
-        BASE base = (BASE)t;
-        TaskWrapper<BASE> task = new TaskWrapper<>(this,base,t);
+        BASE base = (BASE) t;
+        TaskWrapper<BASE> task = new TaskWrapper<>(this, base, t);
 
         @SuppressWarnings("unchecked")
         BASE proxy = (BASE) Proxy.newProxyInstance(tc.getClassLoader(),
-                new Class[] {tc},
+                new Class[]{tc},
                 task);
 
         return proxy;
@@ -312,24 +316,24 @@ public class Engine implements Orchestrator {
 
     @Override
     public <R> CompletableFuture<R> cond(CompletableFuture<Boolean> condition, CompletableFuture<R> thenValue, boolean thenActivate, CompletableFuture<R> elseValue, boolean elseActivate) {
-        ConditionalTask<R> task = new ConditionalTask<>(this,condition,thenValue,thenActivate,elseValue,elseActivate);
+        ConditionalTask<R> task = new ConditionalTask<>(this, condition, thenValue, thenActivate, elseValue, elseActivate);
         return task.getOutput();
     }
 
     /**
      * Extracts the interface BASE from TaskInterface<BASE> in the class hierarchy.
-     * @param task to extract interface from
+     *
+     * @param task   to extract interface from
      * @param <BASE> Generic type of TaskInterface
      * @return
      */
     <BASE> Class<BASE> extractTaskInterface(TaskInterface<BASE> task) {
         Class<BASE> clazz = extractTaskInterfaceFromClass(task.getClass());
-        if (clazz==null) {
+        if (clazz == null) {
             // This should not happen because compiler restricts calls to those that
             // implement interface TaskInterface
             throw new InvalidTaskException("Ill-Structured task does not implement com.ebay.bascomtask.core.TaskInterface: " + task);
-        }
-        else return clazz;
+        } else return clazz;
     }
 
     @SuppressWarnings("unchecked")

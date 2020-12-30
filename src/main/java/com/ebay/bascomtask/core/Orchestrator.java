@@ -25,7 +25,7 @@ import java.util.function.*;
  *
  * @author Brendan McCarthy
  */
-public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
+public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Creates an Orchestrator.
@@ -47,6 +47,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
 
     /**
      * Returns {@link #getSpawnMode()} or, if null, the globally-configured spawn mode.
+     *
      * @return non-null spawnMode
      */
     SpawnMode getEffectiveSpawnMode();
@@ -67,7 +68,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
      *
      * @param futures to execute
      */
-    void execute(CompletionStage<?>...futures);
+    void execute(CompletionStage<?>... futures);
 
     /**
      * Variant of {@link #execute(CompletionStage[])} that waits for all of its arguments to finish and
@@ -75,23 +76,23 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
      *
      * @param futures to execute and then wait on
      */
-    void executeAndWait(CompletableFuture<?>...futures);
+    void executeAndWait(CompletableFuture<?>... futures);
 
     /**
      * Execute one of two choices depending on the result of the supplied condition. Neither choice is
      * executed until condition completes, and condition is only executed if the output from this method
      * is activated (reachable from a required CompletableFuture).
      *
-     * @param condition to first evaluate
+     * @param condition  to first evaluate
      * @param thenFuture chosen if condition evaluates to true
      * @param elseFuture chosen if condition evaluates to false
-     * @param <R> type of return result
+     * @param <R>        type of return result
      * @return thenFuture or elseFuture
      */
     default <R> CompletableFuture<R> cond(CompletableFuture<Boolean> condition,
                                           CompletableFuture<R> thenFuture,
                                           CompletableFuture<R> elseFuture) {
-        return cond(condition,thenFuture,false,elseFuture,false);
+        return cond(condition, thenFuture, false, elseFuture, false);
     }
 
     /**
@@ -100,12 +101,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
      * condition is activated. That would be before the result of condition is known, so proactively starting
      * either future may be wasteful but it will also be faster.
      *
-     * @param condition to first evaluate
-     * @param thenFuture chosen if condition evaluates to true
+     * @param condition    to first evaluate
+     * @param thenFuture   chosen if condition evaluates to true
      * @param thenActivate iff true then start executing at same time as condition
-     * @param elseFuture chosen if condition evaluates to false
+     * @param elseFuture   chosen if condition evaluates to false
      * @param elseActivate iff true then start executing at same time as condition
-     * @param <R> type of return result
+     * @param <R>          type of return result
      * @return thenFuture or elseFuture
      */
     <R> CompletableFuture<R> cond(CompletableFuture<Boolean> condition,
@@ -159,19 +160,20 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
      * @param <R>      type of return result
      * @return CompletableFuture for the return result
      */
-    default <TASK,R> CompletableFuture<R> task(TASK userTask, Function<TASK,R> fn) {
-        return fn(()->userTask,fn).apply();
+    default <TASK, R> CompletableFuture<R> task(TASK userTask, Function<TASK, R> fn) {
+        return fn(() -> userTask, fn).apply();
     }
 
     /**
      * Adds a task wrapper on any user pojo task method with a void result.
+     *
      * @param userTask pojo task
-     * @param fn Consumer function (returns no value)
-     * @param <TASK> type of user task
+     * @param fn       Consumer function (returns no value)
+     * @param <TASK>   type of user task
      * @return CompletableFuture for void result -- doesn't return a value but can be used to initiate execution
      */
     default <TASK> CompletableFuture<Void> voidTask(TASK userTask, Consumer<TASK> fn) {
-        return vfn(()->userTask,fn).apply();
+        return vfn(() -> userTask, fn).apply();
     }
 
 
@@ -181,7 +183,8 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
 
     /**
      * Produces function task that takes no arguments and produces one result.
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param fn  function to apply to that pojo if/when task is activated
      * @param <R> type of return result
      * @return Function task
      */
@@ -191,154 +194,165 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable  {
 
     /**
      * Produces function task that takes one argument and produces one result.
-     * @param s1 Supplier function (returns a value)
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param s1   Supplier function (returns a value)
+     * @param fn   function to apply to that pojo if/when task is activated
      * @param <IN> type of input
-     * @param <R> type of return result
+     * @param <R>  type of return result
      * @return Function task
      */
-    default <IN,R> SupplierTask<R> fn(Supplier<IN> s1, Function<IN,R> fn) {
+    default <IN, R> SupplierTask<R> fn(Supplier<IN> s1, Function<IN, R> fn) {
         CompletableFuture<IN> in1 = fn(s1).apply();
-        return task(new SupplierTask.SupplierTask1<>(in1,fn));
+        return task(new SupplierTask.SupplierTask1<>(in1, fn));
     }
 
     /**
      * Produces function task that takes one non-lambda argument and produces one result.
-     * @param in provides result to be applied to function
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param in   provides result to be applied to function
+     * @param fn   function to apply to that pojo if/when task is activated
      * @param <IN> base type of input
-     * @param <R> type of return result
+     * @param <R>  type of return result
      * @return Function task
      */
-    default <IN,R> SupplierTask<R> fn(CompletableFuture<IN> in, Function<IN,R> fn) {
-        return task(new SupplierTask.SupplierTask1<>(in,fn));
+    default <IN, R> SupplierTask<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
+        return task(new SupplierTask.SupplierTask1<>(in, fn));
     }
 
     /**
      * Produces function task that takes two non-lambda arguments and produces one result.
-     * @param in1 provides first value for fn
-     * @param in2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param in1   provides first value for fn
+     * @param in2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> base type of input1
      * @param <IN2> base type of input2
-     * @param <R> type of return result
+     * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1,IN2,R> SupplierTask<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1,IN2,R> fn) {
+    default <IN1, IN2, R> SupplierTask<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
         return task(new SupplierTask.SupplierTask2<>(in1, in2, fn));
     }
 
     /**
      * Produces function task that takes mixed arguments and produces one result.
-     * @param s1 provides first value for fn
-     * @param in2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param s1    provides first value for fn
+     * @param in2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> type of input1
      * @param <IN2> base type of input2
-     * @param <R> type of return result
+     * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1,IN2,R> SupplierTask<R> fn(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1,IN2,R> fn) {
+    default <IN1, IN2, R> SupplierTask<R> fn(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
         CompletableFuture<IN1> in1 = fn(s1).apply();
-        return fn(in1,in2,fn);
+        return fn(in1, in2, fn);
     }
 
     /**
      * Produces function task that takes mixed arguments and produces one result.
-     * @param in1 provides first value for fn
-     * @param s2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param in1   provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> base type of input1
      * @param <IN2> type of input2
-     * @param <R> type of return result
+     * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1,IN2,R> SupplierTask<R> fn(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1,IN2,R> fn) {
+    default <IN1, IN2, R> SupplierTask<R> fn(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
         CompletableFuture<IN2> in2 = fn(s2).apply();
-        return fn(in1,in2,fn);
+        return fn(in1, in2, fn);
     }
 
     /**
      * Produces function task that takes two lambda arguments and produces one result.
-     * @param s1 provides first value for fn
-     * @param s2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param s1    provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> type of input1
      * @param <IN2> type of input2
-     * @param <R> type of return result
+     * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1,IN2,R> SupplierTask<R> fn(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1,IN2,R> fn) {
+    default <IN1, IN2, R> SupplierTask<R> fn(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
         CompletableFuture<IN1> in1 = fn(s1).apply();
         CompletableFuture<IN2> in2 = fn(s2).apply();
-        return fn(in1,in2,fn);
+        return fn(in1, in2, fn);
     }
 
     /**
      * Produces function task that takes one lambda argument and produces no result.
-     * @param s1 provides value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param s1   provides value for fn
+     * @param fn   function to apply to that pojo if/when task is activated
      * @param <IN> type of input1
      * @return Function task
      */
     default <IN> ConsumerTask vfn(Supplier<IN> s1, Consumer<IN> fn) {
         CompletableFuture<IN> in1 = fn(s1).apply();
-        return task(new ConsumerTask.ConsumerTask1<>(in1,fn));
+        return task(new ConsumerTask.ConsumerTask1<>(in1, fn));
     }
 
     /**
      * Produces function task that takes mixed arguments and produces no result.
-     * @param cf1 provides first value for fn
-     * @param s2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param cf1   provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> base type of input1
      * @param <IN2> type of input2
      * @return Function task
      */
-    default <IN1,IN2> ConsumerTask vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1,IN2> fn) {
+    default <IN1, IN2> ConsumerTask vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
         CompletableFuture<IN2> in2 = fn(s2).apply();
-        return task(new ConsumerTask.ConsumerTask2<>(cf1,in2,fn));
+        return task(new ConsumerTask.ConsumerTask2<>(cf1, in2, fn));
     }
 
     /**
      * Produces function task that takes non-lambda arguments and produces no result.
-     * @param cf1 provides first value for fn
-     * @param cf2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param cf1   provides first value for fn
+     * @param cf2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> base type of input1
      * @param <IN2> base type of input2
      * @return Function task
      */
-    default <IN1,IN2> ConsumerTask vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1,IN2> fn) {
-        return task(new ConsumerTask.ConsumerTask2<>(cf1,cf2,fn));
+    default <IN1, IN2> ConsumerTask vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+        return task(new ConsumerTask.ConsumerTask2<>(cf1, cf2, fn));
     }
 
     /**
      * Produces function task that takes mixed arguments and produces no result.
-     * @param s1 provides first value for fn
-     * @param cf2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param s1    provides first value for fn
+     * @param cf2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> type of input1
      * @param <IN2> base type of input2
      * @return Function task
      */
-    default <IN1,IN2> ConsumerTask vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1,IN2> fn) {
+    default <IN1, IN2> ConsumerTask vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
         CompletableFuture<IN1> in1 = fn(s1).apply();
-        return task(new ConsumerTask.ConsumerTask2<>(in1,cf2,fn));
+        return task(new ConsumerTask.ConsumerTask2<>(in1, cf2, fn));
     }
 
     /**
      * Produces function task that takes two lambda arguments and produces no result.
-     * @param s1 provides first value for fn
-     * @param s2 provides second value for fn
-     * @param fn function to apply to that pojo if/when task is activated
+     *
+     * @param s1    provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
      * @param <IN1> type of input1
      * @param <IN2> type of input2
      * @return Function task
      */
-    default <IN1,IN2> ConsumerTask vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1,IN2> fn) {
+    default <IN1, IN2> ConsumerTask vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
         CompletableFuture<IN1> in1 = fn(s1).apply();
         CompletableFuture<IN2> in2 = fn(s2).apply();
-        return task(new ConsumerTask.ConsumerTask2<>(in1,in2,fn));
+        return task(new ConsumerTask.ConsumerTask2<>(in1, in2, fn));
     }
 }

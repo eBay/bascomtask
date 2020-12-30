@@ -60,6 +60,7 @@ public enum SpawnMode {
     /**
      * Returns true if this mode allows for the main thread can be picked up while idle and otherwise
      * waiting for a CompletableFuture to complete, and used to to process spawning task methods.
+     *
      * @return true iff main thread is reusable
      */
     public boolean isMainThreadReusable() {
@@ -68,6 +69,7 @@ public enum SpawnMode {
 
     public interface SpawnModable {
         SpawnMode getSpawnMode();
+
         void setSpawnMode(SpawnMode spawnMode);
     }
 }

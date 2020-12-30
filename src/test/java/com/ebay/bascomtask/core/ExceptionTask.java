@@ -32,14 +32,17 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
     }
 
     CompletableFuture<RET> faultImmediate(String msg);
+
     CompletableFuture<RET> faultAfter(int ms, String msg);
+
     CompletableFuture<RET> faultAfter(CompletableFuture<RET> x, int ms, String msg);
 
     CompletableFuture<RET> faultImmediateCompletion(int ms, String msg);
 
     /**
      * Throws Exception after interval in external (non-BT) CompletableFuture-managed thread.
-     * @param ms to wait before throwing
+     *
+     * @param ms  to wait before throwing
      * @param msg to include in exceptino
      * @return !isDone() CompletableFuture
      */
@@ -55,7 +58,7 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
             try {
                 Thread.sleep(ms);
             } catch (InterruptedException e) {
-                throw new RuntimeException("Bad interrupt",e);
+                throw new RuntimeException("Bad interrupt", e);
             }
             throw new FaultHappened(msg);
         }
@@ -64,13 +67,13 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
             try {
                 Thread.sleep(ms);
             } catch (InterruptedException e) {
-                throw new RuntimeException("Bad interrupt",e);
+                throw new RuntimeException("Bad interrupt", e);
             }
             throw new FaultHappened(msg);
         }
 
         private CompletableFuture<RET> faultWithCompletion(int ms, String msg) {
-            return CompletableFuture.supplyAsync(()->delayFault(ms,msg));
+            return CompletableFuture.supplyAsync(() -> delayFault(ms, msg));
         }
 
         @Override
@@ -80,22 +83,24 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
 
         @Override
         public CompletableFuture<RET> faultAfter(int ms, String msg) {
-            return fault(ms,msg);
+            return fault(ms, msg);
         }
 
         @Override
         public CompletableFuture<RET> faultAfter(CompletableFuture<RET> x, int ms, String msg) {
-            return fault(ms,msg);
+            return fault(ms, msg);
         }
 
         @Override
         public CompletableFuture<RET> faultImmediateCompletion(int ms, String msg) {
-            return CompletableFuture.supplyAsync(()->{throw new FaultHappened(msg);});
+            return CompletableFuture.supplyAsync(() -> {
+                throw new FaultHappened(msg);
+            });
         }
 
         @Override
         public CompletableFuture<RET> faultWithCompletionAfter(int ms, String msg) {
-            return faultWithCompletion(ms,msg);
+            return faultWithCompletion(ms, msg);
         }
     }
 

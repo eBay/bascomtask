@@ -35,54 +35,54 @@ public class TaskVariationsTest extends BaseOrchestratorTest {
     @Test
     public void yes() throws Exception {
         CompletableFuture<String> s = $.task(new Yes()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void yesp() throws Exception {
         CompletableFuture<String> s = $.task(new YesP<String>()).returnType(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void subYes() throws Exception {
         CompletableFuture<String> s = $.task(new SubYes()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void yesBefore() throws Exception {
         CompletableFuture<String> s = $.task(new YesBefore()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void yesAfter() throws Exception {
         CompletableFuture<String> s = $.task(new YesAfter()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void yesAndNo() throws Exception {
         CompletableFuture<String> s = $.task(new YesAndNo()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void yesAndNoClass() throws Exception {
         CompletableFuture<String> s = $.task(new YesAndNoClass()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void yesAndNoSubClass() throws Exception {
         CompletableFuture<String> s = $.task(new YesAndNoSubClass()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 
     @Test
     public void noClassYes() throws Exception {
         CompletableFuture<String> s = $.task(new NoClassYes()).ret(SV);
-        assertEquals(SV,s.get());
+        assertEquals(SV, s.get());
     }
 }

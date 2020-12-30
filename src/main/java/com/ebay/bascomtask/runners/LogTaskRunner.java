@@ -36,6 +36,7 @@ public class LogTaskRunner implements TaskRunner {
 
     /**
      * Set debug level. This does not configure the level, which must be done in any slf4j-conformant manner.
+     *
      * @param level to use
      */
     public void setLevel(LogTaskLevel level) {
@@ -44,6 +45,7 @@ public class LogTaskRunner implements TaskRunner {
 
     /**
      * Makes log output include actual method arguments.
+     *
      * @param full include method arguments or not
      */
     public void setFullSignatureLogging(boolean full) {
@@ -83,7 +85,7 @@ public class LogTaskRunner implements TaskRunner {
     @Override
     public void onComplete(TaskRun taskRun, Object fromBefore, boolean doneOnExit) {
         if (level.isEnabled(LOG) && !doneOnExit) {
-            level.write(LOG,"COMPLETE-TASK {}",fromBefore);
+            level.write(LOG, "COMPLETE-TASK {}", fromBefore);
         }
     }
 }

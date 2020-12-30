@@ -42,13 +42,15 @@ public class StatTaskRunner implements TaskRunner {
         private long maxExecTime = 0;
         private long minExecTime = Long.MAX_VALUE;
         private long execTotal = 0;
+
         double avg(int count) {
-            return count==0 ? 0 : execTotal / (double)count;
+            return count == 0 ? 0 : execTotal / (double) count;
         }
+
         void add(long duration) {
             execTotal += duration;
-            minExecTime = Math.min(minExecTime,duration);
-            maxExecTime = Math.max(maxExecTime,duration);
+            minExecTime = Math.min(minExecTime, duration);
+            maxExecTime = Math.max(maxExecTime, duration);
         }
     }
 
@@ -56,6 +58,7 @@ public class StatTaskRunner implements TaskRunner {
         private int count = 0;
         final InternalTiming execTime = new InternalTiming();
         final InternalTiming completionTime = new InternalTiming();
+
         void add(long duration) {
             count++;
             execTime.add(duration);
@@ -63,12 +66,12 @@ public class StatTaskRunner implements TaskRunner {
     }
 
     private synchronized void add(String key, long duration) {
-        InternalStat stat = map.computeIfAbsent(key, k->new InternalStat());
+        InternalStat stat = map.computeIfAbsent(key, k -> new InternalStat());
         stat.add(duration);
     }
 
     private synchronized void extend(String key, long duration) {
-        InternalStat stat = map.computeIfAbsent(key, k->new InternalStat());
+        InternalStat stat = map.computeIfAbsent(key, k -> new InternalStat());
         stat.completionTime.add(duration);
     }
 
@@ -85,10 +88,10 @@ public class StatTaskRunner implements TaskRunner {
     @Override
     public void onComplete(TaskRun taskRun, Object fromBefore, boolean doneOnExit) {
         long duration = taskRun.getEndedAt() - taskRun.getStartedAt();
-        add(taskRun.getTaskPlusMethodName(),duration);
+        add(taskRun.getTaskPlusMethodName(), duration);
         if (!doneOnExit) {
             duration = taskRun.getCompletedAt() - taskRun.getEndedAt();
-            extend(taskRun.getTaskPlusMethodName(),duration);
+            extend(taskRun.getTaskPlusMethodName(), duration);
         }
     }
 
@@ -116,6 +119,7 @@ public class StatTaskRunner implements TaskRunner {
         public long average;
         public long max;
         public long min;
+
         void populateFrom(InternalTiming internalTiming, int count) {
             this.average = Math.round(internalTiming.avg(count));
             this.max = internalTiming.maxExecTime;
@@ -136,6 +140,7 @@ public class StatTaskRunner implements TaskRunner {
 
     /**
      * Returns a summarized execution data snapshot.
+     *
      * @return data
      */
     public synchronized Report collect() {
@@ -143,23 +148,23 @@ public class StatTaskRunner implements TaskRunner {
         int sz = map.size();
         report.stats = new Stat[sz];
         int pos = 0;
-        for (Map.Entry<String, InternalStat> next: map.entrySet()) {
+        for (Map.Entry<String, InternalStat> next : map.entrySet()) {
             Stat stat = report.stats[pos++] = new Stat();
             stat.taskMethod = next.getKey();
             InternalStat istat = next.getValue();
             stat.count = istat.count;
             stat.execTime = new Timing();
-            stat.execTime.populateFrom(istat.execTime,istat.count);
+            stat.execTime.populateFrom(istat.execTime, istat.count);
             if (istat.completionTime.maxExecTime > 0) {
                 stat.completionTime = new Timing();
-                stat.completionTime.populateFrom(istat.completionTime,istat.count);
+                stat.completionTime.populateFrom(istat.completionTime, istat.count);
             }
         }
         return report;
     }
 
     private static void fill(PrintStream ps, char c, int count) {
-        for (int i=0; i<count; i++) {
+        for (int i = 0; i < count; i++) {
             ps.print(c);
         }
     }
@@ -170,76 +175,91 @@ public class StatTaskRunner implements TaskRunner {
     private static abstract class Col {
         final String hdr;
         int maxWidth;
+
         Col(String hdr) {
             this.hdr = hdr;
             maxWidth = hdr.length();
         }
 
         void widen(Stat stat) {
-            maxWidth = Math.max(maxWidth,getValueWidh(stat));
+            maxWidth = Math.max(maxWidth, getValueWidh(stat));
 
         }
+
         void hdr(PrintStream ps) {
             int len = hdr.length();
-            int fill = Math.max(0,maxWidth - len);
-            int before = fill/2;
+            int fill = Math.max(0, maxWidth - len);
+            int before = fill / 2;
             int after = fill - before;
-            fill(ps,' ',before+1);
+            fill(ps, ' ', before + 1);
             ps.print(hdr);
-            fill(ps,' ',after+1);
+            fill(ps, ' ', after + 1);
             ps.print('|');
         }
+
         void sep(PrintStream ps, char c) {
-            fill(ps,'-',maxWidth + 2);
+            fill(ps, '-', maxWidth + 2);
             ps.print(c);
         }
+
         abstract int getValueWidh(Stat stat);
+
         abstract void print(PrintStream ps, Stat stat);
 
-        void cell(PrintStream ps,Stat stat) {
+        void cell(PrintStream ps, Stat stat) {
             int width = getValueWidh(stat);
-            print(ps,stat);
-            fill(ps,' ',2 + maxWidth - width);
+            print(ps, stat);
+            fill(ps, ' ', 2 + maxWidth - width);
             ps.print('|');
         }
     }
 
     private static class LongCol extends Col {
-        private final Function<Stat,Long> fn;
-        LongCol(String hdr, Function<Stat,Long> fn) {
+        private final Function<Stat, Long> fn;
+
+        LongCol(String hdr, Function<Stat, Long> fn) {
             super(hdr);
             this.fn = fn;
         }
+
         @Override
         int getValueWidh(Stat stat) {
             return width(fn.apply(stat));
         }
+
         @Override
         void print(PrintStream ps, Stat stat) {
             ps.print(fn.apply(stat));
         }
     }
+
     static class StringCol extends Col {
-        private final Function<Stat,String> fn;
-        StringCol(String hdr, Function<Stat,String> fn) {
+        private final Function<Stat, String> fn;
+
+        StringCol(String hdr, Function<Stat, String> fn) {
             super(hdr);
             this.fn = fn;
         }
+
         @Override
         int getValueWidh(Stat stat) {
             return fn.apply(stat).length();
         }
+
         @Override
         void print(PrintStream ps, Stat stat) {
             ps.print(fn.apply(stat));
         }
     }
+
     private static class AddCol extends Col {
-        private final Function<Timing,Long> fn;
-        AddCol(String hdr, Function<Timing,Long> fn) {
+        private final Function<Timing, Long> fn;
+
+        AddCol(String hdr, Function<Timing, Long> fn) {
             super(hdr);
             this.fn = fn;
         }
+
         @Override
         int getValueWidh(Stat stat) {
             int w = width(fn.apply(stat.execTime));
@@ -248,6 +268,7 @@ public class StatTaskRunner implements TaskRunner {
             }
             return w;
         }
+
         @Override
         void print(PrintStream ps, Stat stat) {
             ps.print(fn.apply(stat.execTime));
@@ -258,7 +279,7 @@ public class StatTaskRunner implements TaskRunner {
         }
     }
 
-    private void row(PrintStream ps, List<Col>cols, char div, Consumer<Col>fn) {
+    private void row(PrintStream ps, List<Col> cols, char div, Consumer<Col> fn) {
         ps.print(div);
         cols.forEach(fn);
         ps.print('\n');
@@ -266,36 +287,38 @@ public class StatTaskRunner implements TaskRunner {
 
     /**
      * Prints a tabular-formatted summary of statistics to the given PrintStream.
+     *
      * @param ps to print to
      */
     public void report(PrintStream ps) {
         Report report = collect();
 
         List<Col> cols = Arrays.asList(
-                new LongCol("Count",stat->stat.count),
-                new AddCol("Avg",timing->timing.average),
-                new AddCol("Min",timing->timing.min),
-                new AddCol("Max",timing->timing.max),
-                new StringCol("Method",stat-> stat.taskMethod)
+                new LongCol("Count", stat -> stat.count),
+                new AddCol("Avg", timing -> timing.average),
+                new AddCol("Min", timing -> timing.min),
+                new AddCol("Max", timing -> timing.max),
+                new StringCol("Method", stat -> stat.taskMethod)
         );
 
-        for (Stat next: report.stats) {
-            cols.forEach(col->col.widen(next));
+        for (Stat next : report.stats) {
+            cols.forEach(col -> col.widen(next));
         }
 
-        row(ps,cols,'-',col->col.sep(ps,'-'));
-        row(ps,cols,'|',col->col.hdr(ps));
-        row(ps,cols,'|',col->col.sep(ps,'|'));
+        row(ps, cols, '-', col -> col.sep(ps, '-'));
+        row(ps, cols, '|', col -> col.hdr(ps));
+        row(ps, cols, '|', col -> col.sep(ps, '|'));
 
-        for (Stat next: report.stats) {
-            row(ps,cols,'|',col->col.cell(ps,next));
+        for (Stat next : report.stats) {
+            row(ps, cols, '|', col -> col.cell(ps, next));
         }
 
-        row(ps,cols,'-',col->col.sep(ps,'-'));
+        row(ps, cols, '-', col -> col.sep(ps, '-'));
     }
 
     /**
      * Returns a table-formatted summary as a string.
+     *
      * @return table summary
      */
     public String report() {
@@ -307,7 +330,7 @@ public class StatTaskRunner implements TaskRunner {
             ps.flush();
             return baos.toString(ENC);
         } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Bad encoding",e);
+            throw new RuntimeException("Bad encoding", e);
         }
     }
 }

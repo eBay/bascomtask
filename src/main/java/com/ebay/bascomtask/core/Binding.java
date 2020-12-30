@@ -50,8 +50,9 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     /**
      * Invoked for a CF that is not BT-managed.
+     *
      * @param engine being run
-     * @param cf return value
+     * @param cf     return value
      */
     Binding(Engine engine, CompletableFuture<RETURNTYPE> cf) {
         this.engine = engine;
@@ -61,6 +62,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     /**
      * Invoked for a BT-managed input.
+     *
      * @param engine being run
      */
     Binding(Engine engine) {
@@ -69,7 +71,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     @Override
     public String toString() {
-        return "Binding("+getTaskPlusMethodName()+")";
+        return "Binding(" + getTaskPlusMethodName() + ")";
     }
 
     protected boolean isLight() {
@@ -82,6 +84,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     /**
      * Ensures the provided CF is or is wrapped by a BT-controlled CF, and registered as an input argument.
+     *
      * @param cf to ensure
      * @return BT-controlled CF
      */
@@ -90,7 +93,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         if (cf instanceof BascomTaskFuture) {
             bascomTaskFuture = (BascomTaskFuture<RV>) cf;
         } else {
-            Binding<RV> binding = new ExternalBinding<>(engine,cf);
+            Binding<RV> binding = new ExternalBinding<>(engine, cf);
             bascomTaskFuture = binding.getOutput();
         }
         if (registerAsDependentInput) {
@@ -102,6 +105,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     /**
      * Ensure the task for this binding is executed (or returning it for execution) either by starting it
      * now or starting its predecessors -- unless (in each case) already started.
+     *
      * @param pending possibly null Binding (task) that needs to be started
      * @return ready and needing to-be-executed Binding (task) that needs to be started
      */
@@ -140,22 +144,23 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     final void onCompletion(List<Binding<?>> bindings) {
         completedAt = System.currentTimeMillis();
         Binding<?> pending = null;
-        for (Binding<?> next: bindings) {
+        for (Binding<?> next : bindings) {
             pending = next.argReady(pending);
         }
         if (pending != null) {
-            pending.fire("completion",true);
+            pending.fire("completion", true);
         }
     }
 
     /**
      * Called when a CF argument has completed and is ready -- should only be ONCE for each such arguments
+     *
      * @param pending argument
      * @return binding ready to process or null if none
      */
     final Binding<?> argReady(Binding<?> pending) {
         if (readyCount.incrementAndGet() == inputs.size()) {
-            pending = runAccordingToMode(pending,"completion");
+            pending = runAccordingToMode(pending, "completion");
             pending = onReady(pending);
         }
         return pending;
@@ -163,6 +168,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     /**
      * Subclasses can optionally override to activate bindings.
+     *
      * @param pending to process
      * @return pending
      */
@@ -208,7 +214,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         }
     }
 
-    void fireTaskThruRunners(List<TaskRunner>runners1, List<TaskRunner>runners2, int combinedIndex, Thread parentThread, TaskRun under, boolean direct) {
+    void fireTaskThruRunners(List<TaskRunner> runners1, List<TaskRunner> runners2, int combinedIndex, Thread parentThread, TaskRun under, boolean direct) {
         List<TaskRunner> rs = runners1;
         int localIndex = combinedIndex;
         if (combinedIndex >= runners1.size()) {
@@ -218,16 +224,16 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         TaskRunner next = rs.get(localIndex);
         if (combinedIndex == 0) {
             Object fromBefore = next.before(under);
-            chooseThreadAndFire(next,under,parentThread,fromBefore,"TODO",direct);
+            chooseThreadAndFire(next, under, parentThread, fromBefore, "TODO", direct);
         } else {
             PlaceHolderRunner phr = new PlaceHolderRunner(next, parentThread, under);
-            fireTaskThruRunners(runners1,runners2,combinedIndex-1,parentThread,phr,direct);
+            fireTaskThruRunners(runners1, runners2, combinedIndex - 1, parentThread, phr, direct);
         }
     }
 
     void chooseThreadAndFire(TaskRunner taskRunner, TaskRun taskRun, Thread parentThread, Object fromBefore, String src, boolean direct) {
         if (direct) {
-            fireFirstRunner(taskRunner,taskRun,parentThread,fromBefore,src);
+            fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src);
         } else {
             Runnable runnable = () -> fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src);
             engine.run(runnable, parentThread);
@@ -236,7 +242,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     void fireFirstRunner(TaskRunner taskRunner, TaskRun taskRun, Thread parentThread, Object fromBefore, String src) {
         final String name = getName();
-        LOG.debug("Firing {} from {}",name,src);
+        LOG.debug("Firing {} from {}", name, src);
         try {
             Object rv = taskRunner.executeTaskMethod(taskRun, parentThread, fromBefore);
             if (rv instanceof CompletableFuture) {
@@ -244,23 +250,23 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
                 CompletableFuture<RETURNTYPE> cf = (CompletableFuture<RETURNTYPE>) rv;
                 // Allow taskRunners to complete before we continue processing other tasks here
                 completeRunner(taskRunner, taskRun, fromBefore, cf);
-                LOG.debug("Exiting {} from {}",name,src);
+                LOG.debug("Exiting {} from {}", name, src);
                 output.bind(cf);
             } else {
                 throw new RuntimeException("Return value is not a CompletableFuture " + this);
             }
         } catch (Exception e) {
             engine.recordAnyException();
-            LOG.debug("Faulting {} from {}",name,src);
+            LOG.debug("Faulting {} from {}", name, src);
             output.faultForward(e);
         }
     }
 
     static void completeRunner(TaskRunner taskRunner, TaskRun taskRun, Object fromBefore, Object rv) {
         if (rv instanceof CompletableFuture) {
-            CompletableFuture<?> cf = (CompletableFuture<?>)rv;
+            CompletableFuture<?> cf = (CompletableFuture<?>) rv;
             boolean isDone = cf.isDone();
-            cf.thenAccept(v->taskRunner.onComplete(taskRun,fromBefore,isDone));
+            cf.thenAccept(v -> taskRunner.onComplete(taskRun, fromBefore, isDone));
         }
     }
 

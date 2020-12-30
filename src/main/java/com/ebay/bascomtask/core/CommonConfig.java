@@ -41,6 +41,7 @@ public interface CommonConfig {
     /**
      * Gets the most recently set mode. The global default is {@link SpawnMode#WHEN_NEEDED}. The Orchestrator
      * default is null, which results in using the global setting.
+     *
      * @return most recently-set mode (possibly null) or default if none set
      */
     SpawnMode getSpawnMode();
@@ -48,12 +49,14 @@ public interface CommonConfig {
     /**
      * Changes the thread-spawning logic to be consistent with the specified mode. If not set at a more
      * specific level (Orchestrator), the globally-set value is used.
+     *
      * @param mode to set
      */
     void setSpawnMode(SpawnMode mode);
 
     /**
      * Gets the current timeout, which defaults to meaning no timeout.
+     *
      * @return current timeout
      */
     long getTimeoutMs();
@@ -61,12 +64,14 @@ public interface CommonConfig {
     /**
      * Sets the current timeout. When set to a value greater than zero, the calling thread will wait and all
      * task execution will be done by spawned threads. The default is zero, meaning there will be no timeouts.
+     *
      * @param ms duration in milliseconds, zero means no timeout will be applied
      */
     void setTimeoutMs(long ms);
 
     /**
      * Calls {@link #setTimeoutMs(long)} after calculating the millisecond duration from the supplied arguments.
+     *
      * @param duration to timeout after
      * @param timeUnit to apply
      */
@@ -77,6 +82,7 @@ public interface CommonConfig {
     /**
      * Resets the service used by this framework for spawning threads. Global default is
      * Executors.newFixedThreadPool({@link GlobalConfig#DEFAULT_FIXED_THREADPOOL_SIZE}.
+     *
      * @param executorService to set as new default
      */
     void setExecutorService(ExecutorService executorService);
@@ -94,12 +100,14 @@ public interface CommonConfig {
     /**
      * Adds a TaskRunner that will be processed after any existing TaskRunner, excepting
      * that all global runners are processed before local (orchestrator-specific) runners.
+     *
      * @param taskRunner to add
      */
     void lastInterceptWith(TaskRunner taskRunner);
 
     /**
      * Removes the given TaskRunner from the list, if it is already in the list.
+     *
      * @param taskRunner to remove
      */
     void removeInterceptor(TaskRunner taskRunner);

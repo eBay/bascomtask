@@ -39,7 +39,8 @@ public class GlobalConfig implements CommonConfig, SpawnMode.SpawnModable {
 
     public static final GlobalConfig INSTANCE = new GlobalConfig();
 
-    private GlobalConfig() {}
+    private GlobalConfig() {
+    }
 
     @Override
     public SpawnMode getSpawnMode() {
@@ -48,7 +49,7 @@ public class GlobalConfig implements CommonConfig, SpawnMode.SpawnModable {
 
     @Override
     public void setSpawnMode(SpawnMode mode) {
-        if (mode==null) {
+        if (mode == null) {
             mode = SpawnMode.WHEN_NEEDED;
         }
         this.spawnMode = mode;

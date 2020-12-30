@@ -36,10 +36,12 @@ interface NamingTask extends TaskInterface<NamingTask> {
 
     class OverridesGetAndSet implements NamingTask {
         private String name;
+
         @Override
         public String getName() {
             return name;
         }
+
         @Override
         public NamingTask name(String name) {
             this.name = name;

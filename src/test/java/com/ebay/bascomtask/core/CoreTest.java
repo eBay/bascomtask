@@ -45,11 +45,11 @@ import static com.ebay.bascomtask.core.ExceptionTask.*;
  *
  * @author Brendan McCarthy
  */
-@RunWith( Parameterized.class )
+@RunWith(Parameterized.class)
 public class CoreTest extends BaseOrchestratorTest {
 
-    @Parameterized.Parameters(name="{0}")
-    public static Collection<Object[]> data(){
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
                 {null},
                 {SpawnMode.NEVER_SPAWN},
@@ -70,34 +70,56 @@ public class CoreTest extends BaseOrchestratorTest {
     private void checkSameThreads(UberTask t1, UberTask t2, boolean sameIfNormalMode, boolean sameUnlessExplicit, boolean ifNeverMain, boolean ifAlwaysSpawn) {
         boolean same = t1.ranInSameThread(t2);
         boolean cmp;
-        SpawnMode mode = this.mode==null ? SpawnMode.WHEN_NEEDED : this.mode;
+        SpawnMode mode = this.mode == null ? SpawnMode.WHEN_NEEDED : this.mode;
         switch (mode) {
-            case NEVER_SPAWN: cmp = true; break;
-            case NEVER_MAIN: cmp = ifNeverMain; break;
-            case DONT_SPAWN_UNLESS_EXPLICIT: cmp = sameUnlessExplicit; break;
+            case NEVER_SPAWN:
+                cmp = true;
+                break;
+            case NEVER_MAIN:
+                cmp = ifNeverMain;
+                break;
+            case DONT_SPAWN_UNLESS_EXPLICIT:
+                cmp = sameUnlessExplicit;
+                break;
             case WHEN_NEEDED:
-            case WHEN_NEEDED_NO_REUSE: cmp = sameIfNormalMode; break;
-            case ALWAYS_SPAWN: cmp = ifAlwaysSpawn; break;
-            default: throw new RuntimeException("Bad mode");
+            case WHEN_NEEDED_NO_REUSE:
+                cmp = sameIfNormalMode;
+                break;
+            case ALWAYS_SPAWN:
+                cmp = ifAlwaysSpawn;
+                break;
+            default:
+                throw new RuntimeException("Bad mode");
         }
-        assertEquals(cmp,same);
+        assertEquals(cmp, same);
     }
 
     private void checkInMainThread(UberTask t1, boolean sameIfNormalMode, boolean sameUnlessExplicit, boolean ifNeverMain, boolean ifAlwaysSpawn) {
         String tn = Thread.currentThread().getName();
         boolean same = tn.equals(t1.getThreadName());
         boolean cmp;
-        SpawnMode mode = this.mode==null ? SpawnMode.WHEN_NEEDED : this.mode;
+        SpawnMode mode = this.mode == null ? SpawnMode.WHEN_NEEDED : this.mode;
         switch (mode) {
-            case NEVER_SPAWN: cmp = true; break;
-            case ALWAYS_SPAWN: cmp = ifAlwaysSpawn; break;
-            case NEVER_MAIN: cmp = ifNeverMain; break;
-            case DONT_SPAWN_UNLESS_EXPLICIT: cmp = sameUnlessExplicit; break;
+            case NEVER_SPAWN:
+                cmp = true;
+                break;
+            case ALWAYS_SPAWN:
+                cmp = ifAlwaysSpawn;
+                break;
+            case NEVER_MAIN:
+                cmp = ifNeverMain;
+                break;
+            case DONT_SPAWN_UNLESS_EXPLICIT:
+                cmp = sameUnlessExplicit;
+                break;
             case WHEN_NEEDED:
-            case WHEN_NEEDED_NO_REUSE: cmp = sameIfNormalMode; break;
-            default: throw new RuntimeException("Bad mode");
+            case WHEN_NEEDED_NO_REUSE:
+                cmp = sameIfNormalMode;
+                break;
+            default:
+                throw new RuntimeException("Bad mode");
         }
-        assertEquals("Task " + t1,cmp,same);
+        assertEquals("Task " + t1, cmp, same);
     }
 
     @Before
@@ -115,10 +137,10 @@ public class CoreTest extends BaseOrchestratorTest {
 
     private void naming(NamingTask task) {
         NamingTask tw = $.task(task);
-        assertEquals(task.getName(),tw.getName());
+        assertEquals(task.getName(), tw.getName());
         String nm = "__!!__";
         tw.name(nm);
-        assertEquals(nm,tw.getName());
+        assertEquals(nm, tw.getName());
     }
 
     @Test
@@ -134,7 +156,7 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTask top = $.task(task);
         CompletableFuture<Integer> cf = top.retValueOne();
         int got = cf.get();
-        assertEquals(1,got);
+        assertEquals(1, got);
     }
 
     @Test
@@ -143,7 +165,7 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTask top = $.task(task);
         CompletableFuture<Integer> cf = top.retValueOne();
         int got = cf.get();
-        assertEquals(1,got);
+        assertEquals(1, got);
     }
 
     @Test
@@ -152,7 +174,7 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTask top = $.task(task);
         CompletableFuture<Integer> cf = top.ret(1);
         int got = cf.get();
-        assertEquals(1,got);
+        assertEquals(1, got);
     }
 
     @Test(expected = InvalidTaskMethodException.class)
@@ -164,7 +186,7 @@ public class CoreTest extends BaseOrchestratorTest {
     public void singleRetNamed() throws Exception {
         String name = "foobar";
         int got = $.task(task()).name(name).ret(1).get();
-        assertEquals(1,got);
+        assertEquals(1, got);
     }
 
     @Test
@@ -174,10 +196,10 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTask mid = $.task(task());
         CompletableFuture<Integer> mf = mid.inc(tf);
         int got = mf.get();
-        assertEquals(2,got);
+        assertEquals(2, got);
 
         boolean sameThread = top.ranInSameThread(mid);
-        if (mode==SpawnMode.ALWAYS_SPAWN) {
+        if (mode == SpawnMode.ALWAYS_SPAWN) {
             sameThread = !sameThread;
         }
         assertTrue(sameThread);
@@ -186,21 +208,21 @@ public class CoreTest extends BaseOrchestratorTest {
     private void vAdd(Weight leftWeight, Weight rightWeight, boolean sameIfNormalMode, boolean ifNeverMain, boolean ifAlwaysSpawn) throws Exception {
         UberTask left = $.task(task());
         UberTask right = $.task(task());
-        CompletableFuture<Integer> lv = leftWeight.ret(left,1);
-        CompletableFuture<Integer> rv = rightWeight.ret(right,5);
-        CompletableFuture<Integer> v = $.task(task()).add(lv,rv);
+        CompletableFuture<Integer> lv = leftWeight.ret(left, 1);
+        CompletableFuture<Integer> rv = rightWeight.ret(right, 5);
+        CompletableFuture<Integer> v = $.task(task()).add(lv, rv);
         int got = v.get();
-        assertEquals(6,got);
+        assertEquals(6, got);
 
-        checkSameThreads(left,right,sameIfNormalMode,true,ifNeverMain,ifAlwaysSpawn);
+        checkSameThreads(left, right, sameIfNormalMode, true, ifNeverMain, ifAlwaysSpawn);
     }
 
     @Test
     public void vAdd() throws Exception {
-        vAdd(Weight.LIGHT,Weight.LIGHT,true,true,true);
-        vAdd(Weight.LIGHT,Weight.HEAVY,true,false,false);
-        vAdd(Weight.HEAVY,Weight.LIGHT,true,false,false);
-        vAdd(Weight.HEAVY,Weight.HEAVY,false,false,false);
+        vAdd(Weight.LIGHT, Weight.LIGHT, true, true, true);
+        vAdd(Weight.LIGHT, Weight.HEAVY, true, false, false);
+        vAdd(Weight.HEAVY, Weight.LIGHT, true, false, false);
+        vAdd(Weight.HEAVY, Weight.HEAVY, false, false, false);
     }
 
     private void diamond(Weight leftWeight, Weight rightWeight, boolean sameIfNormalMode, boolean ifAlwaysSpawn) throws Exception {
@@ -209,29 +231,32 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTask right = $.task(task());
         UberTask bottom = $.task(task());
         CompletableFuture<Integer> tf = top.ret(1);
-        CompletableFuture<Integer> lf = leftWeight.inc(left,tf);
-        CompletableFuture<Integer> rf = rightWeight.inc(right,tf);
-        CompletableFuture<Integer> bf = bottom.add(lf,rf);
+        CompletableFuture<Integer> lf = leftWeight.inc(left, tf);
+        CompletableFuture<Integer> rf = rightWeight.inc(right, tf);
+        CompletableFuture<Integer> bf = bottom.add(lf, rf);
         int got = bf.get();
-        assertEquals(4,got);
+        assertEquals(4, got);
 
-        checkSameThreads(left,right,sameIfNormalMode,true, sameIfNormalMode,ifAlwaysSpawn);
+        checkSameThreads(left, right, sameIfNormalMode, true, sameIfNormalMode, ifAlwaysSpawn);
     }
 
     @Test
     public void diamond() throws Exception {
-        diamond(Weight.LIGHT,Weight.LIGHT,true,true);
-        diamond(Weight.LIGHT,Weight.HEAVY,true,false);
-        diamond(Weight.HEAVY,Weight.LIGHT,true,false);
-        diamond(Weight.HEAVY,Weight.HEAVY,false,false);
+        diamond(Weight.LIGHT, Weight.LIGHT, true, true);
+        diamond(Weight.LIGHT, Weight.HEAVY, true, false);
+        diamond(Weight.HEAVY, Weight.LIGHT, true, false);
+        diamond(Weight.HEAVY, Weight.HEAVY, false, false);
     }
 
     @Test
     public void singleFutureArg() throws Exception {
-        CompletableFuture<Integer> cf = CompletableFuture.supplyAsync(()->{sleep(100);return 3;});
+        CompletableFuture<Integer> cf = CompletableFuture.supplyAsync(() -> {
+            sleep(100);
+            return 3;
+        });
         CompletableFuture<Integer> cp = $.task(task()).inc(cf);
         int got = cp.get();
-        assertEquals(4,got);
+        assertEquals(4, got);
     }
 
     @Test
@@ -239,20 +264,23 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTask task = task(5);
         CompletableFuture<Integer> top = $.task(task).ret(1);
         CompletableFuture<Integer> left = $.task(task).inc(top);
-        CompletableFuture<Integer> rcf = CompletableFuture.supplyAsync(()->{sleep(300);return 3;});
-        CompletableFuture<Integer> right = $.task(task).add((top),rcf);
-        CompletableFuture<Integer> middle = $.task(task).add(left,(right));
-        CompletableFuture<Integer> cp = $.task(task).add(left,middle,right);
+        CompletableFuture<Integer> rcf = CompletableFuture.supplyAsync(() -> {
+            sleep(300);
+            return 3;
+        });
+        CompletableFuture<Integer> right = $.task(task).add((top), rcf);
+        CompletableFuture<Integer> middle = $.task(task).add(left, (right));
+        CompletableFuture<Integer> cp = $.task(task).add(left, middle, right);
         int got = cp.get();
-        assertEquals(12,got);
+        assertEquals(12, got);
     }
 
     @Test
     public void forceRunSpawned() throws Exception {
         UberTask task = task();
         int got = $.task(task).runSpawned().ret(1).get();
-        assertEquals(1,got);
-        checkInMainThread(task,false,false,false,false);
+        assertEquals(1, got);
+        checkInMainThread(task, false, false, false, false);
     }
 
     @Test
@@ -263,13 +291,13 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> f1 = $.task(task1).runSpawned().ret(1);
         CompletableFuture<Integer> f2 = $.task(task2).light().ret(2);
         CompletableFuture<Integer> f3 = $.task(task3).runSpawned().ret(3);
-        CompletableFuture<Integer> added = $.task(task()).add(f1,f2,f3);
+        CompletableFuture<Integer> added = $.task(task()).add(f1, f2, f3);
         int got = added.get();
-        assertEquals(6,got);
+        assertEquals(6, got);
 
-        checkInMainThread(task1,false,false,false, false);
-        checkInMainThread(task2,true,true,true, true);
-        checkInMainThread(task3,false,false,false, false);
+        checkInMainThread(task1, false, false, false, false);
+        checkInMainThread(task2, true, true, true, true);
+        checkInMainThread(task3, false, false, false, false);
     }
 
     @Test
@@ -282,14 +310,14 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> f1 = $.task(task1).name("inc1").runSpawned().inc(base);
         CompletableFuture<Integer> f2 = $.task(task2).name("light").light().inc(base);
         CompletableFuture<Integer> f3 = $.task(task3).name("inc2").runSpawned().inc(base);
-        CompletableFuture<Integer> added = $.task(task()).add(f1,f2,f3);
+        CompletableFuture<Integer> added = $.task(task()).add(f1, f2, f3);
         int got = added.get();
-        assertEquals(6,got);
+        assertEquals(6, got);
 
-        checkInMainThread(baseTask,true,true,true, true);
-        checkInMainThread(task1,false,false,false, false);
-        checkInMainThread(task2,true,true,true, true);
-        checkInMainThread(task3,false,false,false, false);
+        checkInMainThread(baseTask, true, true, true, true);
+        checkInMainThread(task1, false, false, false, false);
+        checkInMainThread(task2, true, true, true, true);
+        checkInMainThread(task3, false, false, false, false);
     }
 
     @Test
@@ -301,7 +329,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> left = $.task(shouldRun).inc(base);
 
         int got = left.get();
-        assertEquals(2,got);
+        assertEquals(2, got);
     }
 
     @Test
@@ -312,7 +340,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t1 = $.task(task().delayFor(delay)).ret(1);
         CompletableFuture<Integer> t2 = $.task(task().delayFor(delay)).ret(1);
 
-        $.execute(t1,t2);
+        $.execute(t1, t2);
 
         // These ensure we don't test endingTime before it is actually set, since at this point the final
         // bookkeeping/processing on t1 and t2 might not have completed (very small window)
@@ -352,7 +380,7 @@ public class CoreTest extends BaseOrchestratorTest {
     public void nonFutureReturn() {
         CompletableFuture<Integer> base = $.task(task()).ret(1);
         int got = $.task(task()).nonFutureRet(base);
-        assertEquals(1,got);
+        assertEquals(1, got);
     }
 
     @Test
@@ -360,19 +388,19 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> tf = $.task(task()).light().ret(1);
         CompletableFuture<Integer> lf = $.task(task()).inc(tf);
         CompletableFuture<Integer> rf = $.task(task()).inc(tf);
-        CompletableFuture<Integer> bf = $.task(task()).add(lf,rf);
+        CompletableFuture<Integer> bf = $.task(task()).add(lf, rf);
         int got = bf.get();
         assertEquals(4, got);
     }
 
     @Test
     public void externals() throws Exception {
-        CompletableFuture<Integer> e1 = CompletableFuture.supplyAsync(()->sleepThen(15,1));
-        CompletableFuture<Integer> e2 = CompletableFuture.supplyAsync(()->sleepThen(5,2));
-        CompletableFuture<Integer> e3 = CompletableFuture.supplyAsync(()->sleepThen(25,3));
-        CompletableFuture<Integer> add = $.task(task()).add(e1,e2,e3);
+        CompletableFuture<Integer> e1 = CompletableFuture.supplyAsync(() -> sleepThen(15, 1));
+        CompletableFuture<Integer> e2 = CompletableFuture.supplyAsync(() -> sleepThen(5, 2));
+        CompletableFuture<Integer> e3 = CompletableFuture.supplyAsync(() -> sleepThen(25, 3));
+        CompletableFuture<Integer> add = $.task(task()).add(e1, e2, e3);
         int got = add.get();
-        assertEquals(6,got);
+        assertEquals(6, got);
     }
 
     private int getFromPoolsOfSize(CompletableFuture<Integer> cf, int size) throws Exception {
@@ -391,22 +419,22 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t1 = $.task(task).ret(1);
         CompletableFuture<Integer> t2 = $.task(task).ret(2);
         CompletableFuture<Integer> t3 = $.task(task).ret(4);
-        CompletableFuture<Integer> add = $.task(task().delayFor(0)).add(t1,t2,t3);
-        int got = getFromPoolsOfSize(add,1);
-        assertEquals(7,got);
+        CompletableFuture<Integer> add = $.task(task().delayFor(0)).add(t1, t2, t3);
+        int got = getFromPoolsOfSize(add, 1);
+        assertEquals(7, got);
     }
 
     @Test
     public void poolSizeExceededInSpawnedThread() throws Exception {
         CompletableFuture<Integer> t1 = $.task(task()).runSpawned().ret(1);
         CompletableFuture<Integer> t2 = $.task(task()).runSpawned().inc(t1);
-        int got = getFromPoolsOfSize(t2,1);
-        assertEquals(2,got);
+        int got = getFromPoolsOfSize(t2, 1);
+        assertEquals(2, got);
     }
 
     @Test
     public void reuseMainThread() throws Exception {
-        if ($.getEffectiveSpawnMode()==SpawnMode.WHEN_NEEDED) {
+        if ($.getEffectiveSpawnMode() == SpawnMode.WHEN_NEEDED) {
             UberTask tfast = task().delayFor(1);
             CompletableFuture<Integer> fast = $.task(tfast).name("fastl").ret(5);
 
@@ -428,11 +456,11 @@ public class CoreTest extends BaseOrchestratorTest {
     public void neverMainThread() throws Exception {
         UberTask task = task();
         $.task(task).ret(1).get();
-        checkInMainThread(task,true,true,false, false);
+        checkInMainThread(task, true, true, false, false);
 
         task = task();
         $.task(task).light().ret(1).get();
-        checkInMainThread(task,true,true,true, true);
+        checkInMainThread(task, true, true, true, true);
     }
 
     @Test
@@ -441,13 +469,13 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTasker task = task().delayFor(wait);
         CompletableFuture<Integer> t1 = $.task(task).name("delayed").runSpawned().ret(1);
         CompletableFuture<Integer> t2 = $.task(task().delayFor(0)).name("fast").ret(2);
-        $.execute(t1,t2);
+        $.execute(t1, t2);
         int got = t2.get();
-        int exp = mode==SpawnMode.NEVER_SPAWN ? 1 : 0;
-        assertEquals(exp,task.getActualCount());
-        assertEquals(2,got);
-        sleep(wait+5);
-        assertEquals(1,task.getActualCount());
+        int exp = mode == SpawnMode.NEVER_SPAWN ? 1 : 0;
+        assertEquals(exp, task.getActualCount());
+        assertEquals(2, got);
+        sleep(wait + 5);
+        assertEquals(1, task.getActualCount());
     }
 
     @Test
@@ -462,32 +490,32 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t3 = $.task(task3).name("task3").runSpawned().ret(3);
         CompletableFuture<Integer> t4 = $.task(task4).name("task4").runSpawned().ret(4);
 
-        $.executeAndWait(t1,t2,t3,t4);
+        $.executeAndWait(t1, t2, t3, t4);
 
-        assertEquals(1,task1.getActualCount());
-        assertEquals(1,task2.getActualCount());
-        assertEquals(1,task3.getActualCount());
-        assertEquals(1,task4.getActualCount());
+        assertEquals(1, task1.getActualCount());
+        assertEquals(1, task2.getActualCount());
+        assertEquals(1, task3.getActualCount());
+        assertEquals(1, task4.getActualCount());
 
-        assertEquals(1,(int)t1.get());
-        assertEquals(2,(int)t2.get());
-        assertEquals(3,(int)t3.get());
-        assertEquals(4,(int)t4.get());
+        assertEquals(1, (int) t1.get());
+        assertEquals(2, (int) t2.get());
+        assertEquals(3, (int) t3.get());
+        assertEquals(4, (int) t4.get());
     }
 
-    @Test(expected= TimeoutExceededException.class)
+    @Test(expected = TimeoutExceededException.class)
     public void timeoutOrchestrator() throws Exception {
         $.setTimeout(5, TimeUnit.MILLISECONDS);
         $.task(task(0).delayFor(20)).ret(1).get();
     }
 
-    @Test(expected= TimeoutExceededException.class)
+    @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobal() throws Exception {
         GlobalConfig.INSTANCE.setTimeout(5, TimeUnit.MILLISECONDS);
         $.task(task(0).delayFor(20)).ret(1).get();
     }
 
-    @Test(expected= TimeoutExceededException.class)
+    @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobalSpawned() throws Exception {
         GlobalConfig.INSTANCE.setTimeout(5, TimeUnit.MILLISECONDS);
         $.task(task(0).delayFor(20)).runSpawned().ret(1).get();
@@ -495,9 +523,9 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void nestedFault() throws Exception {
-        CompletableFuture<Integer> cf = $.task(task()).faultRecover($,3);
+        CompletableFuture<Integer> cf = $.task(task()).faultRecover($, 3);
         int got = cf.get();
-        assertEquals(3,got);
+        assertEquals(3, got);
     }
 
     @Test
@@ -505,12 +533,12 @@ public class CoreTest extends BaseOrchestratorTest {
         String msg = "fault_path";
         int RV = 9;
         CompletableFuture<Integer> f1 = $.task(task()).ret(RV);
-        CompletableFuture<Integer> f2 = $.task(new Faulty<Integer>()).faultAfter(f1,5,msg);
+        CompletableFuture<Integer> f2 = $.task(new Faulty<Integer>()).faultAfter(f1, 5, msg);
         try {
             f2.get();
         } catch (FaultHappened e) {
             int gotF1 = f1.get();
-            assertEquals(RV,gotF1);
+            assertEquals(RV, gotF1);
             return;
         }
         fail("No fault");
@@ -522,13 +550,13 @@ public class CoreTest extends BaseOrchestratorTest {
         int RV = 9;
         CompletableFuture<Integer> l1 = $.task(task().delayFor(30)).name("left1").ret(RV);
         CompletableFuture<Integer> r1 = $.task(task().delayFor(5)).runSpawned().name("right1").ret(RV);
-        CompletableFuture<Integer> r2 = $.task(new Faulty<Integer>()).name("right2-faulter").faultAfter(r1,1,msg);
-        CompletableFuture<Integer> bottom = $.task(task(0)).name("bottom").add(l1,r2);
+        CompletableFuture<Integer> r2 = $.task(new Faulty<Integer>()).name("right2-faulter").faultAfter(r1, 1, msg);
+        CompletableFuture<Integer> bottom = $.task(task(0)).name("bottom").add(l1, r2);
         try {
             bottom.get();
         } catch (FaultHappened e) {
             int gotF1 = l1.get();
-            assertEquals(RV,gotF1);
+            assertEquals(RV, gotF1);
             return;
         }
         fail("No fault");
@@ -540,15 +568,15 @@ public class CoreTest extends BaseOrchestratorTest {
         int RV = 9;
         CompletableFuture<Integer> f0 = $.task(task()).name("f0").ret(RV);
         CompletableFuture<Integer> f1 = $.task(task()).name("f1").ret(RV);
-        CompletableFuture<Integer> f2 = $.task(new Faulty<Integer>()).name("f2").faultAfter(f1,5,msg);
+        CompletableFuture<Integer> f2 = $.task(new Faulty<Integer>()).name("f2").faultAfter(f1, 5, msg);
         CompletableFuture<Integer> f3 = $.task(task(0)).name("f3").inc(f2);
-        CompletableFuture<Integer> fadd = $.task(task(0)).add(f0,f3);
+        CompletableFuture<Integer> fadd = $.task(task(0)).add(f0, f3);
         try {
             fadd.get();
         } catch (FaultHappened e1) {
-            assertEquals(msg,e1.getMessage());
-            assertEquals(RV,(int)f0.get());
-            assertEquals(RV,(int)f1.get());
+            assertEquals(msg, e1.getMessage());
+            assertEquals(RV, (int) f0.get());
+            assertEquals(RV, (int) f1.get());
             try {
                 f3.get();
             } catch (FaultHappened e2) {
@@ -562,13 +590,13 @@ public class CoreTest extends BaseOrchestratorTest {
     @Test
     public void doubleFault() throws Exception {
         String msg = "fault_path";
-        CompletableFuture<Integer> fLeft = $.task(new Faulty<Integer>()).name("left").faultAfter(1,msg);
-        CompletableFuture<Integer> fRight = $.task(new Faulty<Integer>()).name("right").faultAfter(1,msg);
-        CompletableFuture<Integer> bottom = $.task(task(0)).name("bottom").add(fLeft,(fRight));
+        CompletableFuture<Integer> fLeft = $.task(new Faulty<Integer>()).name("left").faultAfter(1, msg);
+        CompletableFuture<Integer> fRight = $.task(new Faulty<Integer>()).name("right").faultAfter(1, msg);
+        CompletableFuture<Integer> bottom = $.task(task(0)).name("bottom").add(fLeft, (fRight));
         try {
             bottom.get();
         } catch (FaultHappened e) {
-            assertEquals(msg,e.getMessage());
+            assertEquals(msg, e.getMessage());
             return;
         }
         fail("No fault");
@@ -578,7 +606,7 @@ public class CoreTest extends BaseOrchestratorTest {
         try {
             cf.get();
         } catch (Exception e) {
-            assertEquals(ec,e.getClass());
+            assertEquals(ec, e.getClass());
             return;
         }
         fail("Exception not thrown");
@@ -590,11 +618,11 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> fLeftMid = $.task(task(0)).name("leftMid").inc(fLeftTop);
         CompletableFuture<Integer> fRightTop = $.task(task().delayFor(0)).name("rightTop").ret(10);
         ExceptionTask<Integer> ft = faulty();
-        CompletableFuture<Integer> fRightMid = $.task(ft).name("rightMid").faultAfter(fRightTop, 0,"msg");
+        CompletableFuture<Integer> fRightMid = $.task(ft).name("rightMid").faultAfter(fRightTop, 0, "msg");
 
-        assertEquals(10,(int)fRightTop.get());
-        assertEquals(1,(int)fLeftTop.get());
-        checkExceptionIsExpectedType(fRightMid,ExceptionTask.FaultHappened.class);
+        assertEquals(10, (int) fRightTop.get());
+        assertEquals(1, (int) fLeftTop.get());
+        checkExceptionIsExpectedType(fRightMid, ExceptionTask.FaultHappened.class);
         checkExceptionIsExpectedType(fLeftMid, TaskNotStartedException.class);
     }
 
@@ -604,15 +632,15 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> fLeftMid = $.task(task(0)).name("leftMid").inc(fLeftTop);
         CompletableFuture<Integer> fRightTop = $.task(task().delayFor(0)).name("rightTop").ret(10);
         ExceptionTask<Integer> ft = faulty();
-        CompletableFuture<Integer> fRightMid = $.task(ft).name("rightMid").faultAfter(fRightTop, 0,"msg");
+        CompletableFuture<Integer> fRightMid = $.task(ft).name("rightMid").faultAfter(fRightTop, 0, "msg");
 
-        CompletableFuture<Integer> fAdd = $.task(task(0)).name("add").add(fLeftMid,(fRightMid));
+        CompletableFuture<Integer> fAdd = $.task(task(0)).name("add").add(fLeftMid, (fRightMid));
 
-        assertEquals(10,(int)fRightTop.get());
-        assertEquals(1,(int)fLeftTop.get());
-        checkExceptionIsExpectedType(fRightMid,ExceptionTask.FaultHappened.class);
+        assertEquals(10, (int) fRightTop.get());
+        assertEquals(1, (int) fLeftTop.get());
+        checkExceptionIsExpectedType(fRightMid, ExceptionTask.FaultHappened.class);
         checkExceptionIsExpectedType(fLeftMid, TaskNotStartedException.class);
-        checkExceptionIsExpectedType(fAdd,ExceptionTask.FaultHappened.class);
+        checkExceptionIsExpectedType(fAdd, ExceptionTask.FaultHappened.class);
     }
 
 
@@ -628,9 +656,9 @@ public class CoreTest extends BaseOrchestratorTest {
                 if (spawn) {
                     task = task.runSpawned();
                 }
-                CompletableFuture<Integer> it = task.name("inner").ret(x+5);
+                CompletableFuture<Integer> it = task.name("inner").ret(x + 5);
                 int n = get(it);
-                return super.ret(x+n);
+                return super.ret(x + n);
             }
         };
         TaskInterface<UberTask> outerTask = $.task(outer);
@@ -638,7 +666,7 @@ public class CoreTest extends BaseOrchestratorTest {
             outerTask = outerTask.runSpawned();
         }
         int got = outerTask.name("outer").ret(1).get();
-        assertEquals(7,got);
+        assertEquals(7, got);
     }
 
     @Test
@@ -658,7 +686,7 @@ public class CoreTest extends BaseOrchestratorTest {
                 if (spawn) {
                     task = task.runSpawned();
                 }
-                it.set( task.name("inner").inc(slow) );
+                it.set(task.name("inner").inc(slow));
                 return super.ret(x);
             }
         };
@@ -668,7 +696,7 @@ public class CoreTest extends BaseOrchestratorTest {
         }
         int got = outerTask.name("outer").ret(1).get();
         got += it.get().get();
-        assertEquals(7,got);
+        assertEquals(7, got);
     }
 
     @Test
@@ -680,7 +708,7 @@ public class CoreTest extends BaseOrchestratorTest {
     @Test
     public void simpleCond() throws Exception {
         CompletableFuture<Boolean> c1 = $.task(task(1)).ret(true);
-        CompletableFuture<Boolean> cond = $.cond(c1,c1,c1);
+        CompletableFuture<Boolean> cond = $.cond(c1, c1, c1);
         boolean b = cond.get();
         assertTrue(b);
     }
@@ -690,23 +718,23 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Boolean> c1 = $.task(task(1)).name("chooser").ret(cond);
         CompletableFuture<Integer> p1 = $.task(task(thenCount)).name("then").ret(1);
         CompletableFuture<Integer> p2 = $.task(task(elseCount)).name("else").ret(2);
-        CompletableFuture<Integer> r = $.cond(c1,p1,thenActivate,p2,elseActivate);
+        CompletableFuture<Integer> r = $.cond(c1, p1, thenActivate, p2, elseActivate);
         int got = r.get();
-        assertEquals(exp,got);
+        assertEquals(exp, got);
 
         sleep(25);  // Give tasks time to complete and update actualCount
     }
 
     @Test
     public void addCondFalseFalse() throws Exception {
-        cond(true,1,false,0,false);
-        cond(false,0,false,1,false);
+        cond(true, 1, false, 0, false);
+        cond(false, 0, false, 1, false);
     }
 
     @Test
     public void addCondTrueFalse() throws Exception {
-        cond(true,1,true,0,false);
-        cond(false,1,true,1,false);
+        cond(true, 1, true, 0, false);
+        cond(false, 1, true, 1, false);
     }
 
     @Test
@@ -717,10 +745,9 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void addCondTrueTrue() throws Exception {
-        cond(true,1,true,1,true);
-        cond(false,1,true,1,true);
+        cond(true, 1, true, 1, true);
+        cond(false, 1, true, 1, true);
     }
-
 
 
     ///
@@ -728,14 +755,15 @@ public class CoreTest extends BaseOrchestratorTest {
     ///
     private static final String MSG1 = "msg1";
 
-    private void fault(Supplier<CompletableFuture<?>>fn, String expMsg) throws Exception {
-        faultGet(fn.get(),expMsg);
+    private void fault(Supplier<CompletableFuture<?>> fn, String expMsg) throws Exception {
+        faultGet(fn.get(), expMsg);
     }
-    private void faultGet(CompletableFuture<?>cf, String expMsg) throws Exception {
+
+    private void faultGet(CompletableFuture<?> cf, String expMsg) throws Exception {
         try {
             cf.get();
         } catch (ExceptionTask.FaultHappened e) {
-            assertEquals(expMsg,e.getMessage());
+            assertEquals(expMsg, e.getMessage());
             return;
         }
         fail("No exception thrown");
@@ -743,37 +771,37 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void faultOneImmediate() throws Exception {
-        fault(()->$.task(faulty()).faultImmediate(MSG1),MSG1);
+        fault(() -> $.task(faulty()).faultImmediate(MSG1), MSG1);
     }
 
     @Test
     public void faultOneDelay() throws Exception {
-        fault(()->$.task(faulty()).faultAfter(0,MSG1),MSG1);
+        fault(() -> $.task(faulty()).faultAfter(0, MSG1), MSG1);
     }
 
     @Test
     public void faultOneDelayComplete() throws Exception {
-        fault(()->new Engine().task(faulty()).faultWithCompletionAfter(0,MSG1),MSG1);
+        fault(() -> new Engine().task(faulty()).faultWithCompletionAfter(0, MSG1), MSG1);
     }
 
     @Test
     public void faultOneSpawnImmediate() throws Exception {
-        fault(()->$.task(faulty()).runSpawned().faultImmediate(MSG1),MSG1);
+        fault(() -> $.task(faulty()).runSpawned().faultImmediate(MSG1), MSG1);
     }
 
     @Test
     public void faultOneSpawnDelay() throws Exception {
-        fault(()->$.task(faulty()).runSpawned().faultAfter(0,MSG1),MSG1);
+        fault(() -> $.task(faulty()).runSpawned().faultAfter(0, MSG1), MSG1);
     }
 
     @Test
     public void faultOneSpawnDelayComplete() throws Exception {
-        fault(()->new Engine().task(faulty()).runSpawned().faultWithCompletionAfter(0,MSG1),MSG1);
+        fault(() -> new Engine().task(faulty()).runSpawned().faultWithCompletionAfter(0, MSG1), MSG1);
     }
 
     @Test
     public void faultOneImmediateComplete() throws Exception {
-        fault(()->new Engine().task(faulty()).faultImmediateCompletion(0,MSG1),MSG1);
+        fault(() -> new Engine().task(faulty()).faultImmediateCompletion(0, MSG1), MSG1);
     }
 
     @Test

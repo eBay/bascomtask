@@ -28,12 +28,14 @@ import java.util.function.*;
 public interface ConsumerTask extends TaskInterface<ConsumerTask> {
     /**
      * Creates a CompletableFuture around the lambda expression.
+     *
      * @return evaluated CompletableFuture
      */
     CompletableFuture<Void> apply();
 
     /**
      * An ConsumerTask that takes 1 argument.
+     *
      * @param <IN> type of input
      */
     class ConsumerTask1<IN> implements ConsumerTask {
@@ -55,15 +57,16 @@ public interface ConsumerTask extends TaskInterface<ConsumerTask> {
 
     /**
      * An ConsumerTask that takes 2 arguments.
+     *
      * @param <IN1> type of first input
      * @param <IN2> type of second input
      */
-    class ConsumerTask2<IN1,IN2> implements ConsumerTask {
-        private final BiConsumer<IN1,IN2> fn;
+    class ConsumerTask2<IN1, IN2> implements ConsumerTask {
+        private final BiConsumer<IN1, IN2> fn;
         private final CompletableFuture<IN1> cf1;
         private final CompletableFuture<IN2> cf2;
 
-        public ConsumerTask2(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1,IN2> fn) {
+        public ConsumerTask2(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
             this.cf1 = cf1;
             this.cf2 = cf2;
             this.fn = fn;
@@ -73,7 +76,7 @@ public interface ConsumerTask extends TaskInterface<ConsumerTask> {
         public CompletableFuture<Void> apply() {
             IN1 v1 = get(cf1);
             IN2 v2 = get(cf2);
-            fn.accept(v1,v2);
+            fn.accept(v1, v2);
             return complete();
         }
     }

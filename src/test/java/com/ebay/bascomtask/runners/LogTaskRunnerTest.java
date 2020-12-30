@@ -25,22 +25,22 @@ import org.junit.Test;
  */
 public class LogTaskRunnerTest {
 
-    private final static MockTaskRun R1 = new MockTaskRun("the","task");
+    private final static MockTaskRun R1 = new MockTaskRun("the", "task");
 
     private void write(LogTaskRunner runner, LogTaskLevel level) {
         runner.setLevel(level);
         Object fromBefore = runner.before(R1);
         Thread thread = Thread.currentThread();
-        runner.executeTaskMethod(R1,thread,fromBefore);
-        runner.onComplete(R1,fromBefore,false);
-        runner.onComplete(R1,fromBefore,true);
+        runner.executeTaskMethod(R1, thread, fromBefore);
+        runner.onComplete(R1, fromBefore, false);
+        runner.onComplete(R1, fromBefore, true);
     }
 
     private void runAll(boolean full) {
         LogTaskRunner runner = new LogTaskRunner();
         runner.setFullSignatureLogging(full);
-        for (LogTaskLevel next: LogTaskLevel.values()) {
-            write(runner,next);
+        for (LogTaskLevel next : LogTaskLevel.values()) {
+            write(runner, next);
         }
     }
 

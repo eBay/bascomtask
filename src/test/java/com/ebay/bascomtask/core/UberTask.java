@@ -43,10 +43,11 @@ public interface UberTask extends TaskInterface<UberTask> {
         HEAVY;
 
         CompletableFuture<Integer> ret(UberTask t, Integer v) {
-            return this==LIGHT ? t.retLight(v) : t.ret(v);
+            return this == LIGHT ? t.retLight(v) : t.ret(v);
         }
+
         CompletableFuture<Integer> inc(UberTask t, CompletableFuture<Integer> cf) {
-            return this==LIGHT ? t.incLight(cf) : t.inc(cf);
+            return this == LIGHT ? t.incLight(cf) : t.inc(cf);
         }
     }
 
@@ -55,17 +56,25 @@ public interface UberTask extends TaskInterface<UberTask> {
     int nonFutureRet(CompletableFuture<Integer> cf);
 
     void voidConsume();
+
     void voidConsume(CompletableFuture<?> cf);
 
     CompletableFuture<Void> consume();
+
     CompletableFuture<Void> consume(CompletableFuture<?> cf);
 
     CompletableFuture<Integer> retValueOne();
+
     CompletableFuture<Integer> ret(int x);
+
     CompletableFuture<Integer> retLight(int x);
+
     CompletableFuture<Integer> inc(CompletableFuture<Integer> cf);
+
     CompletableFuture<Integer> incLight(CompletableFuture<Integer> cf);
+
     CompletableFuture<Integer> add(CompletableFuture<Integer> x, CompletableFuture<Integer> y);
+
     CompletableFuture<Integer> add(CompletableFuture<Integer> x, CompletableFuture<Integer> y, CompletableFuture<Integer> z);
 
     CompletableFuture<Boolean> ret(boolean b);
@@ -76,11 +85,12 @@ public interface UberTask extends TaskInterface<UberTask> {
 
     static void checkDone(CompletableFuture<?> cf) {
         //RunMode.mode.checkDone(cf);
-        assertTrue("Input argument is not done",cf.isDone());
+        assertTrue("Input argument is not done", cf.isDone());
     }
 
     /**
      * Creates a task with a default expectedCount of 1.
+     *
      * @return new task
      */
     static UberTasker task() {
@@ -89,6 +99,7 @@ public interface UberTask extends TaskInterface<UberTask> {
 
     /**
      * Creates a task that will fail junit assertion if not executed the given number of times.
+     *
      * @return new task
      */
     static UberTasker task(int expectedCount) {
@@ -118,13 +129,13 @@ public interface UberTask extends TaskInterface<UberTask> {
 
         static void clearAndVerify() {
             StringBuilder sb = null;
-            for (UberTasker next: tasks) {
+            for (UberTasker next : tasks) {
                 if (next.actualCount.get() != next.expectedExecutionCount) {
-                    if (sb==null) {
+                    if (sb == null) {
                         sb = new StringBuilder();
                     }
                     sb.append(String.format("Task(%s) got %d != (exp) %d%n",
-                            next.getName(),next.actualCount.get(),next.expectedExecutionCount));
+                            next.getName(), next.actualCount.get(), next.expectedExecutionCount));
                 }
             }
             tasks.clear();
@@ -140,6 +151,7 @@ public interface UberTask extends TaskInterface<UberTask> {
         /**
          * These test tasks are expected bo be executed once and only once, unless told
          * otherwise. The default count of execution passes can be passed here.
+         *
          * @param expectedExecutionCount to expect
          */
         UberTasker(int expectedExecutionCount) {
@@ -172,7 +184,7 @@ public interface UberTask extends TaskInterface<UberTask> {
             try {
                 Thread.sleep(sleepForMs);
             } catch (InterruptedException e) {
-                throw new RuntimeException("Bad interrupt",e);
+                throw new RuntimeException("Bad interrupt", e);
             }
             actualCount.incrementAndGet();
         }
@@ -223,7 +235,8 @@ public interface UberTask extends TaskInterface<UberTask> {
             return complete(b);
         }
 
-        @Override @Light
+        @Override
+        @Light
         public CompletableFuture<Integer> retLight(int x) {
             return ret(x);
         }
@@ -233,10 +246,11 @@ public interface UberTask extends TaskInterface<UberTask> {
             checkDone(cf);
             int v = get(cf);
             delay();
-            return complete(v+1);
+            return complete(v + 1);
         }
 
-        @Override @Light
+        @Override
+        @Light
         public CompletableFuture<Integer> incLight(CompletableFuture<Integer> cf) {
             checkDone(cf);
             return inc(cf);
@@ -249,7 +263,7 @@ public interface UberTask extends TaskInterface<UberTask> {
             int x = get(fx);
             int y = get(fy);
             delay();
-            return complete(x+y);
+            return complete(x + y);
         }
 
         @Override
@@ -261,7 +275,7 @@ public interface UberTask extends TaskInterface<UberTask> {
             int y = get(fy);
             int z = get(fz);
             delay();
-            return complete(x+y+z);
+            return complete(x + y + z);
         }
 
         @Override

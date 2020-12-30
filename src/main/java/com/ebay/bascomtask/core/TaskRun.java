@@ -24,6 +24,7 @@ package com.ebay.bascomtask.core;
 public interface TaskRun extends TaskMeta {
     /**
      * Returns the user task pojo if there is one. For some internal tasks, there may not be.
+     *
      * @return possibly null userTask
      */
     TaskInterface<?> getTask();
@@ -31,6 +32,7 @@ public interface TaskRun extends TaskMeta {
     /**
      * Returns the task name, e.g. for a user task TASK.METHOD, where TASK is the the user-specified task
      * renaming else the class name if none.
+     *
      * @return never null name
      */
     String getName();

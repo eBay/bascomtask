@@ -32,35 +32,37 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
 
     ConditionalTask(Engine engine, CompletableFuture<Boolean> condition, CompletableFuture<R> thenValue, boolean thenActivate, CompletableFuture<R> elseValue, boolean elseActivate) {
         super(engine);
-        this.condition = ensureWrapped(condition,true);
-        this.thenFuture = ensureWrapped(thenValue,false);
-        this.elseFuture = ensureWrapped(elseValue,false);
+        this.condition = ensureWrapped(condition, true);
+        this.thenFuture = ensureWrapped(thenValue, false);
+        this.elseFuture = ensureWrapped(elseValue, false);
         this.thenActivate = thenActivate;
         this.elseActivate = elseActivate;
     }
 
     private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate) {
         if (activate) {
-            pending = bascomTaskFuture.activate(this,pending);
+            pending = bascomTaskFuture.activate(this, pending);
         }
         return pending;
     }
 
     /**
      * Always activate the condition, and also active then and/or else if requested.
+     *
      * @param pending to be processed
      * @return pending
      */
     @Override
     Binding<?> doActivate(Binding<?> pending) {
-        pending = condition.activate(this,pending);
-        pending = activateIf(pending,thenFuture,thenActivate);
-        pending = activateIf(pending,elseFuture,elseActivate);
+        pending = condition.activate(this, pending);
+        pending = activateIf(pending, thenFuture, thenActivate);
+        pending = activateIf(pending, elseFuture, elseActivate);
         return pending;
     }
 
     /**
      * Ensures that the condition of choice is activated. This is called after the condition has completed.
+     *
      * @param pending to process
      * @return pending
      */
@@ -68,7 +70,7 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
     Binding<?> onReady(Binding<?> pending) {
         Boolean which = get(condition);
         BascomTaskFuture<?> choice = which ? thenFuture : elseFuture;
-        pending = choice.activate(this,pending);
+        pending = choice.activate(this, pending);
         return super.onReady(pending);
     }
 

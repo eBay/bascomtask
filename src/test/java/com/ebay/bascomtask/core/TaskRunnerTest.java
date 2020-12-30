@@ -40,7 +40,7 @@ import static org.junit.Assert.assertTrue;
 public class TaskRunnerTest {
 
     private static final AtomicInteger count = new AtomicInteger();
-    private static final Map<Key,Integer> ordering = new ConcurrentHashMap<>();
+    private static final Map<Key, Integer> ordering = new ConcurrentHashMap<>();
     private Orchestrator $;
 
     static class Key {
@@ -59,6 +59,7 @@ public class TaskRunnerTest {
 
         final MockRunner runner;
         final String taskName;
+
         Key(MockRunner runner, String taskName) {
             this.runner = runner;
             this.taskName = taskName;
@@ -79,16 +80,20 @@ public class TaskRunnerTest {
 
         private static String ord(int x) {
             switch (x) {
-                case 0: return "first";
-                case 1: return "second";
-                case 2: return "third";
-                default: throw new RuntimeException("Ord too big: " + x);
+                case 0:
+                    return "first";
+                case 1:
+                    return "second";
+                case 2:
+                    return "third";
+                default:
+                    throw new RuntimeException("Ord too big: " + x);
             }
         }
 
         @Override
         public String toString() {
-            return "MockRunner(" + name +")";
+            return "MockRunner(" + name + ")";
         }
 
         @Override
@@ -101,10 +106,10 @@ public class TaskRunnerTest {
         @Override
         public Object executeTaskMethod(TaskRun taskRun, Thread parentThread, Object fromBefore) {
             int order = count.getAndIncrement();
-            ordering.put(new Key(this,taskRun.getName()),order);
+            ordering.put(new Key(this, taskRun.getName()), order);
             AtomicInteger which = parentThread == Thread.currentThread() ? execSameThreadHits : execDiffThreadHits;
             which.incrementAndGet();
-            AtomicBoolean ab = (AtomicBoolean)fromBefore;
+            AtomicBoolean ab = (AtomicBoolean) fromBefore;
             ab.set(true);
             return taskRun.run();
         }
@@ -114,13 +119,14 @@ public class TaskRunnerTest {
             completedHits.incrementAndGet();
         }
 
-        void verify (int exec, int execSame, int execDiff) {
-            assertEquals(say("Before"),exec,beforeHits.get());
-            assertEquals(say("ExecSame"),execSame,execSameThreadHits.get());
-            assertEquals(say("ExecDiff"),execDiff,execDiffThreadHits.get());
-            assertEquals(say("Completed"),exec,completedHits.get());
+        void verify(int exec, int execSame, int execDiff) {
+            assertEquals(say("Before"), exec, beforeHits.get());
+            assertEquals(say("ExecSame"), execSame, execSameThreadHits.get());
+            assertEquals(say("ExecDiff"), execDiff, execDiffThreadHits.get());
+            assertEquals(say("Completed"), exec, completedHits.get());
             assertTrue(say("Matched?"), matched.get());
         }
+
         private String say(String s) {
             return s + "(" + name + ")";
         }
@@ -128,19 +134,20 @@ public class TaskRunnerTest {
 
     /**
      * Verifies that for all tasks executed, the first runner was executed before the second
+     *
      * @param r1 first runner
      * @param r2 second runner
      */
     private void verifyOrder(MockRunner r1, MockRunner r2) {
         List<String> badTaskNames = ordering.keySet().stream()
-                .map(key->key.taskName).distinct()
-                .filter(tn->!ordered(tn,r1,r2))
+                .map(key -> key.taskName).distinct()
+                .filter(tn -> !ordered(tn, r1, r2))
                 .collect(Collectors.toList());
-        assertEquals(0,badTaskNames.size());
+        assertEquals(0, badTaskNames.size());
     }
 
     private boolean ordered(String taskName, MockRunner r1, MockRunner r2) {
-        return ordering.get(new Key(r1,taskName)) < ordering.get(new Key(r2,taskName));
+        return ordering.get(new Key(r1, taskName)) < ordering.get(new Key(r2, taskName));
     }
 
     @Before
@@ -156,7 +163,7 @@ public class TaskRunnerTest {
         GlobalConfig.INSTANCE.firstInterceptWith(mockRunner);
 
         $.task(task()).ret(1).get();
-        mockRunner.verify(1,1,0);
+        mockRunner.verify(1, 1, 0);
     }
 
     @Test
@@ -167,14 +174,14 @@ public class TaskRunnerTest {
         GlobalConfig.INSTANCE.lastInterceptWith(secondMockRunner);
 
         $.task(task()).ret(1).get();
-        firstMockRunner.verify(1,1,0);
-        secondMockRunner.verify(1,1,0);
+        firstMockRunner.verify(1, 1, 0);
+        secondMockRunner.verify(1, 1, 0);
 
-        verifyOrder(firstMockRunner,secondMockRunner);
+        verifyOrder(firstMockRunner, secondMockRunner);
     }
 
     private void run3(CommonConfig m1, CommonConfig m2, CommonConfig m3) throws Exception {
-                      MockRunner firstMockRunner = new MockRunner(0);
+        MockRunner firstMockRunner = new MockRunner(0);
         MockRunner secondMockRunner = new MockRunner(1);
         MockRunner thirdMockRunner = new MockRunner(2);
         m1.lastInterceptWith(secondMockRunner);
@@ -182,13 +189,13 @@ public class TaskRunnerTest {
         m3.firstInterceptWith(firstMockRunner);
 
         $.task(task()).ret(1).get();
-        firstMockRunner.verify(1,1,0);
-        secondMockRunner.verify(1,1,0);
-        thirdMockRunner.verify(1,1,0);
+        firstMockRunner.verify(1, 1, 0);
+        secondMockRunner.verify(1, 1, 0);
+        thirdMockRunner.verify(1, 1, 0);
 
-        verifyOrder(firstMockRunner,secondMockRunner);
-        verifyOrder(firstMockRunner,thirdMockRunner);
-        verifyOrder(secondMockRunner,thirdMockRunner);
+        verifyOrder(firstMockRunner, secondMockRunner);
+        verifyOrder(firstMockRunner, thirdMockRunner);
+        verifyOrder(secondMockRunner, thirdMockRunner);
     }
 
 
@@ -221,13 +228,13 @@ public class TaskRunnerTest {
 
         CompletableFuture<Integer> left = $.task(task()).name("left").ret(1);
         CompletableFuture<Integer> right = $.task(task()).name("right").ret(2);
-        CompletableFuture<Integer> add = $.task(task()).name("bottom").add(left,(right));
-        assertEquals((Integer)3,add.get());
+        CompletableFuture<Integer> add = $.task(task()).name("bottom").add(left, (right));
+        assertEquals((Integer) 3, add.get());
 
-        firstMockRunner.verify(3, 2,1);
-        secondMockRunner.verify(3,2,1);
+        firstMockRunner.verify(3, 2, 1);
+        secondMockRunner.verify(3, 2, 1);
 
-        verifyOrder(firstMockRunner,secondMockRunner);
+        verifyOrder(firstMockRunner, secondMockRunner);
     }
 
     @Test
@@ -243,19 +250,19 @@ public class TaskRunnerTest {
         $.firstInterceptWith(or2);
 
         $.task(task()).ret(1).get();
-        gr1.verify(1,1,0);
-        gr2.verify(1,1,0);
-        or1.verify(1,1,0);
-        or2.verify(1,1,0);
+        gr1.verify(1, 1, 0);
+        gr2.verify(1, 1, 0);
+        or1.verify(1, 1, 0);
+        or2.verify(1, 1, 0);
 
         GlobalConfig.INSTANCE.removeInterceptor(gr1);
         $.removeInterceptor(or1);
 
         $.task(task()).ret(1).get();
 
-        gr1.verify(1,1,0);
-        gr2.verify(2,2,0);
-        or1.verify(1,1,0);
-        or2.verify(2,2,0);
+        gr1.verify(1, 1, 0);
+        gr2.verify(2, 2, 0);
+        or1.verify(1, 1, 0);
+        or2.verify(2, 2, 0);
     }
 }

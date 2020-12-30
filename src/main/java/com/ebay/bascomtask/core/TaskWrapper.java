@@ -61,10 +61,14 @@ class TaskWrapper<T> implements InvocationHandler {
             InvocationTargetException {
         String nm = method.getName();
         switch (nm) {
-            case "hashCode": return original.hashCode();
-            case "equals": return this == args[0];
-            case "toString": return "TaskWrapper[" + original + "]";
-            default: return fakeTaskMethod(proxy, method, args, nm);
+            case "hashCode":
+                return original.hashCode();
+            case "equals":
+                return this == args[0];
+            case "toString":
+                return "TaskWrapper[" + original + "]";
+            default:
+                return fakeTaskMethod(proxy, method, args, nm);
         }
     }
 
@@ -75,16 +79,13 @@ class TaskWrapper<T> implements InvocationHandler {
         if ("name".equals(targetMethodName)) {
             name = args[0].toString();
             return proxy;
-        }
-        else if ("getName".equals(targetMethodName)) {
+        } else if ("getName".equals(targetMethodName)) {
             return getName();
-        }
-        else if ("light".equals(targetMethodName)) {
+        } else if ("light".equals(targetMethodName)) {
             this.runSpawned = false;
             this.light = true;
             return proxy;
-        }
-        else if ("runSpawned".equals(targetMethodName)) {
+        } else if ("runSpawned".equals(targetMethodName)) {
             this.light = false;
             this.runSpawned = true;
             return proxy;
@@ -92,9 +93,9 @@ class TaskWrapper<T> implements InvocationHandler {
 
         if (method.getReturnType().equals(Void.TYPE) || !CompletableFuture.class.isAssignableFrom(method.getReturnType())) {
             // Execute immediately if not return a CompletableFuture
-            return method.invoke(original,args);
+            return method.invoke(original, args);
         } else {
-            Binding<T> binding = new ReflectionBinding<>(engine,this,original,method,args);
+            Binding<T> binding = new ReflectionBinding<>(engine, this, original, method, args);
             return binding.getOutput();
         }
     }

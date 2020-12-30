@@ -25,6 +25,7 @@ public interface TaskMeta {
 
     /**
      * Returns the time at which this task method was started.
+     *
      * @return start time in ms or 0 if not started
      */
     long getStartedAt();
@@ -32,6 +33,7 @@ public interface TaskMeta {
     /**
      * Returns the time at which this task method was ended. This value would always be greater
      * than or equal to {@link #getStartedAt()}.
+     *
      * @return end time in ms or 0 if not ended
      */
     long getEndedAt();
@@ -40,6 +42,7 @@ public interface TaskMeta {
      * Returns the time at which this task method was completed, which for CompletableFutures is the time
      * at which it had a value assigned. This value is always greater than or equal to {@link #getEndedAt()},
      * and is greater than the ending time iff the CompletableFuture had !isDone() on method exit.
+     *
      * @return completion time in ms or 0 if not ended
      */
     long getCompletedAt();

@@ -28,106 +28,137 @@ public enum LogTaskLevel {
         public boolean isEnabled(Logger logger) {
             return logger.isInfoEnabled();
         }
+
         public void write(Logger logger, String msg) {
             logger.info(msg);
         }
+
         public void write(Logger logger, String format, Object arg) {
-            logger.info(format,arg);
+            logger.info(format, arg);
         }
+
         public void write(Logger logger, String format, Object arg1, Object arg2) {
-            logger.info(format,arg1,arg2);
+            logger.info(format, arg1, arg2);
         }
+
         public void write(Logger logger, String format, Object... arguments) {
-            logger.info(format,arguments);
+            logger.info(format, arguments);
         }
+
         public void write(Logger logger, String msg, Throwable t) {
-            logger.info(msg,t);
+            logger.info(msg, t);
         }
     },
     ERROR {
         public boolean isEnabled(Logger logger) {
             return logger.isErrorEnabled();
         }
+
         public void write(Logger logger, String msg) {
             logger.error(msg);
         }
+
         public void write(Logger logger, String format, Object arg) {
-            logger.error(format,arg);
+            logger.error(format, arg);
         }
+
         public void write(Logger logger, String format, Object arg1, Object arg2) {
-            logger.error(format,arg1,arg2);
+            logger.error(format, arg1, arg2);
         }
+
         public void write(Logger logger, String format, Object... arguments) {
-            logger.error(format,arguments);
+            logger.error(format, arguments);
         }
+
         public void write(Logger logger, String msg, Throwable t) {
-            logger.error(msg,t);
+            logger.error(msg, t);
         }
     },
     WARN {
         public boolean isEnabled(Logger logger) {
             return logger.isWarnEnabled();
         }
+
         public void write(Logger logger, String msg) {
             logger.warn(msg);
         }
+
         public void write(Logger logger, String format, Object arg) {
-            logger.warn(format,arg);
+            logger.warn(format, arg);
         }
+
         public void write(Logger logger, String format, Object arg1, Object arg2) {
-            logger.warn(format,arg1,arg2);
+            logger.warn(format, arg1, arg2);
         }
+
         public void write(Logger logger, String format, Object... arguments) {
-            logger.warn(format,arguments);
+            logger.warn(format, arguments);
         }
+
         public void write(Logger logger, String msg, Throwable t) {
-            logger.warn(msg,t);
+            logger.warn(msg, t);
         }
     },
     TRACE {
         public boolean isEnabled(Logger logger) {
             return logger.isTraceEnabled();
         }
+
         public void write(Logger logger, String msg) {
             logger.trace(msg);
         }
+
         public void write(Logger logger, String format, Object arg) {
-            logger.trace(format,arg);
+            logger.trace(format, arg);
         }
+
         public void write(Logger logger, String format, Object arg1, Object arg2) {
-            logger.trace(format,arg1,arg2);
+            logger.trace(format, arg1, arg2);
         }
+
         public void write(Logger logger, String format, Object... arguments) {
-            logger.trace(format,arguments);
+            logger.trace(format, arguments);
         }
+
         public void write(Logger logger, String msg, Throwable t) {
-            logger.trace(msg,t);
+            logger.trace(msg, t);
         }
     },
     DEBUG {
         public boolean isEnabled(Logger logger) {
             return logger.isDebugEnabled();
         }
+
         public void write(Logger logger, String msg) {
             logger.debug(msg);
         }
+
         public void write(Logger logger, String format, Object arg) {
-            logger.debug(format,arg);
+            logger.debug(format, arg);
         }
+
         public void write(Logger logger, String format, Object arg1, Object arg2) {
-            logger.debug(format,arg1,arg2);
+            logger.debug(format, arg1, arg2);
         }
+
         public void write(Logger logger, String format, Object... arguments) {
-            logger.debug(format,arguments);
+            logger.debug(format, arguments);
         }
+
         public void write(Logger logger, String msg, Throwable t) {
-            logger.debug(msg,t);
+            logger.debug(msg, t);
         }
     };
+
     public abstract boolean isEnabled(Logger logger);
+
     public abstract void write(Logger logger, String msg);
+
     public abstract void write(Logger logger, String format, Object arg);
+
     public abstract void write(Logger logger, String format, Object arg1, Object arg2);
+
     public abstract void write(Logger logger, String format, Object... arguments);
+
     public abstract void write(Logger logger, String msg, Throwable t);
 }

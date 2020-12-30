@@ -37,7 +37,7 @@ class PlaceHolderRunner implements TaskRun {
 
     @Override
     public String toString() {
-        return "PRunner("+taskRun+")";
+        return "PRunner(" + taskRun + ")";
     }
 
     @Override
@@ -62,8 +62,8 @@ class PlaceHolderRunner implements TaskRun {
 
     @Override
     public Object run() {
-        Object rv = next.executeTaskMethod(taskRun,parentThread,fromBefore);
-        Binding.completeRunner(next,taskRun,fromBefore,rv);
+        Object rv = next.executeTaskMethod(taskRun, parentThread, fromBefore);
+        Binding.completeRunner(next, taskRun, fromBefore, rv);
         return rv;
     }
 

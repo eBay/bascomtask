@@ -25,13 +25,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Tracks and creates a task execution profile on demand.
  *
- * @see #format()
  * @author Brendan McCarthy
+ * @see #format()
  */
 public class ProfilingTaskRunner implements TaskRunner {
 
     private final List<Event> events = new ArrayList<>();
-    private final Map<String,ThreadTracker> threadMap = new HashMap<>();
+    private final Map<String, ThreadTracker> threadMap = new HashMap<>();
     private final List<Event> rowHeaders = new ArrayList<>();
     private final AtomicInteger externCount = new AtomicInteger(0);
 
@@ -42,6 +42,7 @@ public class ProfilingTaskRunner implements TaskRunner {
         Event[] events = null;
         boolean active = false;
         final char mark;
+
         ThreadTracker(String nm, char mark) {
             this.index = threadMap.size();
             this.threadName = nm;
@@ -63,7 +64,7 @@ public class ProfilingTaskRunner implements TaskRunner {
         Event(TaskRun taskRun, long ts, String threadName, char mark, int columnOrder) {
             this.taskRun = taskRun;
             this.ts = ts;
-            this.threadTracker = threadMap.computeIfAbsent(threadName, k -> new ThreadTracker(threadName,mark));
+            this.threadTracker = threadMap.computeIfAbsent(threadName, k -> new ThreadTracker(threadName, mark));
             this.columnOrder = columnOrder;
         }
 
@@ -76,9 +77,11 @@ public class ProfilingTaskRunner implements TaskRunner {
         boolean replacedBy(StartEvent e) {
             return false;
         }
+
         boolean replacedBy() {
             return false;
         }
+
         boolean replacedBy(CompletionEvent e) {
             return false;
         }
@@ -87,7 +90,7 @@ public class ProfilingTaskRunner implements TaskRunner {
     private class StartEvent extends Event {
 
         StartEvent(TaskRun taskRun, long ts, String threadName, char mark, int columnOrder) {
-            super(taskRun,ts,threadName,mark,columnOrder);
+            super(taskRun, ts, threadName, mark, columnOrder);
         }
 
         @Override
@@ -113,7 +116,7 @@ public class ProfilingTaskRunner implements TaskRunner {
 
     private class EndEvent extends Event {
         EndEvent(TaskRun taskRun, long ts, String threadName) {
-            super(taskRun,ts,threadName,'-',0);
+            super(taskRun, ts, threadName, '-', 0);
         }
 
         @Override
@@ -134,6 +137,7 @@ public class ProfilingTaskRunner implements TaskRunner {
         boolean replacedBy(StartEvent e) {
             return true;
         }
+
         boolean replacedBy(CompletionEvent e) {
             return true;
         }
@@ -142,7 +146,7 @@ public class ProfilingTaskRunner implements TaskRunner {
     private class CompletionEvent extends Event {
 
         CompletionEvent(TaskRun taskRun, long ts, String threadName) {
-            super(taskRun,ts,threadName,'+',0);
+            super(taskRun, ts, threadName, '+', 0);
         }
 
         @Override
@@ -159,6 +163,7 @@ public class ProfilingTaskRunner implements TaskRunner {
         boolean replaces(Event e) {
             return e.replacedBy(this);
         }
+
         boolean replacedBy(StartEvent e) {
             return true;
         }
@@ -172,11 +177,11 @@ public class ProfilingTaskRunner implements TaskRunner {
     @Override
     public Object executeTaskMethod(TaskRun taskRun, Thread parentThread, Object fromBefore) {
         final String threadName = Thread.currentThread().getName();
-        events.add(new StartEvent(taskRun,taskRun.getStartedAt(),threadName,'-',0));
+        events.add(new StartEvent(taskRun, taskRun.getStartedAt(), threadName, '-', 0));
         try {
             return taskRun.run();
         } finally {
-            events.add(new EndEvent(taskRun,taskRun.getEndedAt(),threadName));
+            events.add(new EndEvent(taskRun, taskRun.getEndedAt(), threadName));
         }
     }
 
@@ -184,14 +189,14 @@ public class ProfilingTaskRunner implements TaskRunner {
     public void onComplete(TaskRun taskRun, Object fromBefore, boolean doneOnExit) {
         long cat = taskRun.getCompletedAt();
         if (cat > taskRun.getEndedAt()) {
-            final String threadName = "EX*TERN+"+externCount.getAndIncrement();
-            events.add(new StartEvent(taskRun,taskRun.getStartedAt(),threadName, '+',1));
-            events.add(new CompletionEvent(taskRun,cat,threadName));
+            final String threadName = "EX*TERN+" + externCount.getAndIncrement();
+            events.add(new StartEvent(taskRun, taskRun.getStartedAt(), threadName, '+', 1));
+            events.add(new CompletionEvent(taskRun, cat, threadName));
         }
     }
 
     private static void fill(StringBuilder sb, int spaces) {
-        for (int i=0; i<spaces; i++) {
+        for (int i = 0; i < spaces; i++) {
             sb.append(' ');
         }
     }
@@ -200,8 +205,8 @@ public class ProfilingTaskRunner implements TaskRunner {
 
     private static void fill(StringBuilder sb, long v) {
         String s = String.valueOf(v);
-        int spaces = Math.max(0,TIMESTAMP_COLUMN_WIDTH-s.length());
-        fill(sb,spaces);
+        int spaces = Math.max(0, TIMESTAMP_COLUMN_WIDTH - s.length());
+        fill(sb, spaces);
         sb.append(v);
     }
 
@@ -226,7 +231,7 @@ public class ProfilingTaskRunner implements TaskRunner {
      * represent that the gold.pond task method ended 10 ms after start; the value at 5 indicates that it was active
      * and would only be drawn if there were additional columns (not shown above) because other things of interest
      * occurred at that time.
-     *
+     * <p>
      * When a task immediately follows another within the same timestamp value, the end of the first is omitted.
      * In the following, for example, gold.pond ends at timestamp 10 and gold.fish begins at that same timestamp:
      * <pre>
@@ -235,7 +240,7 @@ public class ProfilingTaskRunner implements TaskRunner {
      *    10| gold.fish  ---
      *    20|            ---
      * </pre>
-     *
+     * <p>
      * Tasks that return non-completed CompletableFutures have by definition a thread outside of BascomTask control.
      * Each of these is represented in its own column and such columns are letter-numbered beginning with 'A'. The
      * markers are '-+-' and '+' replacing the corresponding markers used in BascomTask-controlled threads. Each task
@@ -256,8 +261,8 @@ public class ProfilingTaskRunner implements TaskRunner {
             StringBuilder sb = new StringBuilder();
             List<ThreadTracker> threadTrackers = getOrderedTrackers();
 
-            formatHdr(sb,nameColumnWidth,threadTrackers);
-            formatBody(sb,nameColumnWidth,threadTrackers);
+            formatHdr(sb, nameColumnWidth, threadTrackers);
+            formatBody(sb, nameColumnWidth, threadTrackers);
             return sb.toString();
         }
     }
@@ -265,30 +270,30 @@ public class ProfilingTaskRunner implements TaskRunner {
     private int prepare() {
         int max = 0;
         rowHeaders.clear();
-        for (Event next: events) {
+        for (Event next : events) {
             int sz = rowHeaders.size();
             if (sz == 0) {
                 rowHeaders.add(next);
             } else {
-                Event lastRowHeader = rowHeaders.get(sz-1);
-                if (next.ts==lastRowHeader.ts && next.replaces(lastRowHeader)) {
-                    rowHeaders.set(sz-1,next);
+                Event lastRowHeader = rowHeaders.get(sz - 1);
+                if (next.ts == lastRowHeader.ts && next.replaces(lastRowHeader)) {
+                    rowHeaders.set(sz - 1, next);
                 } else {
                     rowHeaders.add(next);
                 }
             }
-            next.level = rowHeaders.size()-1;
-            if (next.threadTracker.firstEvent==null) {
+            next.level = rowHeaders.size() - 1;
+            if (next.threadTracker.firstEvent == null) {
                 next.threadTracker.firstEvent = next;
             }
         }
 
-        for (ThreadTracker next: threadMap.values()) {
+        for (ThreadTracker next : threadMap.values()) {
             next.events = new Event[rowHeaders.size()];
         }
 
-        for (Event next: events) {
-            max = Math.max(max,next.taskRun.getTaskPlusMethodName().length());
+        for (Event next : events) {
+            max = Math.max(max, next.taskRun.getTaskPlusMethodName().length());
             next.threadTracker.events[next.level] = next;
         }
         return max;
@@ -311,16 +316,16 @@ public class ProfilingTaskRunner implements TaskRunner {
         int internCount = 0;
         int externCount = 0;
 
-        for (ThreadTracker next: trackers) {
+        for (ThreadTracker next : trackers) {
             String hdr;
             if (next.isInternElseExtern()) {
                 hdr = String.valueOf(internCount++);
             } else {
-                hdr = String.format("%c",('A'+externCount++));
+                hdr = String.format("%c", ('A' + externCount++));
             }
             sb.append(' ');
             sb.append(hdr);
-            fill(sb,3-hdr.length());
+            fill(sb, 3 - hdr.length());
         }
         sb.append('\n');
     }
@@ -328,24 +333,24 @@ public class ProfilingTaskRunner implements TaskRunner {
     private void formatBody(StringBuilder sb, int nameColumnWidth, List<ThreadTracker> trackers) {
         final long baseline = events.get(0).ts;
 
-        for (int i=0; i< rowHeaders.size(); i++) {
+        for (int i = 0; i < rowHeaders.size(); i++) {
             Event nextRowHeader = rowHeaders.get(i);
             long delta = nextRowHeader.ts - baseline;
-            fill(sb,delta);
+            fill(sb, delta);
             sb.append("| ");
             String nm = nextRowHeader.taskRun.getTaskPlusMethodName();
             if (nextRowHeader.nameElseBlanks()) {
                 sb.append(nm);
             } else {
-                fill(sb,nm.length());
+                fill(sb, nm.length());
             }
-            int spaces = nameColumnWidth-nm.length()+2;
-            fill(sb,spaces);
+            int spaces = nameColumnWidth - nm.length() + 2;
+            fill(sb, spaces);
             for (ThreadTracker nextTracker : trackers) {
                 Event ex = nextTracker.events[i];
 
-                char b = ex==null ? ' ' : '-';
-                char m = (ex==null && !nextTracker.active) ? ' ' : nextTracker.mark;
+                char b = ex == null ? ' ' : '-';
+                char m = (ex == null && !nextTracker.active) ? ' ' : nextTracker.mark;
                 sb.append(b);
                 sb.append(m);
                 sb.append(b);

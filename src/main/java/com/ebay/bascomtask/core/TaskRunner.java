@@ -50,9 +50,10 @@ public interface TaskRunner {
      *         }
      *     }
      * </pre>
-     * @param taskRun to execute
+     *
+     * @param taskRun      to execute
      * @param parentThread of spawned task, which may be same as Thread.currentThread()
-     * @param fromBefore value returned from {@link #before(TaskRun)}
+     * @param fromBefore   value returned from {@link #before(TaskRun)}
      * @return return value from task invocation
      */
     Object executeTaskMethod(TaskRun taskRun, Thread parentThread, Object fromBefore);
@@ -66,7 +67,8 @@ public interface TaskRunner {
      * <p>The provided doneOnExit parameter indicates whether a CompletableFuture return value had isDone()==true
      * when the method completed. This should not be taken as very close but not exactly precise, since there are
      * very small time intervals involved in the steps behind making that determination.
-     * @param taskRun that was executed
+     *
+     * @param taskRun    that was executed
      * @param fromBefore value returned from {@link #before(TaskRun)}
      * @param doneOnExit false iff a CompletableFuture was returned and it was not done when the method exited
      */

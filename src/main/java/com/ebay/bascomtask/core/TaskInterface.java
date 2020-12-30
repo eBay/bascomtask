@@ -26,19 +26,18 @@ import java.util.concurrent.Future;
  * interface IDelay implements TaskInterface<IDelay> {
  *    public void exec(...);
  * }
- * 
+ *
  * class Delay implements IDelay {...}
  * }</pre>
- * 
+ * <p>
  * Note that Delay or IDelay can implement/extend other interfaces, but among all of them only
  * one should be designated as a TaskInterface in the manner above.
- * 
+ * <p>
  * There are no methods to implement from this interface, but it does provide several common
  * methods on tasks. It also allows the BT task-dependency mechanism to work properly.
  *
- * @author Brendan McCarthy
- *
  * @param <T> identifies that interface as one that defines task methods
+ * @author Brendan McCarthy
  */
 public interface TaskInterface<T> {
 
@@ -54,7 +53,7 @@ public interface TaskInterface<T> {
     default T name(String name) {
         throw new RuntimeException("Invalid call for setting name \"" + name + "\", subclass has not overridden this method");
     }
-    
+
     /**
      * Returns the name of this task, useful for logging and profiling. Subclasses can optionally
      * override if they want to expose something other than the class name as the default name. Whether or not
@@ -78,7 +77,7 @@ public interface TaskInterface<T> {
      */
     @SuppressWarnings("unchecked")
     default T light() {
-        return (T)this;
+        return (T) this;
     }
 
     /**
@@ -87,11 +86,12 @@ public interface TaskInterface<T> {
      * executing thread finds more than one task ready to fire.
      *
      * <p>Reverses any previous call to {@link #light()} or any {@link com.ebay.bascomtask.annotations.Light} annotation
+     *
      * @return this
      */
     @SuppressWarnings("unchecked")
     default T runSpawned() {
-        return (T)this;
+        return (T) this;
     }
 
     /**
@@ -99,23 +99,24 @@ public interface TaskInterface<T> {
      * that call into unchecked ones. This is useful in tasks because a task is always
      * called with valid futures so those exceptions will never be generated. Calling this
      * method is not a requirement as task methods can simply call future.get() directly
-     * and handle or throw the exceptions themselves. 
+     * and handle or throw the exceptions themselves.
+     *
      * @param future to retrieve value from
-     * @param <R> type of value returned
+     * @param <R>    type of value returned
      * @return value wrapped by the supplied future, which may or may not be null
      */
     default <R> R get(Future<R> future) {
         try {
             return future.get();
-        }
-        catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Unexpected access fault on future",e);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Unexpected access fault on future", e);
         }
     }
 
     /**
      * Convenience method creates a CompletableFuture from a constant value, which
      * may or may not be null.
+     *
      * @param arg value to wrap
      * @param <R> type of value returned
      * @return CompletableFuture that wraps the provided value
@@ -128,6 +129,7 @@ public interface TaskInterface<T> {
      * Convenience method for returning a void result. The framework requires a return result
      * even for logically void methods in order to expose common methods (such as being able to start
      * task execution) on the return result.
+     *
      * @return a void result
      */
     default CompletableFuture<Void> complete() {

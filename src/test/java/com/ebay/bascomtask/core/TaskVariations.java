@@ -45,7 +45,7 @@ public class TaskVariations {
 
     }
 
-    interface SubYesTask  extends YesTask {
+    interface SubYesTask extends YesTask {
     }
 
     static class SubYes extends Base implements SubYesTask {
@@ -61,7 +61,7 @@ public class TaskVariations {
         }
     }
 
-    interface YesTaskBefore  extends NoTask, TaskInterface<YesTaskBefore> {
+    interface YesTaskBefore extends NoTask, TaskInterface<YesTaskBefore> {
         CompletableFuture<String> ret(String s);
     }
 
@@ -75,11 +75,11 @@ public class TaskVariations {
     static class YesAfter extends Base implements YesTaskAfter {
     }
 
-    interface YesAndNoTask  extends NoTask, YesTask {
+    interface YesAndNoTask extends NoTask, YesTask {
 
     }
 
-    static class YesAndNo  extends Base implements YesAndNoTask {
+    static class YesAndNo extends Base implements YesAndNoTask {
     }
 
     static class YesAndNoClass extends Base implements NoTask, YesTask {

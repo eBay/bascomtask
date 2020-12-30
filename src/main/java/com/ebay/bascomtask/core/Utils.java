@@ -29,7 +29,7 @@ class Utils {
             } catch (NoSuchMethodException e) {
                 return null;
             } catch (Exception e) {
-                throw new RuntimeException("Unable to read annotations",e);
+                throw new RuntimeException("Unable to read annotations", e);
             }
         }
         return null;
@@ -53,7 +53,8 @@ class Utils {
      * Formats the supplied arguments, in parens, after the supplied base. CompletableFutures
      * have a '+' or '-' prefix indicating whether or not they are complete (if not complete
      * there is no value, so only '-' will be displayed).
-     * @param sb to add to
+     *
+     * @param sb   to add to
      * @param base prefix
      * @param args arguments
      */
@@ -73,8 +74,7 @@ class Utils {
                     } catch (Exception e) {
                         throw new RuntimeException("Unexpected 'get' on CF exception", e);
                     }
-                }
-                else {
+                } else {
                     pre = "-";
                     actual = "";
                 }

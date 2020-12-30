@@ -19,6 +19,7 @@ package com.ebay.bascomtask.runners;
 import com.ebay.bascomtask.core.*;
 
 import static com.ebay.bascomtask.core.UberTask.*;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -97,7 +98,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
     }
 
     private void run(String threadName, long startedAt, long endedAt, String name, String method) {
-        run(threadName,startedAt,endedAt,endedAt,name,method);
+        run(threadName, startedAt, endedAt, endedAt, name, method);
     }
 
     private void run(String threadName, long startedAt, long endedAt, long completedAt, String name, String method) {
@@ -106,8 +107,8 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         Thread thread = Thread.currentThread();
         FakeTaskRun fakeRun = new FakeTaskRun(startedAt, endedAt, completedAt, name, method);
         try {
-            taskRunner.executeTaskMethod(fakeRun,thread,null);
-            taskRunner.onComplete(fakeRun,null,true);
+            taskRunner.executeTaskMethod(fakeRun, thread, null);
+            taskRunner.onComplete(fakeRun, null, true);
         } finally {
             Thread.currentThread().setName(orgName);
         }
@@ -123,7 +124,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void test1() {
-        run(T1,1,10,"blue","dog");
+        run(T1, 1, 10, "blue", "dog");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains("  0| blue.dog    ---"));
@@ -131,8 +132,8 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void testTwoSeq() {
-        run(T1,0,10,"blue","dog");
-        run(T1,10,20,"green","hornet");
+        run(T1, 0, 10, "blue", "dog");
+        run(T1, 10, 20, "green", "hornet");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains("10| green.hornet    ---"));
@@ -140,8 +141,8 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void testTwoOverlap() {
-        run(T1, 0,10,"blue","dog");
-        run(T2, 7,17,"green","hornet");
+        run(T1, 0, 10, "blue", "dog");
+        run(T2, 7, 17, "green", "hornet");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains("7| green.hornet     -  ---"));
@@ -150,10 +151,10 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void testSeqAndOverlap() {
-        run(T1, 0,10,"blue","dog");
-        run(T2, 7,17,"green","hornet");
-        run(T1, 10,17,"blue","pony");
-        run(T2, 18,21,"green","bird");
+        run(T1, 0, 10, "blue", "dog");
+        run(T2, 7, 17, "green", "hornet");
+        run(T1, 10, 17, "blue", "pony");
+        run(T2, 18, 21, "green", "bird");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains(" 10| blue.pony       ---  - "));
@@ -162,11 +163,11 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void testThree() {
-        run(T1, 0,10,"blue","dog");
-        run(T2, 7,17,"green","hornet");
-        run(T1, 10,17,"blue","pony");
-        run(T2, 18,21,"green","bird");
-        run(T3, 3,21,"red","cat");
+        run(T1, 0, 10, "blue", "dog");
+        run(T2, 7, 17, "green", "hornet");
+        run(T1, 10, 17, "blue", "pony");
+        run(T2, 18, 21, "green", "bird");
+        run(T3, 3, 21, "red", "cat");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains("7| green.hornet     -   -  ---"));
@@ -175,7 +176,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void test1xc() {
-        run(T1,1,10,15,"blue","dog");
+        run(T1, 1, 10, 15, "blue", "dog");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains("  0| blue.dog    --- -+-"));
@@ -184,8 +185,8 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void test2xc() {
-        run(T1,0,10,15,"gold","pond");
-        run(T1,10,20,25,"gold","fish");
+        run(T1, 0, 10, 15, "gold", "pond");
+        run(T1, 10, 20, 25, "gold", "fish");
         String fmt = taskRunner.format();
         log(fmt);
         assertTrue(fmt.contains("0| gold.fish    ---  +  -+-"));

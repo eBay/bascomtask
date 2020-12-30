@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
 class ExternalBinding<RETURNTYPE> extends Binding<RETURNTYPE> {
 
     ExternalBinding(Engine engine, CompletableFuture<RETURNTYPE> cf) {
-        super(engine,cf);
+        super(engine, cf);
     }
 
     @Override
@@ -50,5 +50,6 @@ class ExternalBinding<RETURNTYPE> extends Binding<RETURNTYPE> {
     }
 
     @Override
-    public void formatActualSignature(StringBuilder sb) {}
+    public void formatActualSignature(StringBuilder sb) {
+    }
 }

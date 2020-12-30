@@ -38,7 +38,7 @@ public class MockTaskRun implements TaskRun {
     }
 
     void sim(TaskRunner taskRunner, long startedAt, long endedAt) {
-        sim(taskRunner,startedAt,endedAt,endedAt);
+        sim(taskRunner, startedAt, endedAt, endedAt);
     }
 
     void sim(TaskRunner taskRunner, long startedAt, long endedAt, long completedAt) {
@@ -46,9 +46,9 @@ public class MockTaskRun implements TaskRun {
         this.endedAt = endedAt;
         this.completedAt = completedAt;
         Object fromBefore = taskRunner.before(this);
-        taskRunner.executeTaskMethod(this,Thread.currentThread(),fromBefore);
+        taskRunner.executeTaskMethod(this, Thread.currentThread(), fromBefore);
         boolean doneOnExit = endedAt <= startedAt;
-        taskRunner.onComplete(this,fromBefore,doneOnExit);
+        taskRunner.onComplete(this, fromBefore, doneOnExit);
     }
 
     @Override

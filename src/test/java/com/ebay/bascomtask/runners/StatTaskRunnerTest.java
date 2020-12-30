@@ -33,8 +33,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class StatTaskRunnerTest extends BaseOrchestratorTest {
 
-    private final static MockTaskRun R1 = new MockTaskRun("bear","hibernate");
-    private final static MockTaskRun R2 = new MockTaskRun("bear","run");
+    private final static MockTaskRun R1 = new MockTaskRun("bear", "hibernate");
+    private final static MockTaskRun R2 = new MockTaskRun("bear", "run");
 
     @Test
     public void empty() {
@@ -45,13 +45,13 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
                 + "| Count | Avg | Min | Max | Method |\n"
                 + "|-------|-----|-----|-----|--------|\n"
                 + "------------------------------------\n";
-        assertEquals(exp,report);
+        assertEquals(exp, report);
     }
 
     @Test
     public void oneRowOneTime() {
         StatTaskRunner runner = new StatTaskRunner();
-        R1.sim(runner,0,10);
+        R1.sim(runner, 0, 10);
 
         String report = runner.report();
         System.out.println(report);
@@ -60,13 +60,13 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
                 + "|-------|-----|-----|-----|----------------|\n"
                 + "|1      |10   |10   |10   |bear.hibernate  |\n"
                 + "--------------------------------------------\n";
-        assertEquals(exp,report);
+        assertEquals(exp, report);
     }
 
     @Test
     public void oneRowOneTimeExtended() {
         StatTaskRunner runner = new StatTaskRunner();
-        R1.sim(runner,0,10,12);
+        R1.sim(runner, 0, 10, 12);
 
         String report = runner.report();
         System.out.println(report);
@@ -76,8 +76,8 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
     @Test
     public void oneRowTwoTimes() {
         StatTaskRunner runner = new StatTaskRunner();
-        R1.sim(runner,0,10);
-        R1.sim(runner,5,45);
+        R1.sim(runner, 0, 10);
+        R1.sim(runner, 5, 45);
 
         String report = runner.report();
         System.out.println(report);
@@ -87,8 +87,8 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
     @Test
     public void twoRowsOneTime() {
         StatTaskRunner runner = new StatTaskRunner();
-        R1.sim(runner,0,10);
-        R2.sim(runner,5,45);
+        R1.sim(runner, 0, 10);
+        R2.sim(runner, 5, 45);
 
         String report = runner.report();
         System.out.println(report);
@@ -99,10 +99,10 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
     @Test
     public void oneRowManyTimes() {
         StatTaskRunner runner = new StatTaskRunner();
-        for (int i=0; i< 999999; i++) {
-            long start = i%100;
-            long end = start + 1000 + i%101;
-            R1.sim(runner,start,end);
+        for (int i = 0; i < 999999; i++) {
+            long start = i % 100;
+            long end = start + 1000 + i % 101;
+            R1.sim(runner, start, end);
         }
 
         String report = runner.report();
@@ -114,7 +114,7 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
     public void oneRunner() throws Exception {
         StatTaskRunner taskRunner = new StatTaskRunner();
         GlobalConfig.INSTANCE.firstInterceptWith(taskRunner);
-        for (int i=0; i<3; i++) {
+        for (int i = 0; i < 3; i++) {
             CompletableFuture<Integer> c = $.task(task().delayFor(30)).name("blue").ret(1);
             CompletableFuture<Integer> inc = $.task(task().delayFor(20)).name("red").inc(c);
             inc.get();
