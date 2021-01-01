@@ -22,8 +22,7 @@ package com.ebay.bascomtask.exceptions;
  * @author Brendan McCarthy
  */
 public class TaskNotStartedException extends RuntimeException {
-
-    public TaskNotStartedException(String msg) {
-        super(msg);
+    public TaskNotStartedException(Throwable t) {
+        super(t);
     }
 }

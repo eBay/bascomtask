@@ -40,10 +40,7 @@ public class Engine implements Orchestrator {
     private final int uniqueIndex;
     private final AtomicInteger threadCounter = new AtomicInteger(0);
 
-    // New task method initiations cease once if/when this is set to true; it can never be set back to false
-    private boolean anyExceptions = false; // If at least one exception
-
-    // BT-managed threads are flagged for bookeepping purposes
+    // BT-managed threads are flagged for bookkeeping purposes
     private final ThreadLocal<Boolean> isBtManagedThread = ThreadLocal.withInitial(() -> false);
 
     private SpawnMode spawnMode = null; // When null, takes on globally-configured state
@@ -70,6 +67,11 @@ public class Engine implements Orchestrator {
 
     String createThreadName() {
         return "BT-" + uniqueIndex + '-' + threadCounter.incrementAndGet();
+    }
+
+    @Override
+    public int getCountOfThreadsSpawned() {
+        return threadCounter.get();
     }
 
     @Override
@@ -148,11 +150,14 @@ public class Engine implements Orchestrator {
                 BlockingQueue<CrossThreadChannel> waiting = new LinkedBlockingDeque<>(1);
                 cf.whenComplete((msg, ex) -> {
                     // Prevents run() method from taking it (it's ok if it's already taken it)
-                    idleThreads.remove(waiting);
+                    if (!idleThreads.remove(waiting)) {
+                        // This is ok, just log for information purposes
+                        LOG.debug("Main thread preempted remove on {}", cf);
+                    }
                     // Complete a waiting thread if there is one and run() method hasn't already processed it
                     if (!waiting.offer(new CrossThreadChannel(null, null))) {
                         // This is ok, just log for information purposes
-                        LOG.debug("On completion of {}, offer preempted", Thread.currentThread().getName());
+                        LOG.debug("Main thread preempted offer on {}", cf);
                     }
                 });
 
@@ -160,7 +165,7 @@ public class Engine implements Orchestrator {
                     if (idleThreads.offer(waiting)) {  // Publish the availability of this thread
                         CrossThreadChannel channel;
                         try {
-                            LOG.debug("Main thread {} waiting...", Thread.currentThread().getName());
+                            LOG.debug("Main thread waiting on {}", cf);
                             channel = waiting.take();  // Waits for either a work task (runnable) or a termination marker
                         } catch (InterruptedException e) {
                             break;
@@ -168,8 +173,7 @@ public class Engine implements Orchestrator {
                         if (channel.runnable == null) {
                             break;
                         } else {
-                            String nm = Thread.currentThread().getName();
-                            LOG.debug("Reuse thread \"{}\" --> \"{}\"", channel.parentThread.getName(), nm);
+                            LOG.debug("Main thread reused from parent thread \"{}\" on {}", channel.parentThread.getName(), cf);
                             channel.runnable.run();
                         }
                     }
@@ -205,27 +209,6 @@ public class Engine implements Orchestrator {
         });
     }
 
-    /**
-     * Records an exception if not already recorded, and if there are no active BT threads then
-     * terminate active CFs because other threads (or the main thread, which may have exited BT
-     * and is waiting on one of those CFs) would otherwise hang.
-     *
-     * @param e to record
-     * @return exception to throw
-     */
-    RuntimeException record(RuntimeException e) {
-        anyExceptions = true;
-        return e;
-    }
-
-    void recordAnyException() {
-        anyExceptions = true;
-    }
-
-    boolean areThereAnyExceptions() {
-        return anyExceptions;
-    }
-
     @Override
     public void execute(CompletionStage<?>... futures) {
         final long ms = getEffectiveTimeoutMs();
@@ -234,12 +217,12 @@ public class Engine implements Orchestrator {
             // result in this method being called recursively
             executedTimed(ms, futures);
         } else {
-            executeInternal(futures);
+            executeInternal("untimed", futures);
         }
     }
 
     private void executedTimed(long ms, CompletionStage<?>[] futures) {
-        GlobalConfig.INSTANCE.executorService.execute(() -> executeInternal(futures));
+        GlobalConfig.INSTANCE.executorService.execute(() -> executeInternal("timed", futures));
         boolean timedOut;
         try {
             timedOut = !GlobalConfig.INSTANCE.executorService.awaitTermination(ms, TimeUnit.MILLISECONDS);
@@ -247,7 +230,6 @@ public class Engine implements Orchestrator {
             timedOut = true;
         }
         if (timedOut) {
-            anyExceptions = true; // Stops further thread spawning
             String msg = timeoutMs == 0 ? "Global" : "Local";
             throw new TimeoutExceededException(msg + " timeout " + ms + " exceeded");
         }
@@ -266,7 +248,7 @@ public class Engine implements Orchestrator {
         }
     }
 
-    private void executeInternal(CompletionStage<?>... futures) {
+    private void executeInternal(String src, CompletionStage<?>... futures) {
         Binding<?> pending = null;
         for (CompletionStage<?> next : futures) {
             if (next instanceof BascomTaskFuture) {
@@ -275,7 +257,7 @@ public class Engine implements Orchestrator {
             }
         }
         if (pending != null) {
-            pending.fire("startup", true);
+            pending.fire("execute", src, true);
         }
     }
 
@@ -290,7 +272,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public String toString() {
-        return "Engine(ex=" + anyExceptions + ")";
+        return "Engine";
     }
 
     @Override
@@ -315,8 +297,22 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public <R> CompletableFuture<R> cond(CompletableFuture<Boolean> condition, CompletableFuture<R> thenValue, boolean thenActivate, CompletableFuture<R> elseValue, boolean elseActivate) {
-        ConditionalTask<R> task = new ConditionalTask<>(this, condition, thenValue, thenActivate, elseValue, elseActivate);
+    public CompletableFuture<Void> cond(CompletableFuture<Boolean> condition,
+                                        CompletableFuture<Void> thenFuture, boolean thenActivate) {
+        ConditionalTask<Void> task = new ConditionalTask<>(this, condition, thenFuture, thenActivate);
+        return task.getOutput();
+    }
+
+
+    @Override
+    public <R> CompletableFuture<R> cond(CompletableFuture<Boolean> condition, CompletableFuture<R> thenFuture, boolean thenActivate, CompletableFuture<R> elseFuture, boolean elseActivate) {
+        ConditionalTask<R> task = new ConditionalTask<>(this, condition, thenFuture, thenActivate, elseFuture, elseActivate);
+        return task.getOutput();
+    }
+
+    @Override
+    public CompletableFuture<Boolean> fate(CompletableFuture<?>... cfs) {
+        FateTask task = new FateTask(this, cfs);
         return task.getOutput();
     }
 
@@ -325,14 +321,14 @@ public class Engine implements Orchestrator {
      *
      * @param task   to extract interface from
      * @param <BASE> Generic type of TaskInterface
-     * @return
+     * @return extracted interface
      */
     <BASE> Class<BASE> extractTaskInterface(TaskInterface<BASE> task) {
         Class<BASE> clazz = extractTaskInterfaceFromClass(task.getClass());
         if (clazz == null) {
             // This should not happen because compiler restricts calls to those that
             // implement interface TaskInterface
-            throw new InvalidTaskException("Ill-Structured task does not implement com.ebay.bascomtask.core.TaskInterface: " + task);
+            throw new InvalidTaskException("Task does not implement com.ebay.bascomtask.core.TaskInterface: " + task);
         } else return clazz;
     }
 

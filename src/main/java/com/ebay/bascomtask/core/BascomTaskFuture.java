@@ -80,22 +80,15 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         cf.thenAccept(this::finish).whenComplete((msg, ex) -> {
             if (ex != null) {
                 Throwable cause = ex.getCause(); // Unwrap from java.util.concurrent.CompletionException
-                binding.engine.recordAnyException();
-                faultForward(cause);
+                binding.faultForward(cause);
             }
         });
     }
 
-    void faultForward(Throwable t) {
-        completeExceptionally(t);
-        propagateException(t);
-    }
-
-    void propagateException(Throwable t) {
+    void propagateException(Throwable t, List<FateTask> fates) {
         for (Binding<?> nextBinding : this.listenerBindings) {
-            LOG.debug("Faulting forward {} ", nextBinding);
             BascomTaskFuture<?> bascomTaskFuture = nextBinding.getOutput();
-            bascomTaskFuture.faultForward(t);
+            bascomTaskFuture.binding.faultForward(t, fates);
         }
     }
 
@@ -111,7 +104,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         binding.onCompletion(lbs);
     }
 
-    Binding<?> activate(Binding<?> becomingActivated, Binding<?> pending) {
+    Binding<?> activate(Binding<?> becomingActivated, Binding<?> pending, boolean callArgReady) {
         boolean complete = true;
         if (listenerBindings != null) {
             // If this CF has already completed, listenerBindings will be null
@@ -125,7 +118,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         }
 
         pending = binding.activate(pending);
-        if (complete) {
+        if (complete && callArgReady) {
             // Only propagate forward if not done already
             pending = becomingActivated.argReady(pending);
         }

@@ -67,10 +67,14 @@ public class CoreTest extends BaseOrchestratorTest {
         this.mode = mode;
     }
 
+    private SpawnMode getEffectiveMode() {
+        return mode == null ? SpawnMode.WHEN_NEEDED : mode;
+    }
+
     private void checkSameThreads(UberTask t1, UberTask t2, boolean sameIfNormalMode, boolean sameUnlessExplicit, boolean ifNeverMain, boolean ifAlwaysSpawn) {
         boolean same = t1.ranInSameThread(t2);
         boolean cmp;
-        SpawnMode mode = this.mode == null ? SpawnMode.WHEN_NEEDED : this.mode;
+        SpawnMode mode = getEffectiveMode();
         switch (mode) {
             case NEVER_SPAWN:
                 cmp = true;
@@ -120,6 +124,35 @@ public class CoreTest extends BaseOrchestratorTest {
                 throw new RuntimeException("Bad mode");
         }
         assertEquals("Task " + t1, cmp, same);
+    }
+
+
+    private void threadCheck(int whenNeeded, int whenNeededNoReuse, int neverMain, int alwaysSpawn, int neverSpawn, int dontSpawnUnlessExplicit) {
+        final SpawnMode mode = getEffectiveMode();
+        int expThreadCount;
+        switch (mode) {
+            case WHEN_NEEDED:
+                expThreadCount = whenNeeded;
+                break;
+            case WHEN_NEEDED_NO_REUSE:
+                expThreadCount = whenNeededNoReuse;
+                break;
+            case NEVER_MAIN:
+                expThreadCount = neverMain;
+                break;
+            case ALWAYS_SPAWN:
+                expThreadCount = alwaysSpawn;
+                break;
+            case NEVER_SPAWN:
+                expThreadCount = neverSpawn;
+                break;
+            case DONT_SPAWN_UNLESS_EXPLICIT:
+                expThreadCount = dontSpawnUnlessExplicit;
+                break;
+            default:
+                throw new RuntimeException("Unexpected mode " + mode);
+        }
+        assertEquals("number of threads spawned", expThreadCount, $.getCountOfThreadsSpawned());
     }
 
     @Before
@@ -203,6 +236,19 @@ public class CoreTest extends BaseOrchestratorTest {
             sameThread = !sameThread;
         }
         assertTrue(sameThread);
+    }
+
+    @Test
+    public void simpleV() throws Exception {
+        CompletableFuture<Integer> leftEar = $.task(task()).name("leftEar").ret(1);
+        CompletableFuture<Integer> rightEar = $.task(task()).name("rightEar").ret(2);
+        CompletableFuture<Integer> nose = $.task(task()).name("nose").add(leftEar,(rightEar));
+
+        assertEquals(3,(int)nose.get());  // Execute first so all are executed and we can test threads below
+        assertEquals(1,(int)leftEar.get());
+        assertEquals(2,(int)rightEar.get());
+
+        threadCheck(1,1,2,3,0,0);
     }
 
     private void vAdd(Weight leftWeight, Weight rightWeight, boolean sameIfNormalMode, boolean ifNeverMain, boolean ifAlwaysSpawn) throws Exception {
@@ -615,21 +661,21 @@ public class CoreTest extends BaseOrchestratorTest {
     @Test
     public void splitSeparateFaultPaths() throws Exception {
         CompletableFuture<Integer> fLeftTop = $.task(task().delayFor(50)).name("leftTop").ret(1);
-        CompletableFuture<Integer> fLeftMid = $.task(task(0)).name("leftMid").inc(fLeftTop);
+        CompletableFuture<Integer> fLeftMid = $.task(task()).name("leftMid").inc(fLeftTop);
         CompletableFuture<Integer> fRightTop = $.task(task().delayFor(0)).name("rightTop").ret(10);
         ExceptionTask<Integer> ft = faulty();
         CompletableFuture<Integer> fRightMid = $.task(ft).name("rightMid").faultAfter(fRightTop, 0, "msg");
 
         assertEquals(10, (int) fRightTop.get());
         assertEquals(1, (int) fLeftTop.get());
+        assertEquals(2, (int) fLeftMid.get());
         checkExceptionIsExpectedType(fRightMid, ExceptionTask.FaultHappened.class);
-        checkExceptionIsExpectedType(fLeftMid, TaskNotStartedException.class);
     }
 
     @Test
     public void splitFaultPathsMerge() throws Exception {
         CompletableFuture<Integer> fLeftTop = $.task(task().delayFor(50)).name("leftTop").ret(1);
-        CompletableFuture<Integer> fLeftMid = $.task(task(0)).name("leftMid").inc(fLeftTop);
+        CompletableFuture<Integer> fLeftMid = $.task(task()).name("leftMid").inc(fLeftTop);
         CompletableFuture<Integer> fRightTop = $.task(task().delayFor(0)).name("rightTop").ret(10);
         ExceptionTask<Integer> ft = faulty();
         CompletableFuture<Integer> fRightMid = $.task(ft).name("rightMid").faultAfter(fRightTop, 0, "msg");
@@ -638,8 +684,8 @@ public class CoreTest extends BaseOrchestratorTest {
 
         assertEquals(10, (int) fRightTop.get());
         assertEquals(1, (int) fLeftTop.get());
+        assertEquals(2, (int) fLeftMid.get());
         checkExceptionIsExpectedType(fRightMid, ExceptionTask.FaultHappened.class);
-        checkExceptionIsExpectedType(fLeftMid, TaskNotStartedException.class);
         checkExceptionIsExpectedType(fAdd, ExceptionTask.FaultHappened.class);
     }
 
@@ -706,11 +752,40 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test
-    public void simpleCond() throws Exception {
+    public void singleCond() throws Exception {
+        CompletableFuture<Boolean> c1 = $.task(task(1)).ret(true);
+        CompletableFuture<Void> cv = $.task(task(1)).consume();
+        CompletableFuture<Void> cond = $.cond(c1, cv);
+        cond.get();
+    }
+
+    @Test
+    public void doubleCond() throws Exception {
         CompletableFuture<Boolean> c1 = $.task(task(1)).ret(true);
         CompletableFuture<Boolean> cond = $.cond(c1, c1, c1);
         boolean b = cond.get();
         assertTrue(b);
+    }
+
+    private void cond(boolean cond, int thenCount, boolean thenActivate) throws Exception {
+        CompletableFuture<Boolean> c1 = $.task(task(1)).name("chooser").ret(cond);
+        CompletableFuture<Void> p1 = $.task(task(thenCount)).name("then").consume();
+        CompletableFuture<Void> r = $.cond(c1, p1, thenActivate);
+        r.get();
+
+        sleep(25);  // Give tasks time to complete and update actualCount
+    }
+
+    @Test
+    public void addCondFalse() throws Exception {
+        cond(true, 1, false);
+        cond(false, 0, false);
+    }
+
+    @Test
+    public void addCondTrue() throws Exception {
+        cond(true, 1, true);
+        cond(false, 1, true);
     }
 
     private void cond(boolean cond, int thenCount, boolean thenActivate, int elseCount, boolean elseActivate) throws Exception {
@@ -749,11 +824,11 @@ public class CoreTest extends BaseOrchestratorTest {
         cond(false, 1, true, 1, true);
     }
 
-
     ///
     /// Fault handling
     ///
     private static final String MSG1 = "msg1";
+    private static final String MSG2 = "msg2";
 
     private void fault(Supplier<CompletableFuture<?>> fn, String expMsg) throws Exception {
         faultGet(fn.get(), expMsg);
@@ -781,7 +856,7 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void faultOneDelayComplete() throws Exception {
-        fault(() -> new Engine().task(faulty()).faultWithCompletionAfter(0, MSG1), MSG1);
+        fault(() -> new Engine().task(faulty()).faultWithCompletionAfter(0, MSG2), MSG2);
     }
 
     @Test
@@ -804,24 +879,145 @@ public class CoreTest extends BaseOrchestratorTest {
         fault(() -> new Engine().task(faulty()).faultImmediateCompletion(0, MSG1), MSG1);
     }
 
+    @Test(expected = ExceptionTask.FaultHappened.class)
+    public void faultPropagates() throws Exception {
+        final String msg = "Bad";
+        Faulty<Integer> faulty = faulty();
+        CompletableFuture<Integer> f1 = $.task(faulty).name("f1").faultAfter(0, msg);
+        CompletableFuture<Integer> f2 = $.task(task(0)).name("f2").inc(f1);
+        f2.get();
+    }
+
     @Test
-    public void ensureFaultStopsNewTasks() throws Exception {
-        // Restrict this test because in these modes everything is in the same thread and the order
-        // of operations is non-deterministic, so we cannot definitively test execution counts.
-        if (mode != SpawnMode.NEVER_SPAWN && mode != SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT) {
-            final String msg = "Bad";
-            // The fault below will reach and pass through bottom before left has a chance to finish,
-            // so it won't register has having executed (expected count should be 0)
-            UberTask leftUberTop = task(0).delayFor(50);
-            UberTask leftUberMid = task(0); // By the time this ready to start, exception should have occurred
-            UberTask rightUberTop = task().delayFor(25);
-            Faulty<Integer> rightUberMid = faulty();
-            CompletableFuture<Integer> leftTop = $.task(leftUberTop).name("leftTop").ret(1);
-            CompletableFuture<Integer> leftMid = $.task(leftUberMid).name("leftMid").inc(leftTop);
-            CompletableFuture<Integer> rightTop = $.task(rightUberTop).name("rightTop").ret(5);
-            CompletableFuture<Integer> rightMid = $.task(rightUberMid).name("rightMid").faultAfter(rightTop, 1, msg);
-            CompletableFuture<Integer> bottom = $.task(task(0)).name("bottom").add(leftMid, (rightMid));
-            faultGet(bottom, msg);
+    public void noFate0() throws Exception {
+        CompletableFuture<Boolean> fb = $.fate();
+        assertFalse(fb.get());
+    }
+
+    @Test
+    public void noFate1() throws Exception {
+        CompletableFuture<Integer> f1 = $.task(task()).ret(1);
+        CompletableFuture<Boolean> fb = $.fate(f1);
+        assertFalse(fb.get());
+    }
+
+    @Test
+    public void yesFate1() throws Exception {
+        Faulty<Void> faulty = new Faulty<>();
+        CompletableFuture<Void> f1 = $.task(faulty).faultAfter(0, "msg");
+        CompletableFuture<Boolean> fb = $.fate(f1);
+        assertTrue(fb.get());
+    }
+
+    @Test
+    public void fate3() throws Exception {
+        String msg = "fault_message";
+        Faulty<Void> faulty = new Faulty<>();
+        CompletableFuture<Integer> f1 = $.task(task()).name("f1").ret(1);
+        CompletableFuture<Void> f2 = $.task(faulty).name("f2").faultAfter(0, msg);
+        final boolean spawning = mode != SpawnMode.NEVER_SPAWN && mode != SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT;
+        int exp = spawning ? 1 : 0; // If not spawning, then fate will cancel f3
+        CompletableFuture<Integer> f3 = $.task(task(exp)).name("f3").ret(3);
+
+        CompletableFuture<Boolean> fb = $.fate(f1, f2, f3);
+        CompletableFuture<Void> fr = $.task(task()).name("fr").consume();
+        CompletableFuture<Void> fv = $.cond(fb, fr);
+        fv.get();
+
+        assertEquals(1, (int) f1.get());
+        if (spawning) {
+            assertEquals(3, (int) f3.get());
+        } else {
+            // f3 will not have started if everything in same thread, so it will have been canelled
+            checkExceptionIsExpectedType(f3, TaskNotStartedException.class);
         }
+
+        sleep(10); // Give time for tasks to complete
+    }
+
+    @Test
+    public void faultReadme() throws Exception {
+        CompletableFuture<Integer> f1 = $.task(task().delayFor(20)).name("f1").ret(1);
+        CompletableFuture<Integer> f2 = $.task(task().delayFor(0)).name("f2").ret(2);
+        CompletableFuture<Integer> f3 = $.task(task().delayFor(0)).name("f3").ret(3);
+
+        final SpawnMode mode = getEffectiveMode();
+        final boolean spawning = mode != SpawnMode.NEVER_SPAWN && mode != SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT;
+        int expExecCount = spawning ? 0 : 1;
+        CompletableFuture<Integer> f4 = $.task(task(expExecCount)).name("f4").inc(f1);
+        ExceptionTask<Integer> faulty = faulty();
+        CompletableFuture<Integer> f5 = $.task(faulty).name("f5").faultAfter(f3, 0, "msg");
+
+        CompletableFuture<Integer> f6 = $.task(task(expExecCount)).name("f6").inc(f4);
+
+        CompletableFuture<Integer> f7 = $.task(task(expExecCount)).name("f7").inc(f6);
+        CompletableFuture<Boolean> f8 = $.fate(f2, f5, f6);
+
+        CompletableFuture<Integer> f9 = $.task(task(0)).name("f9").incIf(f7, f8);
+        CompletableFuture<Boolean> f10 = $.task(task()).name("f10").invert(f8);
+        CompletableFuture<Boolean> f11 = $.task(task()).name("f11").invert(f8);
+        CompletableFuture<Integer> f12 = $.task(task(0)).name("f12").incIf(f5, f8);
+
+        CompletableFuture<Integer> f13 = $.task(task(0)).name("f13").addb(f9, f10, f11, f12);
+
+        checkExceptionIsExpectedType(f13, ExceptionTask.FaultHappened.class);
+        checkExceptionIsExpectedType(f12, ExceptionTask.FaultHappened.class);
+        checkExceptionIsExpectedType(f5, ExceptionTask.FaultHappened.class);
+
+        if (spawning) { // Else the order is implementation not time dependent
+            checkExceptionIsExpectedType(f4, TaskNotStartedException.class);
+            checkExceptionIsExpectedType(f6, TaskNotStartedException.class);
+            checkExceptionIsExpectedType(f7, TaskNotStartedException.class);
+            checkExceptionIsExpectedType(f9, TaskNotStartedException.class);
+        }
+
+        assertTrue("f8", f8.get());
+        assertFalse("f10", f10.get());
+        assertFalse("f11", f10.get());
+
+        assertEquals(1, (int) f1.get());
+        assertEquals(2, (int) f2.get());
+        assertEquals(3, (int) f3.get());
+
+        threadCheck(3,3,4,7,0,0);
+
+        sleep(30);
+    }
+
+    @Test
+    public void mainReadme() throws Exception {
+        CompletableFuture<Integer> f1 = $.task(task().delayFor(0)).name("f1").ret(1);
+        CompletableFuture<Integer> f2 = $.task(task().delayFor(10)).name("f2").ret(2);
+        CompletableFuture<Integer> f3 = $.task(task().delayFor(20)).name("f3").ret(3);
+
+        $.task(task(0)).name("f4").inc(f1);
+        CompletableFuture<Integer> f5 = $.task(task()).name("f5").add(f1,f2);
+        CompletableFuture<Integer> f6 = $.task(task().delayFor(0)).name("f6").add(f2,f3);
+
+        CompletableFuture<Integer> f7 = $.task(task()).name("f7").inc(f5);
+        CompletableFuture<Integer> f8 = $.task(task()).name("f8").add(f5,f6);
+        CompletableFuture<Integer> f9 = $.task(task()).name("f9").inc(f6);
+        CompletableFuture<Integer> f10 = $.task(task()).name("f10").inc(f6);
+
+        $.task(task(0)).name("f11").inc(f7);
+        CompletableFuture<Integer> f12 = $.task(task()).name("f12").add(f7, f8, f9, f10);
+
+        assertEquals(24,(int)f12.get());  // Execute first so all threads activated for tests below
+
+        assertEquals(1,(int)f1.get());
+        assertEquals(2,(int)f2.get());
+        assertEquals(3,(int)f3.get());
+
+        assertEquals(3,(int)f5.get());
+        assertEquals(5,(int)f6.get());
+
+        assertEquals(4,(int)f7.get());
+        assertEquals(8,(int)f8.get());
+        assertEquals(6,(int)f9.get());
+        assertEquals(6,(int)f10.get());
+
+        threadCheck(4,4,5,10,0,0);
+
+        sleep(30);
     }
 }

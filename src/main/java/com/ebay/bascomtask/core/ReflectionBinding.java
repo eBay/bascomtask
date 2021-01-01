@@ -79,48 +79,6 @@ class ReflectionBinding<USERTASKTYPE, RETURNTYPE> extends Binding<RETURNTYPE> {
         return (TaskInterface<?>) userTask;
     }
 
-    Binding<?> doActivate(Binding<?> pending) {
-        if (inputs.size() == 0) {
-            pending = runAccordingToMode(pending, "activate");
-        } else {
-            for (BascomTaskFuture<?> next : inputs) {
-                pending = next.activate(this, pending);
-                if (next.isCompletedExceptionally()) {
-                    // Once an exception is found, propagate it to our output
-                    propagateMostUsefulFault();
-                    break;
-                }
-            }
-        }
-        return pending;
-    }
-
-    /**
-     * Given that it is know that at least one input generates an exception, propagate that exception to
-     * our output, or a better exception if there more than one of our inputs has an exception.
-     */
-    private void propagateMostUsefulFault() {
-        Exception fx = null;
-        for (BascomTaskFuture<?> next : inputs) {
-            if (next.isCompletedExceptionally()) {
-                try {
-                    next.get();  // Only way to get the pending exception is to try and access it
-                } catch (Exception e) {
-                    if (fx == null || !(e instanceof TaskNotStartedException)) {
-                        fx = e;
-                    }
-                }
-            }
-        }
-        if (fx == null) {
-            // Shouldn't happen because this method should only be called when it is known that there is an exception
-            throw new RuntimeException("Unexpected fx not null");
-        } else {
-            getOutput().completeExceptionally(fx);
-        }
-    }
-
-
     @Override
     protected Object invokeTaskMethod() {
         try {
@@ -136,7 +94,7 @@ class ReflectionBinding<USERTASKTYPE, RETURNTYPE> extends Binding<RETURNTYPE> {
             }
             throw re;
         } catch (IllegalAccessException e) {
-            throw engine.record(new RuntimeException("Unable to invoke method", e));
+            throw new RuntimeException("Unable to invoke method", e);
         }
     }
 

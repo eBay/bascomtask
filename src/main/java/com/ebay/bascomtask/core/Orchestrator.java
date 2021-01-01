@@ -53,6 +53,14 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
     SpawnMode getEffectiveSpawnMode();
 
     /**
+     * Returns the number of threads that have been spawned by this Orchestrator. A thread may have been
+     * returned to the thread pool and retrieved again, but these would count as separate logical threads
+     * as far as this return value is concerned.
+     * @return number of logically-spawned threads
+     */
+    int getCountOfThreadsSpawned();
+
+    /**
      * Initiates execution of the task methods behind each supplied CompletableFuture if they are not already started,
      * as well as the task methods needed to supply its inputs, recursively. The dependency ordering is automatically
      * determined and strictly maintained such that ech task method is only executed when all its arguments have
@@ -77,6 +85,35 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param futures to execute and then wait on
      */
     void executeAndWait(CompletableFuture<?>... futures);
+
+    /**
+     * Execute the supplied future depending on the supplied condition. The future is not executed until
+     * condition completes, and condition is only executed if the output from this method is activated
+     * (reachable from a required CompletableFuture).
+     *
+     * @param condition  to first evaluate
+     * @param thenFuture to execute if condition evaluates to true
+     * @return thenFuture or elseFuture
+     */
+    default CompletableFuture<Void> cond(CompletableFuture<Boolean> condition,
+                                         CompletableFuture<Void> thenFuture) {
+        return cond(condition, thenFuture, false);
+    }
+
+    /**
+     * Variant of {@link #cond(CompletableFuture, CompletableFuture)} with an additional boolean argument
+     * indicating whether to proactively start executing thenFuture when condition is activated.
+     * That would be before the result of condition is known, so proactively starting either
+     * future may be wasteful but it will also be faster. The returned void future does not
+     * do anything except providing a way to activate this object.
+     *
+     * @param condition    to first evaluate
+     * @param thenFuture   to execute if condition evaluates to true
+     * @param thenActivate iff true then start executing at same time as condition
+     * @return thenFuture or elseFuture
+     */
+    CompletableFuture<Void> cond(CompletableFuture<Boolean> condition,
+                                 CompletableFuture<Void> thenFuture, boolean thenActivate);
 
     /**
      * Execute one of two choices depending on the result of the supplied condition. Neither choice is
@@ -138,6 +175,8 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      */
     <BASE, SUB extends TaskInterface<BASE>> BASE task(SUB userTask);
 
+    CompletableFuture<Boolean> fate(CompletableFuture<?>...cfs);
+
     /**
      * Creates a task wrapper on any user pojo task method. This is useful when having POJOs extend TaskInterface and/or
      * return CompletableFutures is not an option or is not otherwise desirable. The functional effect is the same as
@@ -175,7 +214,6 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
     default <TASK> CompletableFuture<Void> voidTask(TASK userTask, Consumer<TASK> fn) {
         return vfn(() -> userTask, fn).apply();
     }
-
 
     //////////////////////////////////////////////
     // Function tasks turn lambdas into tasks. ///

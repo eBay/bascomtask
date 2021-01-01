@@ -23,27 +23,29 @@ package com.ebay.bascomtask.core;
  */
 public enum SpawnMode {
     /**
-     * Spawn whenever more than one task can be started at the same time. Default behavior.
+     * Spawn whenever more than one task can be started at the same time. This is the default behavior.
      */
     WHEN_NEEDED(true),
     /**
      * Like {@link #WHEN_NEEDED}, but avoids any attempt to reuse main thread for processing.
      * That 'reuse' occurs when the main thread is sitting idle with no work to do while
-     * spawned threads need further spawn threads.
+     * spawned threads need themselves to spawn threads.
      */
     WHEN_NEEDED_NO_REUSE(false),
     /**
-     * Avoid using main (calling thread) to execute task methods, spawning threads when
-     * the main thread is executing unless the task methods are marked as 'light'.
+     * Avoid using main (calling thread) to execute task methods, spawning threads instead,
+     * unless the task methods are marked as 'light'. This keeps the calling thread free
+     * for other purposes.
      */
     NEVER_MAIN(false),
     /**
-     * Always spawn except for 'light' task methods. This is a stronger assertion then
-     * {@link #NEVER_MAIN}, as the main thread will similarly not execute any tasks.
+     * Always spawn except for 'light' task methods. This is a stronger assertion then {@link #NEVER_MAIN},
+     * as the main thread will similarly not execute any tasks. Every task will run in its own logical thread
+     * (as in a pull from the thread pool, where physical threads may of course be reused).
      */
     ALWAYS_SPAWN(false),
     /**
-     * Never spawn under any circumstance.
+     * Never spawn under any circumstance. Every task will be run in the calling thread when activated.
      */
     NEVER_SPAWN(false),
     /**

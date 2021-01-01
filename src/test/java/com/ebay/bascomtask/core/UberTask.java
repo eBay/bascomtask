@@ -77,7 +77,15 @@ public interface UberTask extends TaskInterface<UberTask> {
 
     CompletableFuture<Integer> add(CompletableFuture<Integer> x, CompletableFuture<Integer> y, CompletableFuture<Integer> z);
 
+    CompletableFuture<Integer> add(CompletableFuture<Integer> w, CompletableFuture<Integer> x, CompletableFuture<Integer> y, CompletableFuture<Integer> z);
+
+    CompletableFuture<Integer> addb(CompletableFuture<Integer> w, CompletableFuture<Boolean> x, CompletableFuture<Boolean> y, CompletableFuture<Integer> z);
+
+    CompletableFuture<Integer> incIf(CompletableFuture<Integer> x, CompletableFuture<Boolean> y);
+
     CompletableFuture<Boolean> ret(boolean b);
+
+    CompletableFuture<Boolean> invert(CompletableFuture<Boolean> x);
 
     CompletableFuture<Integer> faultRecover(Orchestrator $, int x);
 
@@ -236,6 +244,13 @@ public interface UberTask extends TaskInterface<UberTask> {
         }
 
         @Override
+        public CompletableFuture<Boolean> invert(CompletableFuture<Boolean> x) {
+            Boolean b = get(x);
+            delay();
+            return complete(!b);
+        }
+
+        @Override
         @Light
         public CompletableFuture<Integer> retLight(int x) {
             return ret(x);
@@ -276,6 +291,43 @@ public interface UberTask extends TaskInterface<UberTask> {
             int z = get(fz);
             delay();
             return complete(x + y + z);
+        }
+
+        @Override
+        public CompletableFuture<Integer> add(CompletableFuture<Integer> fw, CompletableFuture<Integer> fx, CompletableFuture<Integer> fy, CompletableFuture<Integer> fz) {
+            checkDone(fw);
+            checkDone(fx);
+            checkDone(fy);
+            checkDone(fz);
+            int w = get(fw);
+            int x = get(fx);
+            int y = get(fy);
+            int z = get(fz);
+            delay();
+            return complete(w + x + y + z);
+        }
+
+        @Override
+        public CompletableFuture<Integer> addb(CompletableFuture<Integer> fw, CompletableFuture<Boolean> fx, CompletableFuture<Boolean> fy, CompletableFuture<Integer> fz) {
+            checkDone(fw);
+            checkDone(fx);
+            checkDone(fy);
+            checkDone(fz);
+            int w = get(fw);
+            int x = get(fx) ? 1 : 0;
+            int y = get(fy) ? 1 : 0;
+            int z = get(fz);
+            delay();
+            return complete(w + x + y + z);
+        }
+
+        @Override
+        public CompletableFuture<Integer> incIf(CompletableFuture<Integer> x, CompletableFuture<Boolean> b) {
+            int v = get(x);
+            if (get(b)) {
+                v++;
+            }
+            return complete(v);
         }
 
         @Override

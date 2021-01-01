@@ -112,12 +112,35 @@ Because of this lazy execution, it is not costly to create many tasks and only l
 which ones are needed; the framework will determine the minimal spanning set of tasks to actually execute, and then 
 proceed in a dataflow-forward execution style, executing tasks once (and only when) all their inputs are available 
 and completed. Since the dependency analysis is determined from the method signatures themselves, it is not possible 
-to mistakenly execute a task before its parameters are ready. 
+to mistakenly execute a task before its parameters are ready.
 
-The following diagram illustrates the thread flow among 11 tasks (circles) color-coded with the thread 
-(there are 4 in this example) that executes them:
+## General Programming Model
+1) Task methods on are activated on demand by a call to execute, get, or other access operation on CompletableFuture 
+   returned from a task method. 
+2) Activation runs backward, activating that task method and all its predecessors (incoming arguments).
+3) Task methods that are ready to fire, either because all their CompletableFuture inputs have already completed or
+   because they have no CompletableFuture inputs, are collected. 
+4) All except one are spawned to new threads and all are started (one is kept for execution by the processing thread). 
+5) Completion runs forward. Each completion checks for each of its dependents whether that dependent has all its 
+   arguments ready. All _those_ ready-to-fire task methods are collected.
+6) Return to step 4. 
+
+The following diagram illustrates the thread flow among 12 task method invocations (circles) activated by a
+get() call, with execution color-coded with the thread (there are 4 in this example) that executes them:
 
 ![Thread Flow](doc/thread_flow.svg)
+
+The conventions in this diagram are:
+
+* Circles are task method invocations
+* Arrows are forward dependencies (the task method on the arrow end take the other task method's output as a parameter)
+* Task methods that are executed have a thick outline
+* Arrows have a thick line when they are the final argument that completes all the target inputs
+* Yellow fill in a task-method circle indicate that a value was returned and no exception was generated
+  (in the example above, there were no exceptions but there will be in a later diagram)
+* A gray outline means the task method was never activated, so it was never executed
+* Otherwise, the color codes represent threads, of which there are 4 above indicated by green, red, blue, and orange; 
+  the calling thread in this example is green while the others are spawned by the framework
 
 The incoming request comes through the green thread that calls _get()_ on task 12. To compute its result, all the
 non-gray tasks (excluding 4 and 11) are required. The ones with no incoming paths (1, 2, and 3) are executed first,
@@ -138,10 +161,10 @@ no main thread waiting it spawns an orange 4th thread for task 10. The final tas
 assuming it arrives as the last argument for task 12. The result is now available to return to the original green
 thread caller.
 
-## Initiation and Termination of Tasks
+### Options for Task Initiation
 As in the previous examples, a task method is activated when its value is retrieved through a _get()_ call. Activating
 a task method activates all its predecessors, recursively, if they have not already been activated. Activation can
-also be done independently of retrieving a value by calling _execute()_ on an Orchestrator. This can be useful in
+also be done independently of retrieving a value by calling _execute()_ on an Orchestrator. That call can be useful in
 the following scenarios:
 
 * For activating multiple tasks at once (_execute()_ takes a vararg list of CompletableFutures). If, for example, you
@@ -242,21 +265,96 @@ exposes the task to BascomTask that is slightly more helpful for logging and deb
 
 
 ## Exception Handling
-Exceptions are propagated to any of the various CompletableFuture methods that return values. This occurs even if 
-the exceptions are generated in any spawned thread, at any level of nesting. When an exception occurs, 
-any in-progress tasks are left to complete but no new tasks across the involved Orchestrator will be allowed to start.
+Any exception thrown from a task method is propagated to callers or execute() or to any of the various CompletableFuture 
+methods that return values. This occurs even if the exception is generated in any spawned thread, at any level of 
+nesting, from predecessor to successor recursively. If you get an exception while trying to perform an operation on a
+CompletableFuture, it means that either the immediate task method behind it, or one of its ancestors, generated tha 
+exception.
 
-In the following, an exception is generated in task 4 _prior_ to task 3 even starting:
+It is sometimes desirable to take action when tasks generate exceptions, such as reverting the side effects of previous 
+tasks and/or computing an alternative result. The fate() operation serves this purpose, accepting a variable list of 
+CompletableFutures and returning true only when at least one of them generates an exception. The following, for example, 
+returns an alternate value if either f1 or f2 have exceptions, but just returns f1 otherwise: 
+
+```
+   CompletableFutre<Integer> f1 = $.task(new MyTask1()).computeThing(...);
+   CompletableFutre<Integer> f2 = $.task(new MyTask2()).computeOtherThing(...);
+   CompletableFuture<Boolean> fate = $.fate(f1,f2);
+
+   CompletableFuture<Integer> alt = $.task(new MyAltTask()).computeAlternate(...);
+
+   f1 = $.cond(fate,alt,f1);
+```
+
+Reversion functions can be conditionally applied:
+
+```
+   MyTask1 task1 = new MyTask1();
+   MyTask2 task2 = new MyTask2();
+   CompletableFutre<Integer> f1 = $.task(task1).computeThing(...);
+   CompletableFutre<Integer> f2 = $.task(task2).computeOtherThing(...);
+   CompletableFuture<Boolean> fate = $.fate(f1,f2);
+
+   if (fate.get()) {
+       CompletableFuture<Void> r1 = $.task(task1).revertThing(f1);
+       CompletableFuture<Void> r2 = $.task(task2).revertOtherThing(f2);
+       $.execute(r1,r2);
+   }   
+   
+```
+Grouping task outputs in a fate() call indicates an intention that their success or failure is linked. The action you
+take, if any, is up to you, but the framework does an additional bit of optimization: it attempts to prevent from
+starting, if they have not already started, all tasks methods that feed into the fate() call. While the fate() call 
+does not exit until all its arguments have been processed, unlike regular task methods it does not 
+wait for all its arguments to complete -- it recognizes a fault on any of its arguments as soon as it occurs. 
+Then, it recursively works backwards attempting to prevent any of its predecessors (from its complete set of arguments) 
+from starting if they have not already done so. Since those CompletableFutures should be completed in some way 
+(so that any potential readers will not indefinitely block), they are set to complete exceptionally with a 
+TaskNotStartedException. Reversion logic need simply check the state of its argument, so for the example above
+that might be something like this:
+
+```
+  public CompletableFuture<Void> revertThing(CompletableFuture<Integer> myOutoutput) {
+    if (!myOutput.isCompletedExceptionally()) {
+       // reversion logic here
+    }
+    return complete();
+  }
+```
+
+### General Exception Handling Flow
+When a task throws an exception:
+1. That exception is recursively propagated to all descendents, except for any FateTasks (created by calls to fate()),
+which are collected in a list
+1. For every collected FateTask,
+   1. For every input to that FateTask
+      1. For each ancestor task (recursively) that is not executed 
+         1. mark it as TaskNotCompleted and propagate recursively to its descendents stopping at any task that either
+            1. Is already completed (normally or with some other exception)
+            1. Is a FateTask
+1. Process the collected FateTasks in the normal manner
+
+The following illustrates the various impacts of exceptions on a complex graph. As before, the tasks methods that 
+return a value without exception are filled in yellow. This includes the root tasks 1, 2, and 3 that start and complete 
+normally. Task 5 generates an exception and, as a result, a number of other task are set to return an exception and
+so do not have a yellow fill. Assuming that task 5 completes (by generating its exception) before task 4 is started, 
+the following applies:
 
 ![Fault Flow](doc/fault_flow.svg)
 
-If one was to try and _get()_ a value from each these tasks, the result would be as follows:
+In addition to the propagation of MyException to its descendent tasks 12 and 13, task 8 is a call to fate() which
+works to cancel other tasks from starting. In this example, task 2 would have already started and may even be
+completed so there is nothing to do there, but task 6 has not started. The fate logic works backward
+and also finds that task 4 has not started. That is cancelled and set to return a TaskNotStartedException. 
+As with any other exception, that task is propagated forward to its descendents. In this example, that results
+in tasks 7 and 9 being cancelled; task 13 was already set to complete with the original exception.
 
-* task1.get() ==> returns value
-* task2.get() ==> returns value
-* task3.get() ==> throws TaskNotStartedException
-* task4.get() ==> throws MyException
-* task5.get() ==> throws MyException
+With the exception propagation having completed, task 8 itself can now be activated. It has two descendents and,
+as with normal execution flow, a thread is spawned (orange) to handle the second one. These feed into task 13,
+but that task has already generated an exception and that outcome remains unchanged. The original caller to
+get() will see a MyException thrown. Should any call, by this or other threads get() be made on any other 
+task method output, the results are fixed: all the yellow-filled task methods will return a valid value while
+all the others will throw an exception of the indicated type.
 
 
 ## Configuration

@@ -20,6 +20,7 @@ import com.ebay.bascomtask.core.TaskRun;
 import com.ebay.bascomtask.core.TaskRunner;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -31,10 +32,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ProfilingTaskRunner implements TaskRunner {
 
     private final List<Event> events = new ArrayList<>();
-    private final Map<String, ThreadTracker> threadMap = new HashMap<>();
+    private final Map<String, ThreadTracker> threadMap = new ConcurrentHashMap<>();
     private final List<Event> rowHeaders = new ArrayList<>();
     private final AtomicInteger externCount = new AtomicInteger(0);
 
+    /**
+     * One for each logical thread, as determined by its thread name.
+     */
     private class ThreadTracker {
         final int index;
         final String threadName;
@@ -66,6 +70,14 @@ public class ProfilingTaskRunner implements TaskRunner {
             this.ts = ts;
             this.threadTracker = threadMap.computeIfAbsent(threadName, k -> new ThreadTracker(threadName, mark));
             this.columnOrder = columnOrder;
+        }
+
+        @Override
+        public String toString() {
+            String nm = getClass().getSimpleName();
+            String mn = taskRun.getTaskPlusMethodName();
+            return nm + "(" + mn + ", ["+threadTracker.threadName+"], level="+level+")";
+
         }
 
         abstract boolean effect();

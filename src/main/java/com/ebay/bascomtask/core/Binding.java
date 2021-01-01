@@ -35,13 +35,23 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     private static final Logger LOG = LoggerFactory.getLogger(Binding.class);
 
     final Engine engine;
+
+    // Set to true when this binding's task method will be or has been executed
+    private final AtomicBoolean activated = new AtomicBoolean(false);
+
     // Subset of args that are BascomTaskFutures
-    protected final List<BascomTaskFuture<?>> inputs = new ArrayList<>();
+    private final List<BascomTaskFuture<?>> inputs = new ArrayList<>();
+
+    // Only ever gets reset from false to true, not thread-safety issue
+    private boolean started = false;
+
+    // The output for this task method invocation
     private final BascomTaskFuture<RETURNTYPE> output = new BascomTaskFuture<>(this);
 
-    private final AtomicBoolean activated = new AtomicBoolean(false);
+    // Number of inputs that are completed and ready
     private final AtomicInteger readyCount = new AtomicInteger();
 
+    // Cached because logging/profiling can call repeatedly
     private String cachedTaskPlusName = null;
 
     private long startedAt;
@@ -71,7 +81,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     @Override
     public String toString() {
-        return "Binding(" + getTaskPlusMethodName() + ")";
+        return getClass().getSimpleName() + "(" + getTaskPlusMethodName() + ")";
     }
 
     protected boolean isLight() {
@@ -116,25 +126,65 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         return pending;
     }
 
-    abstract Binding<?> doActivate(Binding<?> pending);
+    Binding<?> doActivate(Binding<?> pending) {
+        if (inputs.size() == 0) {
+            pending = runAccordingToMode(pending, "activate");
+        } else {
+            for (BascomTaskFuture<?> next : inputs) {
+                pending = next.activate(this, pending, true);
+                if (next.isCompletedExceptionally()) {
+                    // Once an exception is found, propagate it to our output
+                    propagateMostUsefulFault();
+                    break;
+                }
+            }
+        }
+        return pending;
+    }
+
+
+    /**
+     * Given that it is know that at least one input generates an exception, propagate that exception to
+     * our output, or a better exception if there more than one of our inputs has an exception.
+     */
+    private void propagateMostUsefulFault() {
+        Exception fx = null;
+        for (BascomTaskFuture<?> next : inputs) {
+            if (next.isCompletedExceptionally()) {
+                try {
+                    next.get();  // Only way to get the pending exception is to try and access it
+                } catch (Exception e) {
+                    if (fx == null || !(e instanceof TaskNotStartedException)) {
+                        fx = e;
+                    }
+                }
+            }
+        }
+        if (fx == null) {
+            // Shouldn't happen because this method should only be called when it is known that there is an exception
+            throw new RuntimeException("Unexpected fx not null");
+        } else {
+            getOutput().completeExceptionally(fx);
+        }
+    }
 
     Binding<?> runAccordingToMode(Binding<?> pending, String src) {
         SpawnMode mode = engine.getEffectiveSpawnMode();
         if (isLight()) {
-            fire(src + "-light", true);
+            fire(src, "light", true);
         } else if (mode == SpawnMode.NEVER_MAIN && engine.isMainThread() && !isLight()) {
-            fire(src + "-neverMain", false);
+            fire(src, "neverMain", false);
         } else if (mode == SpawnMode.ALWAYS_SPAWN) {
-            fire(src + "-alwaysSpawn", false);
+            fire(src, "alwaysSpawn", false);
         } else if (mode == SpawnMode.NEVER_SPAWN) {
-            fire(src + "-neverSpawn", true);
+            fire(src, "neverSpawn", true);
         } else if (isRunSpawned()) {
-            fire(src + "-runSpawned", false);
+            fire(src, "runSpawned", false);
         } else if (mode == SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT) {
-            fire(src + "-explicit", true);
+            fire(src, "explicit", true);
         } else { // May or may not spawn
             if (pending != null) {
-                pending.fire(src + "-conflict", false);
+                pending.fire(src, "conflict", false);
             }
             pending = this;
         }
@@ -148,7 +198,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
             pending = next.argReady(pending);
         }
         if (pending != null) {
-            pending.fire("completion", true);
+            pending.fire("onCompletion", "direct", true);
         }
     }
 
@@ -195,26 +245,28 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         //System.out.println("Binding complete " + this);
     }
 
-    void fire(String src, boolean direct) {
+    void fire(String src1, String src2, boolean direct) {
         if (activated.get()) {  // Only activated tasks are executed
-            if (engine.areThereAnyExceptions()) {  // Don't fire if any exceptions have happened
+            if (!output.isCompletedExceptionally()) {
+                //if (engine.areThereAnyExceptions()) {  // Don't fire if any exceptions have happened
                 //output.faultForward(new TaskNotStartedException("Fault detected"));
-                output.completeExceptionally(new TaskNotStartedException("Fault detected"));
-            } else {
+                //output.completeExceptionally(new TaskNotStartedException("Fault detected"));
+                //} else {
+                started = true;
                 final Thread parentThread = Thread.currentThread();
                 List<TaskRunner> globalRunners = GlobalConfig.INSTANCE.globalRunners;
                 List<TaskRunner> localRunners = this.engine.getRunners();
                 int sz = globalRunners.size() + localRunners.size();
                 if (sz == 0) {
-                    chooseThreadAndFire(this, this, parentThread, null, src, direct);
+                    chooseThreadAndFire(this, this, parentThread, null, src1, src2, direct);
                 } else {
-                    fireTaskThruRunners(localRunners, globalRunners, sz - 1, parentThread, this, direct);
+                    fireTaskThruRunners(localRunners, globalRunners, sz - 1, parentThread, this, src1, src2, direct);
                 }
             }
         }
     }
 
-    void fireTaskThruRunners(List<TaskRunner> runners1, List<TaskRunner> runners2, int combinedIndex, Thread parentThread, TaskRun under, boolean direct) {
+    private void fireTaskThruRunners(List<TaskRunner> runners1, List<TaskRunner> runners2, int combinedIndex, Thread parentThread, TaskRun under, String src1, String src2, boolean direct) {
         List<TaskRunner> rs = runners1;
         int localIndex = combinedIndex;
         if (combinedIndex >= runners1.size()) {
@@ -224,25 +276,26 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         TaskRunner next = rs.get(localIndex);
         if (combinedIndex == 0) {
             Object fromBefore = next.before(under);
-            chooseThreadAndFire(next, under, parentThread, fromBefore, "TODO", direct);
+            chooseThreadAndFire(next, under, parentThread, fromBefore, src1, src2, direct);
         } else {
             PlaceHolderRunner phr = new PlaceHolderRunner(next, parentThread, under);
-            fireTaskThruRunners(runners1, runners2, combinedIndex - 1, parentThread, phr, direct);
+            fireTaskThruRunners(runners1, runners2, combinedIndex - 1, parentThread, phr, src1, src2, direct);
         }
     }
 
-    void chooseThreadAndFire(TaskRunner taskRunner, TaskRun taskRun, Thread parentThread, Object fromBefore, String src, boolean direct) {
+    private void chooseThreadAndFire(TaskRunner taskRunner, TaskRun taskRun, Thread parentThread, Object fromBefore, String src1, String src2, boolean direct) {
         if (direct) {
-            fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src);
+            fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src1, src2);
         } else {
-            Runnable runnable = () -> fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src);
+            Runnable runnable = () -> fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src1, src2);
             engine.run(runnable, parentThread);
         }
     }
 
-    void fireFirstRunner(TaskRunner taskRunner, TaskRun taskRun, Thread parentThread, Object fromBefore, String src) {
+    private void fireFirstRunner(TaskRunner taskRunner, TaskRun taskRun, Thread parentThread, Object fromBefore, String src1, String src2) {
         final String name = getName();
-        LOG.debug("Firing {} from {}", name, src);
+        startedAt = System.currentTimeMillis(); // Set here so runners can access it
+        LOG.debug("Firing {} from {}-{}", name, src1, src2);
         try {
             Object rv = taskRunner.executeTaskMethod(taskRun, parentThread, fromBefore);
             if (rv instanceof CompletableFuture) {
@@ -250,15 +303,74 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
                 CompletableFuture<RETURNTYPE> cf = (CompletableFuture<RETURNTYPE>) rv;
                 // Allow taskRunners to complete before we continue processing other tasks here
                 completeRunner(taskRunner, taskRun, fromBefore, cf);
-                LOG.debug("Exiting {} from {}", name, src);
+                LOG.debug("Exiting {} from {}-{}", name, src1, src2);
                 output.bind(cf);
             } else {
                 throw new RuntimeException("Return value is not a CompletableFuture " + this);
             }
         } catch (Exception e) {
-            engine.recordAnyException();
-            LOG.debug("Faulting {} from {}", name, src);
-            output.faultForward(e);
+            LOG.debug("Exception-exit {} from {}-{}", name, src1, src2);
+            faultForward(e);
+        }
+    }
+
+    final void faultForward(Throwable t) {
+        List<FateTask> fates = new ArrayList<>();
+
+        // First propagate the exception to all direct & indirect descendents, excluding FateTasks
+        // which we collect in a list for later
+        faultForward(t, fates);
+
+        // Next propagate TaskNotStartedException to all reachable task nodes reachable from all fate inputs
+        // and not yet started
+        TaskNotStartedException tns = new TaskNotStartedException(t);
+        for (int i = 0; i < fates.size(); i++) {
+            FateTask next = fates.get(i);
+            next.cancelInputs(tns, fates);
+        }
+
+        // Finally, executed FateTasks after having already propagated exceptions to every reachable place;
+        // now any executions emanating from any FateTasks will stop at any already faulted node
+        Binding<?> pending = null;
+        for (FateTask next : fates) {
+            pending = next.runAccordingToMode(pending, "faultForward");
+        }
+        if (pending != null) {
+            pending.fire("faultForward", "fate", true);
+        }
+    }
+
+    /**
+     * Cancels all direct or indirect ancestor tasks that feed into our inputs, and propagate that
+     * cancellation downward to every reachable task from those cancelled tasks. Cancellation means
+     * setting the output CompletableFuture to TaskNotStartedException, which should only be set
+     * of course on tasks that have not in fact started.
+     *
+     * @param tns   to apply
+     * @param fates to collect
+     */
+    void cancelInputs(TaskNotStartedException tns, List<FateTask> fates) {
+        for (BascomTaskFuture<?> next : inputs) {
+            Binding<?> nextBinding = next.getBinding();
+            if (!nextBinding.started // avoid rewriting earlier exception
+                    && next.completeExceptionally(tns)) {  // Able to reset output to exception?
+                LOG.debug("Task cancelled: {}", nextBinding);
+                nextBinding.cancelInputs(tns, fates); // backward
+                next.propagateException(tns, fates); // forward
+            }
+        }
+    }
+
+    /**
+     * Subclasses can override to alter normal propagation behavior.
+     *
+     * @param t     being thrown
+     * @param fates list of FateTasks to collect
+     */
+    void faultForward(Throwable t, List<FateTask> fates) {
+        if (output.completeExceptionally(t)) {
+            LOG.debug("Faulting forward {} with {}", this, t.getMessage());
+            output.propagateException(t, fates);
         }
     }
 
@@ -274,7 +386,6 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     @Override
     public final Object run() {
-        startedAt = System.currentTimeMillis();
         try {
             return invokeTaskMethod();
         } finally {

@@ -39,8 +39,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class TaskRunnerTest {
 
-    private static final AtomicInteger count = new AtomicInteger();
-    private static final Map<Key, Integer> ordering = new ConcurrentHashMap<>();
+    private final AtomicInteger count = new AtomicInteger();
+    private final Map<Key, Integer> ordering = new ConcurrentHashMap<>();
     private Orchestrator $;
 
     static class Key {
@@ -66,7 +66,20 @@ public class TaskRunnerTest {
         }
     }
 
-    static class MockRunner implements TaskRunner {
+    private static String ord(int x) {
+        switch (x) {
+            case 0:
+                return "first";
+            case 1:
+                return "second";
+            case 2:
+                return "third";
+            default:
+                throw new RuntimeException("Ord too big: " + x);
+        }
+    }
+
+    class MockRunner implements TaskRunner {
         final AtomicInteger beforeHits = new AtomicInteger(0);
         final AtomicInteger execSameThreadHits = new AtomicInteger(0);
         final AtomicInteger execDiffThreadHits = new AtomicInteger(0);
@@ -78,19 +91,6 @@ public class TaskRunnerTest {
             this.name = ord(expPos);
         }
 
-        private static String ord(int x) {
-            switch (x) {
-                case 0:
-                    return "first";
-                case 1:
-                    return "second";
-                case 2:
-                    return "third";
-                default:
-                    throw new RuntimeException("Ord too big: " + x);
-            }
-        }
-
         @Override
         public String toString() {
             return "MockRunner(" + name + ")";
@@ -98,7 +98,7 @@ public class TaskRunnerTest {
 
         @Override
         public Object before(TaskRun taskRun) {
-            int pos = beforeHits.incrementAndGet();
+            beforeHits.incrementAndGet();
             ordering.clear();
             return matched;
         }
@@ -201,7 +201,7 @@ public class TaskRunnerTest {
 
     @Test
     public void globalGlobalLocal() throws Exception {
-        run3(GlobalConfig.INSTANCE, GlobalConfig.INSTANCE, GlobalConfig.INSTANCE);
+        run3(GlobalConfig.INSTANCE, GlobalConfig.INSTANCE, $);
     }
 
     @Test
@@ -211,11 +211,6 @@ public class TaskRunnerTest {
 
     @Test
     public void localGlobalLocal() throws Exception {
-        run3($, GlobalConfig.INSTANCE, $);
-    }
-
-    @Test
-    public void globalLocalGlobal() throws Exception {
         run3($, GlobalConfig.INSTANCE, $);
     }
 

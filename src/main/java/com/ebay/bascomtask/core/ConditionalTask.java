@@ -24,13 +24,28 @@ import java.util.concurrent.CompletableFuture;
  * @author Brendan McCarthy
  */
 class ConditionalTask<R> extends Binding<R> implements TaskInterface<ConditionalTask<R>> {
+    private static final CompletableFuture<Void> VOID_FUTURE = CompletableFuture.completedFuture(null);
     private final BascomTaskFuture<Boolean> condition;
     final BascomTaskFuture<R> thenFuture;
     final BascomTaskFuture<R> elseFuture;
     final boolean thenActivate;
     final boolean elseActivate;
 
-    ConditionalTask(Engine engine, CompletableFuture<Boolean> condition, CompletableFuture<R> thenValue, boolean thenActivate, CompletableFuture<R> elseValue, boolean elseActivate) {
+    ConditionalTask(Engine engine,
+                    CompletableFuture<Boolean> condition,
+                    CompletableFuture<R> thenValue, boolean thenActivate) {
+        super(engine);
+        this.condition = ensureWrapped(condition, true);
+        this.thenFuture = ensureWrapped(thenValue, false);
+        this.elseFuture = null;
+        this.thenActivate = thenActivate;
+        this.elseActivate = false;
+    }
+
+    ConditionalTask(Engine engine,
+                    CompletableFuture<Boolean> condition,
+                    CompletableFuture<R> thenValue, boolean thenActivate,
+                    CompletableFuture<R> elseValue, boolean elseActivate) {
         super(engine);
         this.condition = ensureWrapped(condition, true);
         this.thenFuture = ensureWrapped(thenValue, false);
@@ -40,8 +55,8 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
     }
 
     private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate) {
-        if (activate) {
-            pending = bascomTaskFuture.activate(this, pending);
+        if (activate && bascomTaskFuture != null) {
+            pending = bascomTaskFuture.activate(this, pending, false);
         }
         return pending;
     }
@@ -54,7 +69,7 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
      */
     @Override
     Binding<?> doActivate(Binding<?> pending) {
-        pending = condition.activate(this, pending);
+        pending = condition.activate(this, pending, true);
         pending = activateIf(pending, thenFuture, thenActivate);
         pending = activateIf(pending, elseFuture, elseActivate);
         return pending;
@@ -69,8 +84,15 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
     @Override
     Binding<?> onReady(Binding<?> pending) {
         Boolean which = get(condition);
-        BascomTaskFuture<?> choice = which ? thenFuture : elseFuture;
-        pending = choice.activate(this, pending);
+        BascomTaskFuture<R> choice;
+        if (elseFuture == null) {
+            choice = which ? thenFuture : null;
+        } else {
+            choice = which ? thenFuture : elseFuture;
+        }
+        if (choice != null) {
+            pending = choice.activate(this, pending, true);
+        }
         return super.onReady(pending);
     }
 
@@ -79,6 +101,8 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
     protected Object invokeTaskMethod() {
         if (get(condition)) {
             return thenFuture;
+        } else if (elseFuture == null) {
+            return VOID_FUTURE;
         } else {
             return elseFuture;
         }
