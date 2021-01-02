@@ -169,7 +169,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     }
 
     Binding<?> runAccordingToMode(Binding<?> pending, String src) {
-        SpawnMode mode = engine.getEffectiveSpawnMode();
+        SpawnMode mode = engine.getSpawnMode();
         if (isLight()) {
             fire(src, "light", true);
         } else if (mode == SpawnMode.NEVER_MAIN && engine.isMainThread() && !isLight()) {
@@ -254,32 +254,26 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
                 //} else {
                 started = true;
                 final Thread parentThread = Thread.currentThread();
-                List<TaskRunner> globalRunners = GlobalConfig.INSTANCE.globalRunners;
                 List<TaskRunner> localRunners = this.engine.getRunners();
-                int sz = globalRunners.size() + localRunners.size();
+                int sz = localRunners.size();
                 if (sz == 0) {
                     chooseThreadAndFire(this, this, parentThread, null, src1, src2, direct);
                 } else {
-                    fireTaskThruRunners(localRunners, globalRunners, sz - 1, parentThread, this, src1, src2, direct);
+                    fireTaskThruRunners(localRunners, sz-1, parentThread, this, src1, src2, direct);
                 }
             }
         }
     }
 
-    private void fireTaskThruRunners(List<TaskRunner> runners1, List<TaskRunner> runners2, int combinedIndex, Thread parentThread, TaskRun under, String src1, String src2, boolean direct) {
-        List<TaskRunner> rs = runners1;
-        int localIndex = combinedIndex;
-        if (combinedIndex >= runners1.size()) {
-            rs = runners2;
-            localIndex -= runners1.size();
-        }
-        TaskRunner next = rs.get(localIndex);
-        if (combinedIndex == 0) {
+    private void fireTaskThruRunners(List<TaskRunner> runners, int index, Thread parentThread, TaskRun under, String src1, String src2, boolean direct) {
+        TaskRunner next = runners.get(index);
+        if (index==0) {
             Object fromBefore = next.before(under);
             chooseThreadAndFire(next, under, parentThread, fromBefore, src1, src2, direct);
         } else {
             PlaceHolderRunner phr = new PlaceHolderRunner(next, parentThread, under);
-            fireTaskThruRunners(runners1, runners2, combinedIndex - 1, parentThread, phr, src1, src2, direct);
+            fireTaskThruRunners(runners, index-1,parentThread, phr, src1, src2, direct);
+
         }
     }
 

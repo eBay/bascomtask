@@ -17,8 +17,8 @@
 package com.ebay.bascomtask.core;
 
 /**
- * Task execution hook points. Implementations of this task can be added globally thru
- * {@link GlobalConfig} or specifically to any {@link Orchestrator}. Several built-in versions are
+ * Task execution hook points. Implementations of this task can be added for all Orchestrators
+ * through {@link GlobalConfig} or locally to any individual {@link Orchestrator}. Several built-in versions are
  * also available.
  *
  * @author Brendan McCarthy

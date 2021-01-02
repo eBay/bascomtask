@@ -21,22 +21,18 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Configuration settings. {@link GlobalConfig} and {@link Orchestrator} both implement this class, allowing
- * these values to be set at either level. In general if an Orchestrator has not set a value then the globally
- * configured value is used.
+ * these values to be set at either level. On its creation, an Orchestrator's values are set from the current
+ * global settings.
  *
  * @author Brendan McCarthy
  */
 public interface CommonConfig {
 
     /**
-     * Restore default settings. Applying either globally or locally only affects that level and not the other.
+     * Restore default settings. Applied on GlobalConfig, sets default values. Applied on Orchestrator,
+     * sets values from current GlobalConfig.
      */
-    default void restoreDefaults() {
-        setSpawnMode(null); // Same as SpawnMode.WHEN_NEEDED
-        setTimeoutMs(0);
-        removeAllTaskRunners();
-        restoreDefaultExecutorService();
-    }
+    void restoreConfigurationDefaults(Object arg);
 
     /**
      * Gets the most recently set mode. The global default is {@link SpawnMode#WHEN_NEEDED}. The Orchestrator
@@ -79,6 +75,8 @@ public interface CommonConfig {
         setTimeoutMs(timeUnit.toMillis(duration));
     }
 
+    ExecutorService getExecutorService();
+
     /**
      * Resets the service used by this framework for spawning threads. Global default is
      * Executors.newFixedThreadPool({@link GlobalConfig#DEFAULT_FIXED_THREADPOOL_SIZE}.
@@ -90,30 +88,36 @@ public interface CommonConfig {
     void restoreDefaultExecutorService();
 
     /**
-     * Adds a TaskRunner that will be processed before any existing TaskRunner, excepting
-     * that all global runners are processed before local (orchestrator-specific) runners.
+     * Adds a TaskRunner that will be processed before any existing TaskRunner.
      *
      * @param taskRunner to add
      */
     void firstInterceptWith(TaskRunner taskRunner);
 
     /**
-     * Adds a TaskRunner that will be processed after any existing TaskRunner, excepting
-     * that all global runners are processed before local (orchestrator-specific) runners.
+     * Adds a TaskRunner that will be processed after any existing TaskRunner.
      *
      * @param taskRunner to add
      */
     void lastInterceptWith(TaskRunner taskRunner);
 
     /**
-     * Removes the given TaskRunner from the list, if it is already in the list.
+     * Returns the current number of interceptors, as set by {@link #firstInterceptWith(TaskRunner)},
+     * {@link #lastInterceptWith(TaskRunner)}, or for Orchestrators as set from current global settings.
+     *
+     * @return interceptor count
+     */
+    int getNumberOfInterceptors();
+
+    /**
+     * Removes the given TaskRunner from the current list, if it is there. It will exit silently if not there.
      *
      * @param taskRunner to remove
      */
     void removeInterceptor(TaskRunner taskRunner);
 
     /**
-     * Removes all GlobalConfig from the list.
+     * Removes all interceptors from the current list.
      */
     void removeAllTaskRunners();
 }

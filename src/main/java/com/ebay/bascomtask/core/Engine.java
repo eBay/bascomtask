@@ -35,6 +35,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Engine implements Orchestrator {
     private static final Logger LOG = LoggerFactory.getLogger(Engine.class);
 
+    // Optionally supplied on create
+    private String name;
+
+    private long timeoutMs = 0;
+    private ExecutorService executorService;
+    private SpawnMode spawnMode;
+
+    private final LinkedList<TaskRunner> runners = new LinkedList<>();
+    private final List<TaskRunner> exposeRunners = Collections.unmodifiableList(runners);
+
     // For generating unique thread names for framework-managed threads
     private static final AtomicInteger engineCounter = new AtomicInteger(0);
     private final int uniqueIndex;
@@ -42,11 +52,6 @@ public class Engine implements Orchestrator {
 
     // BT-managed threads are flagged for bookkeeping purposes
     private final ThreadLocal<Boolean> isBtManagedThread = ThreadLocal.withInitial(() -> false);
-
-    private SpawnMode spawnMode = null; // When null, takes on globally-configured state
-
-    private final LinkedList<TaskRunner> runners = new LinkedList<>();
-    private final List<TaskRunner> exposeRunners = Collections.unmodifiableList(runners);
 
     // For passing work (i.e. running tasks) back to the main thread
     private final BlockingQueue<BlockingQueue<CrossThreadChannel>> idleThreads = new LinkedBlockingDeque<>();
@@ -61,17 +66,44 @@ public class Engine implements Orchestrator {
         }
     }
 
-    Engine() {
+    Engine(String name, Object arg) {
+        this.name = name;
         this.uniqueIndex = engineCounter.incrementAndGet();
+        GlobalConfig.Config config = GlobalConfig.getConfig();
+        config.updateConfigurationOn(this,arg);
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public void setName(String name) {
+        this.name = name;
     }
 
     String createThreadName() {
-        return "BT-" + uniqueIndex + '-' + threadCounter.incrementAndGet();
+        StringBuilder sb = new StringBuilder();
+        sb.append("BT-");
+        sb.append(uniqueIndex);
+        sb.append('-');
+        if (name != null) {
+            sb.append(name);
+            sb.append('-');
+        }
+        sb.append(threadCounter.incrementAndGet());
+        return sb.toString();
     }
 
     @Override
     public int getCountOfThreadsSpawned() {
         return threadCounter.get();
+    }
+
+    @Override
+    public void restoreConfigurationDefaults(Object arg) {
+        GlobalConfig.getConfig().updateConfigurationOn(this,arg);
     }
 
     @Override
@@ -81,28 +113,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public void setSpawnMode(SpawnMode mode) {
-        this.spawnMode = mode;
-    }
-
-    @Override
-    public SpawnMode getEffectiveSpawnMode() {
-        if (spawnMode == null) {
-            spawnMode = GlobalConfig.INSTANCE.getSpawnMode();
-            if (spawnMode == null) {
-                spawnMode = SpawnMode.WHEN_NEEDED;
-            }
-        }
-        return spawnMode;
-    }
-
-    private long timeoutMs = 0;
-
-    private long getEffectiveTimeoutMs() {
-        if (timeoutMs == 0) {
-            return GlobalConfig.INSTANCE.getTimeoutMs();
-        } else {
-            return getTimeoutMs();
-        }
+        this.spawnMode = mode==null ? SpawnMode.WHEN_NEEDED : mode;
     }
 
     @Override
@@ -115,7 +126,10 @@ public class Engine implements Orchestrator {
         this.timeoutMs = ms;
     }
 
-    private ExecutorService executorService = null;
+    @Override
+    public ExecutorService getExecutorService() {
+        return executorService;
+    }
 
     @Override
     public void setExecutorService(ExecutorService executorService) {
@@ -124,7 +138,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public void restoreDefaultExecutorService() {
-        this.executorService = null;
+        this.executorService = GlobalConfig.getConfig().getExecutorService();
     }
 
     boolean isMainThread() {
@@ -145,7 +159,7 @@ public class Engine implements Orchestrator {
      * @param cf to start are watch for completion
      */
     private void waitUntilComplete(CompletableFuture<?> cf) {
-        if (getEffectiveSpawnMode().isMainThreadReusable()) {
+        if (getSpawnMode().isMainThreadReusable()) {
             if (!cf.isDone()) {  // Redundant with later checks, but done here to avoid bookkeeping overhead for common cases
                 BlockingQueue<CrossThreadChannel> waiting = new LinkedBlockingDeque<>(1);
                 cf.whenComplete((msg, ex) -> {
@@ -191,11 +205,7 @@ public class Engine implements Orchestrator {
             }
         }
         // Else get one from the pool
-        ExecutorService es = executorService;
-        if (es == null) {
-            es = GlobalConfig.INSTANCE.executorService;
-        }
-        es.execute(() ->
+        executorService.execute(() ->
         {
             String nm = createThreadName();
             Thread.currentThread().setName(nm);
@@ -211,7 +221,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public void execute(CompletionStage<?>... futures) {
-        final long ms = getEffectiveTimeoutMs();
+        final long ms = getTimeoutMs();
         if (ms > 0 && !isBtManagedThread.get()) {
             // It would be wasteful to do this on BT-managed threads which during execution could easily
             // result in this method being called recursively
@@ -222,10 +232,10 @@ public class Engine implements Orchestrator {
     }
 
     private void executedTimed(long ms, CompletionStage<?>[] futures) {
-        GlobalConfig.INSTANCE.executorService.execute(() -> executeInternal("timed", futures));
+        executorService.execute(() -> executeInternal("timed", futures));
         boolean timedOut;
         try {
-            timedOut = !GlobalConfig.INSTANCE.executorService.awaitTermination(ms, TimeUnit.MILLISECONDS);
+            timedOut = !executorService.awaitTermination(ms, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             timedOut = true;
         }
@@ -373,6 +383,11 @@ public class Engine implements Orchestrator {
         synchronized (runners) {
             runners.addLast(taskRunner);
         }
+    }
+
+    @Override
+    public int getNumberOfInterceptors() {
+        return runners.size();
     }
 
     @Override

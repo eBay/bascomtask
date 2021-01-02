@@ -51,7 +51,6 @@ public class CoreTest extends BaseOrchestratorTest {
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-                {null},
                 {SpawnMode.NEVER_SPAWN},
                 {SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT},
                 {SpawnMode.WHEN_NEEDED},
@@ -239,7 +238,8 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test
-    public void simpleV() throws Exception {
+    public void simpleVWithNaming() throws Exception {
+        $.setName("face");
         CompletableFuture<Integer> leftEar = $.task(task()).name("leftEar").ret(1);
         CompletableFuture<Integer> rightEar = $.task(task()).name("rightEar").ret(2);
         CompletableFuture<Integer> nose = $.task(task()).name("nose").add(leftEar,(rightEar));
@@ -380,8 +380,6 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void multipleReturns() throws Exception {
-        Orchestrator $ = new Engine();
-
         int delay = 20; // Enough to ensure that they both have while other may have started and is delayed
         CompletableFuture<Integer> t1 = $.task(task().delayFor(delay)).ret(1);
         CompletableFuture<Integer> t2 = $.task(task().delayFor(delay)).ret(1);
@@ -397,7 +395,9 @@ public class CoreTest extends BaseOrchestratorTest {
         TaskMeta m2 = $.getTaskMeta(t2);
         CommonTestingUtils.validateTimes(m1);
         CommonTestingUtils.validateTimes(m2);
-        assertTrue(m1.overlapped(m2));
+        if (mode != SpawnMode.NEVER_SPAWN && mode != SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT) {
+            assertTrue(m1.overlapped(m2));
+        }
         assertTrue(m1.getStartedAt() > 0);
     }
 
@@ -458,11 +458,12 @@ public class CoreTest extends BaseOrchestratorTest {
 
     private int getFromPoolsOfSize(CompletableFuture<Integer> cf, int size) throws Exception {
         ExecutorService svc = Executors.newFixedThreadPool(size);
+
         try {
-            GlobalConfig.INSTANCE.setExecutorService(svc);
+            GlobalConfig.getConfig().setExecutorService(svc);
             return cf.get();
         } finally {
-            GlobalConfig.INSTANCE.restoreDefaultExecutorService();
+            GlobalConfig.getConfig().restoreDefaultExecutorService();
         }
     }
 
@@ -487,7 +488,7 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void reuseMainThread() throws Exception {
-        if ($.getEffectiveSpawnMode() == SpawnMode.WHEN_NEEDED) {
+        if ($.getSpawnMode() == SpawnMode.WHEN_NEEDED) {
             UberTask tfast = task().delayFor(1);
             CompletableFuture<Integer> fast = $.task(tfast).name("fastl").ret(5);
 
@@ -564,13 +565,15 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobal() throws Exception {
-        GlobalConfig.INSTANCE.setTimeout(5, TimeUnit.MILLISECONDS);
+        GlobalConfig.getConfig().setTimeout(5, TimeUnit.MILLISECONDS);
+        $ = Orchestrator.create("timer");  // So it picks up global settings
         $.task(task(0).delayFor(20)).ret(1).get();
     }
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobalSpawned() throws Exception {
-        GlobalConfig.INSTANCE.setTimeout(5, TimeUnit.MILLISECONDS);
+        GlobalConfig.getConfig().setTimeout(5, TimeUnit.MILLISECONDS);
+        $ = Orchestrator.create("timer");  // So it picks up global settings
         $.task(task(0).delayFor(20)).runSpawned().ret(1).get();
     }
 
@@ -729,7 +732,6 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     private void addFromNestedRefUnactivated(boolean spawn) throws Exception {
-        Orchestrator $ = new Engine();
         CompletableFuture<Integer> slow = $.task(task().delayFor(50)).ret(5);
         AtomicReference<CompletableFuture<Integer>> it = new AtomicReference<>();
         UberTask outer = new UberTasker() {
@@ -885,7 +887,7 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void faultOneDelayComplete() throws Exception {
-        fault(() -> new Engine().task(faulty()).faultWithCompletionAfter(0, MSG2), MSG2);
+        fault(() -> $.task(faulty()).faultWithCompletionAfter(0, MSG2), MSG2);
     }
 
     @Test
@@ -900,12 +902,12 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test
     public void faultOneSpawnDelayComplete() throws Exception {
-        fault(() -> new Engine().task(faulty()).runSpawned().faultWithCompletionAfter(0, MSG1), MSG1);
+        fault(() -> $.task(faulty()).runSpawned().faultWithCompletionAfter(0, MSG1), MSG1);
     }
 
     @Test
     public void faultOneImmediateComplete() throws Exception {
-        fault(() -> new Engine().task(faulty()).faultImmediateCompletion(0, MSG1), MSG1);
+        fault(() -> $.task(faulty()).faultImmediateCompletion(0, MSG1), MSG1);
     }
 
     @Test(expected = ExceptionTask.FaultHappened.class)

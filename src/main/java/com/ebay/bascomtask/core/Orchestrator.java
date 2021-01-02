@@ -25,16 +25,50 @@ import java.util.function.*;
  *
  * @author Brendan McCarthy
  */
-public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
+public interface Orchestrator extends CommonConfig {
 
     /**
-     * Creates an Orchestrator.
+     * Creates an Orchestrator with no additional arguments.
      *
      * @return new Orchestrator
      */
     static Orchestrator create() {
-        return new Engine();
+        return create(null);
     }
+
+    /**
+     * Creates a new named Orchestrator.
+     *
+     * @return new Orchestrator
+     */
+    static Orchestrator create(String name) {
+        return create(name, null);
+    }
+
+    /**
+     * Creates an Orchestrator with the given name and argument.
+     *
+     * @param name optional / possibly null for this orchestrator, useful for logging
+     * @param arg  to pass to {@link GlobalConfig.Config#updateConfigurationOn(Orchestrator, Object)}.
+     * @return new Orchestrator
+     */
+    static Orchestrator create(String name, Object arg) {
+        return new Engine(name, arg);
+    }
+
+    /**
+     * Name as set from {@link #create(String)} or {@link #setName(String)}.
+     *
+     * @return name
+     */
+    String getName();
+
+    /**
+     * Sets name that will become part of the name for any threads spawned by this Orchestrator.
+     *
+     * @param name to set
+     */
+    void setName(String name);
 
     /**
      * Returns details for any future previously registered with {@link #execute(CompletionStage[])} (directly or
@@ -46,16 +80,10 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
     TaskMeta getTaskMeta(CompletableFuture<?> cf);
 
     /**
-     * Returns {@link #getSpawnMode()} or, if null, the globally-configured spawn mode.
-     *
-     * @return non-null spawnMode
-     */
-    SpawnMode getEffectiveSpawnMode();
-
-    /**
      * Returns the number of threads that have been spawned by this Orchestrator. A thread may have been
      * returned to the thread pool and retrieved again, but these would count as separate logical threads
      * as far as this return value is concerned.
+     *
      * @return number of logically-spawned threads
      */
     int getCountOfThreadsSpawned();
@@ -175,7 +203,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      */
     <BASE, SUB extends TaskInterface<BASE>> BASE task(SUB userTask);
 
-    CompletableFuture<Boolean> fate(CompletableFuture<?>...cfs);
+    CompletableFuture<Boolean> fate(CompletableFuture<?>... cfs);
 
     /**
      * Creates a task wrapper on any user pojo task method. This is useful when having POJOs extend TaskInterface and/or
@@ -269,7 +297,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN, R> CompletableFuture<R> fn(Supplier<IN> s1, Function<IN, R> fn) {
-        return fnTask(s1,fn).apply();
+        return fnTask(s1, fn).apply();
     }
 
     /**
@@ -297,7 +325,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN, R> CompletableFuture<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
-        return fnTask(in,fn).apply();
+        return fnTask(in, fn).apply();
     }
 
     /**
@@ -329,7 +357,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
-        return fnTask(in1,in2,fn).apply();
+        return fnTask(in1, in2, fn).apply();
     }
 
     /**
@@ -487,7 +515,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(cf1,s2,fn).apply();
+        return vfnTask(cf1, s2, fn).apply();
     }
 
     /**
@@ -517,7 +545,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(cf1,cf2,fn).apply();
+        return vfnTask(cf1, cf2, fn).apply();
     }
 
     /**
@@ -548,7 +576,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(s1,cf2,fn).apply();
+        return vfnTask(s1, cf2, fn).apply();
     }
 
     /**
@@ -580,6 +608,6 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(s1,s2,fn).apply();
+        return vfnTask(s1, s2, fn).apply();
     }
 }

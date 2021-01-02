@@ -113,7 +113,7 @@ public class StatTaskRunnerTest extends BaseOrchestratorTest {
     @Test
     public void oneRunner() throws Exception {
         StatTaskRunner taskRunner = new StatTaskRunner();
-        GlobalConfig.INSTANCE.firstInterceptWith(taskRunner);
+        $.firstInterceptWith(taskRunner);
         for (int i = 0; i < 3; i++) {
             CompletableFuture<Integer> c = $.task(task().delayFor(30)).name("blue").ret(1);
             CompletableFuture<Integer> inc = $.task(task().delayFor(20)).name("red").inc(c);

@@ -17,6 +17,7 @@
 package com.ebay.bascomtask.core;
 
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
@@ -97,10 +98,18 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         return currentTask.hit();
     }
 
+    @Before
+    public void before() {
+        super.before();;
+    }
+
     @After
     public void after() {
+        super.after();;
         sleep(10); // Give time for async routines to execute
-        assertEquals(currentTask.exp, currentTask.count.get());
+        if (currentTask != null) { // This being called even before tests for some reason
+            assertEquals(currentTask.exp, currentTask.count.get());
+        }
     }
 
     @Test

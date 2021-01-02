@@ -68,10 +68,4 @@ public enum SpawnMode {
     public boolean isMainThreadReusable() {
         return mainThreadReusable;
     }
-
-    public interface SpawnModable {
-        SpawnMode getSpawnMode();
-
-        void setSpawnMode(SpawnMode spawnMode);
-    }
 }

@@ -151,13 +151,13 @@ public class StatTaskRunner implements TaskRunner {
         for (Map.Entry<String, InternalStat> next : map.entrySet()) {
             Stat stat = report.stats[pos++] = new Stat();
             stat.taskMethod = next.getKey();
-            InternalStat istat = next.getValue();
-            stat.count = istat.count;
+            InternalStat internalStat = next.getValue();
+            stat.count = internalStat.count;
             stat.execTime = new Timing();
-            stat.execTime.populateFrom(istat.execTime, istat.count);
-            if (istat.completionTime.maxExecTime > 0) {
+            stat.execTime.populateFrom(internalStat.execTime, internalStat.count);
+            if (internalStat.completionTime.maxExecTime > 0) {
                 stat.completionTime = new Timing();
-                stat.completionTime.populateFrom(istat.completionTime, istat.count);
+                stat.completionTime.populateFrom(internalStat.completionTime, internalStat.count);
             }
         }
         return report;
@@ -182,7 +182,7 @@ public class StatTaskRunner implements TaskRunner {
         }
 
         void widen(Stat stat) {
-            maxWidth = Math.max(maxWidth, getValueWidh(stat));
+            maxWidth = Math.max(maxWidth, getValueWidth(stat));
 
         }
 
@@ -202,12 +202,12 @@ public class StatTaskRunner implements TaskRunner {
             ps.print(c);
         }
 
-        abstract int getValueWidh(Stat stat);
+        abstract int getValueWidth(Stat stat);
 
         abstract void print(PrintStream ps, Stat stat);
 
         void cell(PrintStream ps, Stat stat) {
-            int width = getValueWidh(stat);
+            int width = getValueWidth(stat);
             print(ps, stat);
             fill(ps, ' ', 2 + maxWidth - width);
             ps.print('|');
@@ -223,7 +223,7 @@ public class StatTaskRunner implements TaskRunner {
         }
 
         @Override
-        int getValueWidh(Stat stat) {
+        int getValueWidth(Stat stat) {
             return width(fn.apply(stat));
         }
 
@@ -242,7 +242,7 @@ public class StatTaskRunner implements TaskRunner {
         }
 
         @Override
-        int getValueWidh(Stat stat) {
+        int getValueWidth(Stat stat) {
             return fn.apply(stat).length();
         }
 
@@ -261,7 +261,7 @@ public class StatTaskRunner implements TaskRunner {
         }
 
         @Override
-        int getValueWidh(Stat stat) {
+        int getValueWidth(Stat stat) {
             int w = width(fn.apply(stat.execTime));
             if (stat.completionTime != null) {
                 w += width(fn.apply(stat.completionTime)) + 1;

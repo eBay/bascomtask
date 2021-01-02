@@ -202,11 +202,38 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
         ProfilingTaskRunner taskRunner = new ProfilingTaskRunner();
 
+        assertEquals(0,$.getNumberOfInterceptors());
+
         $.firstInterceptWith(taskRunner);
+
+        assertEquals(1,$.getNumberOfInterceptors());
 
         $.task(task()).name("blue").ret(1).get();
 
         String fmt = taskRunner.format();
         assertTrue(fmt.contains("0| blue.ret    ---"));
+    }
+
+    private final ThreadLocal<ProfilingTaskRunner> threadRunner = new ThreadLocal<>();
+
+    @Test
+    public void globalConfig() throws Exception {
+        GlobalConfig.setConfig(new GlobalConfig.Config() {
+            @Override
+            public void afterDefaultInitialization(Orchestrator orchestrator, Object arg) {
+                ProfilingTaskRunner ptr = new ProfilingTaskRunner();
+                threadRunner.set(ptr);
+                orchestrator.firstInterceptWith(ptr);
+            }
+        });
+
+        Orchestrator $ = Orchestrator.create();
+        assertEquals(1, $.getNumberOfInterceptors());
+
+        $.task(task()).name("single").ret(1).get();
+
+        ProfilingTaskRunner ptr = threadRunner.get();
+        String got = ptr.format();
+        assertTrue(got.contains("0| single.ret    ---"));
     }
 }

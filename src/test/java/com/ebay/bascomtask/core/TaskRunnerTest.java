@@ -41,7 +41,7 @@ public class TaskRunnerTest {
 
     private final AtomicInteger count = new AtomicInteger();
     private final Map<Key, Integer> ordering = new ConcurrentHashMap<>();
-    private Orchestrator $;
+
 
     static class Key {
         @Override
@@ -153,15 +153,15 @@ public class TaskRunnerTest {
     @Before
     public void before() {
         count.set(0);
-        GlobalConfig.INSTANCE.removeAllTaskRunners();
-        $ = new Engine();
+        GlobalConfig.getConfig().removeAllTaskRunners();
     }
 
     @Test
     public void oneRunner() throws Exception {
         MockRunner mockRunner = new MockRunner(0);
-        GlobalConfig.INSTANCE.firstInterceptWith(mockRunner);
+        GlobalConfig.getConfig().firstInterceptWith(mockRunner);
 
+        Orchestrator $ = Orchestrator.create();
         $.task(task()).ret(1).get();
         mockRunner.verify(1, 1, 0);
     }
@@ -170,9 +170,10 @@ public class TaskRunnerTest {
     public void twoRunners() throws Exception {
         MockRunner firstMockRunner = new MockRunner(0);
         MockRunner secondMockRunner = new MockRunner(1);
-        GlobalConfig.INSTANCE.firstInterceptWith(firstMockRunner);
-        GlobalConfig.INSTANCE.lastInterceptWith(secondMockRunner);
+        GlobalConfig.getConfig().firstInterceptWith(firstMockRunner);
+        GlobalConfig.getConfig().lastInterceptWith(secondMockRunner);
 
+        Orchestrator $ = Orchestrator.create();
         $.task(task()).ret(1).get();
         firstMockRunner.verify(1, 1, 0);
         secondMockRunner.verify(1, 1, 0);
@@ -180,13 +181,15 @@ public class TaskRunnerTest {
         verifyOrder(firstMockRunner, secondMockRunner);
     }
 
-    private void run3(CommonConfig m1, CommonConfig m2, CommonConfig m3) throws Exception {
+    private void run3(Orchestrator $, CommonConfig m1, CommonConfig m2, CommonConfig m3) throws Exception {
         MockRunner firstMockRunner = new MockRunner(0);
         MockRunner secondMockRunner = new MockRunner(1);
         MockRunner thirdMockRunner = new MockRunner(2);
         m1.lastInterceptWith(secondMockRunner);
         m2.lastInterceptWith(thirdMockRunner);
         m3.firstInterceptWith(firstMockRunner);
+
+        $.restoreConfigurationDefaults(null);
 
         $.task(task()).ret(1).get();
         firstMockRunner.verify(1, 1, 0);
@@ -201,30 +204,36 @@ public class TaskRunnerTest {
 
     @Test
     public void globalGlobalLocal() throws Exception {
-        run3(GlobalConfig.INSTANCE, GlobalConfig.INSTANCE, $);
+        Orchestrator $ = Orchestrator.create();
+        GlobalConfig.Config globalConfig = GlobalConfig.getConfig();
+        run3($,globalConfig, globalConfig, $);
     }
 
     @Test
     public void localLocalLocal() throws Exception {
-        run3($, $, $);
+        Orchestrator $ = Orchestrator.create();
+        run3($, $, $, $);
     }
 
     @Test
     public void localGlobalLocal() throws Exception {
-        run3($, GlobalConfig.INSTANCE, $);
+        Orchestrator $ = Orchestrator.create();
+        GlobalConfig.Config globalConfig = GlobalConfig.getConfig();
+        run3($, $, globalConfig, $);
     }
 
     @Test
     public void parV() throws Exception {
         MockRunner firstMockRunner = new MockRunner(0);
         MockRunner secondMockRunner = new MockRunner(1);
-        GlobalConfig.INSTANCE.firstInterceptWith(firstMockRunner);
-        GlobalConfig.INSTANCE.lastInterceptWith(secondMockRunner);
+        GlobalConfig.getConfig().firstInterceptWith(firstMockRunner);
+        GlobalConfig.getConfig().lastInterceptWith(secondMockRunner);
 
+        Orchestrator $ = Orchestrator.create();
         CompletableFuture<Integer> left = $.task(task()).name("left").ret(1);
         CompletableFuture<Integer> right = $.task(task()).name("right").ret(2);
         CompletableFuture<Integer> add = $.task(task()).name("bottom").add(left, (right));
-        assertEquals((Integer) 3, add.get());
+        assertEquals(3, (int)add.get());
 
         firstMockRunner.verify(3, 2, 1);
         secondMockRunner.verify(3, 2, 1);
@@ -238,9 +247,10 @@ public class TaskRunnerTest {
         MockRunner gr2 = new MockRunner(0);
         MockRunner or1 = new MockRunner(0);
         MockRunner or2 = new MockRunner(0);
-        GlobalConfig.INSTANCE.firstInterceptWith(gr1);
-        GlobalConfig.INSTANCE.firstInterceptWith(gr2);
+        GlobalConfig.getConfig().firstInterceptWith(gr1);
+        GlobalConfig.getConfig().firstInterceptWith(gr2);
 
+        Orchestrator $ = Orchestrator.create();
         $.firstInterceptWith(or1);
         $.firstInterceptWith(or2);
 
@@ -250,7 +260,7 @@ public class TaskRunnerTest {
         or1.verify(1, 1, 0);
         or2.verify(1, 1, 0);
 
-        GlobalConfig.INSTANCE.removeInterceptor(gr1);
+        $.removeInterceptor(gr1);
         $.removeInterceptor(or1);
 
         $.task(task()).ret(1).get();

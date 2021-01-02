@@ -251,8 +251,8 @@ task method to return a CompletableFuture result. The definition of this fn meth
 ```
 As can be seen, fnTask is the call to make to get the task itself, which you may want to do to apply common
 methods on it such as giving it a name or changing its weight -- unlike regular tasks, function tasks are
-'light' by default but that can be changed by marking them runSpawned(). For must purposes, however, the simpler 
-and shorter fn() call will likely be sufficient.
+'light' by default meaning a separate thread will not be spawned for them, but that can be changed as described
+later in the configuration section. For must purposes, the simpler and shorter fn() call will likely be sufficient.
 
 There are number of these methods that take different kinds of lambdas, for Supplier as well as Consumer lambdas.
 For lambdas that take arguments these must be passed to the fn/fnTask methods in turn, as CompletableFutures. The 
@@ -380,28 +380,22 @@ as with normal execution flow, a thread is spawned (orange) to handle the second
 but that task has already generated an exception and that outcome remains unchanged. The original caller to
 get() will see a MyException thrown. Should any call, by this or other threads get() be made on any other 
 task method output, the results are fixed: all the yellow-filled task methods will return a valid value while
-all the others will throw an exception of the indicated type.
+all the others will throw an Exception of the indicated type.
 
 
 ## Configuration
 
-Various configuration options can be applied at multiple levels:
-
-* For each task when being wired, and if not specified then
-* For each Orchestrator, and if not specified then
-* Globally for all Orchestrators (_GlobalConfig_)
-
-This includes TaskRunners which can be used as decorators/interceptors that can be applied to each task method
-invocation for such purposes as logging, statistics gathering, or profiling. BascomTask provides built-in versions 
-of these (_LogTaskRunner_, _StatTaskRunner_, and _ProfilingTaskRunner_ respectively), but you can write your own
-as well.
+Orchestrators have various configuration options for controlling or extending core behavior. These can be set
+on an individual orchestrator or on GlobalConfig.getConfig() which will then copy all of its settings to 
+orchestrators when they are created. The GlobalConfig configuration object can also be entirely replaced if desired,
+allowing complete control over Orchestrator initialization.
 
 ### Customizing the Thread Spawning Strategy
 
 The time and manner of thread spawning can be controlled at multiple levels. At the task level, a test method can
 be annotated as @Light, in which case no thread is ever spawned for it. This is useful because the writer of the
-task method usually has a pretty good idea about the performance cost of that method, and in many cases if the
-task method is not reaching out to other systems or databases it should probably be @Light.
+task method usually has a pretty good idea about the performance cost of that method. If the task method
+implementation is not reaching out to other systems or databases, it should probably be @Light.
 
 During wiring, that (or the default value which is not @Light) can be overridden, either setting it to be light or 
 forcing it to always require a new thread to be spawned:
@@ -411,9 +405,53 @@ forcing it to always require a new thread to be spawned:
   $.task(new MyTask()).runSpawned().exec(...);
 ```
 
-At the Orchestrator and global level, a SpawnMode can be set that affects all spawning decisions for that or
+At the Orchestrator and global levels, a SpawnMode can be set that affects all spawning decisions for that or
 all Orchestrators. Thread spawning can be always or never used, or only under specified conditions. The role of the 
-main (calling) thread can be controlled, whether to be used or reused in task execution.
+main (calling) thread can be controlled, whether to be used or reused in task execution. The default is
+SpawnMode.WHEN_NEEDED, which is the behavior described earlier this document, but others are available such as
+NEVER_SPAWN.
+
+### Task Runners
+The execution of each task method can be intercepted/decorated by adding (any number of) TaskRunners to an 
+Orchestrator, again on a per Orchestrator basis or for all Orchestrators through GlobalConfig. You can write your 
+own or use a built-in from the BascomTask library:
+
+* LogTaskRunner for logging ingress/egress of tasks
+* StatTaskRunner for collecting aggregate timing information across tasks
+* ProfilingTaskRunner for generating execution profiles for an Orchestrator 
+
+The ability to customize and replace the global configuration object is particularly useful for TaskRunners like
+ProfilingTaskRunner, which are restricted to working against a single Orchestrator (unlike LogTaskRunner, for 
+example, which maintains no state). While it is straightforward to add a ProfilingTaskRunner to any individual
+Orchestrator, that can be tedious if there are many to deal with. The global configuration object provides a hook
+method that you can use to modify each Orchestrator on its creation. In the case of ProfilingTaskOrchestrator,
+we not only want to set it but also to retrieve at a later time in order to obtain its profiling graph. These
+can be stored in some global map or, as in the following example, a ThreadLocal variable; then any Orchestrator
+created from that thread will be profiled with that runner, while calling report() at the desired time will print
+its results:
+
+```java
+class Profiler {
+    private final ThreadLocal<ProfilingTaskRunner> threadRunner = new ThreadLocal<>();
+
+     public static void init() {
+         GlobalConfig.setConfig(new GlobalConfig.Config() {
+             @Override
+             public void afterDefaultInitialization(Orchestrator orchestrator, Object arg) {
+                 ProfilingTaskRunner ptr = new ProfilingTaskRunner();
+                 threadRunner.set(ptr);
+                 orchestrator.firstInterceptWith(ptr);
+             }
+         });
+     }
+     
+     public static void report() {
+        ProfilingTaskRunner ptr = threadRunner.get();
+        System.out.println(ptr.format());
+    }
+}
+```
+
 
 ---
 ## License Information

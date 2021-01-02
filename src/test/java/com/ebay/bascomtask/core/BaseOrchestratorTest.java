@@ -32,10 +32,15 @@ public abstract class BaseOrchestratorTest {
 
     @Before
     public void before() {
-        GlobalConfig.INSTANCE.restoreDefaults();
-        $ = new Engine();
+        GlobalConfig.getConfig().restoreConfigurationDefaults(null);
+        $ = Orchestrator.create();
         String testName = name.getMethodName();
         LOG.debug(testName);
+    }
+
+    @Before
+    public void after() {
+        GlobalConfig.getConfig().restoreConfigurationDefaults(null);
     }
 
     static void sleep(int ms) {
