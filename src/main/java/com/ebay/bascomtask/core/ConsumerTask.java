@@ -16,6 +16,8 @@
  **************************************************************************/
 package com.ebay.bascomtask.core;
 
+import com.ebay.bascomtask.annotations.Light;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.function.*;
 
@@ -48,6 +50,7 @@ public interface ConsumerTask extends TaskInterface<ConsumerTask> {
         }
 
         @Override
+        @Light
         public CompletableFuture<Void> apply() {
             IN v = get(cf);
             fn.accept(v);
@@ -73,6 +76,7 @@ public interface ConsumerTask extends TaskInterface<ConsumerTask> {
         }
 
         @Override
+        @Light
         public CompletableFuture<Void> apply() {
             IN1 v1 = get(cf1);
             IN2 v2 = get(cf2);

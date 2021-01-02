@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ProfilingTaskRunner implements TaskRunner {
 
-    private final List<Event> events = new ArrayList<>();
+    private final List<Event> events = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, ThreadTracker> threadMap = new ConcurrentHashMap<>();
     private final List<Event> rowHeaders = new ArrayList<>();
     private final AtomicInteger externCount = new AtomicInteger(0);
@@ -64,12 +64,19 @@ public class ProfilingTaskRunner implements TaskRunner {
         final ThreadTracker threadTracker;
         int level;
         final int columnOrder;
+        char bracket = '-';
+        final char mark;
 
         Event(TaskRun taskRun, long ts, String threadName, char mark, int columnOrder) {
             this.taskRun = taskRun;
             this.ts = ts;
             this.threadTracker = threadMap.computeIfAbsent(threadName, k -> new ThreadTracker(threadName, mark));
+            this.mark = mark;
             this.columnOrder = columnOrder;
+        }
+
+        void setBracket(char c) {
+            this.bracket = c;
         }
 
         @Override
@@ -193,6 +200,7 @@ public class ProfilingTaskRunner implements TaskRunner {
         try {
             return taskRun.run();
         } finally {
+
             events.add(new EndEvent(taskRun, taskRun.getEndedAt(), threadName));
         }
     }
@@ -223,11 +231,15 @@ public class ProfilingTaskRunner implements TaskRunner {
     }
 
     /**
-     * Returns a tabular execution profile with timestamps as rows and threads as columns. A row is created for
-     * any time (millisecond granularity) during which at least one task-related event occurred. The first column is
-     * the timestamp relative to execution start (the first row is always zero). The second column is the task/method
-     * name invoked. The remaining columns are for each thread. A task is active between two '---' cell entries,
-     * with '-' filers in between. For example,
+     * Returns a tabular execution profile with events as rows and threads as columns. The first column is the
+     * millisecond timestamp relative to the start of execution. The second column is the task method name. The
+     * third column represents the calling thread; if threads were spawned there will be an additional column
+     * for each.
+     *
+     * <p>A row is created any time (millisecond granularity) during which at least one task-related event occurred.
+     * A task start and end is indicated is by '---' entries, and if active between these two points then just a
+     * a '-  entry. For example,
+     *
      * <pre>
      *                    0
      *     0| gold.pond  ---
@@ -240,24 +252,27 @@ public class ProfilingTaskRunner implements TaskRunner {
      *     5|             -
      *    10|            ---
      * </pre>
-     * represent that the gold.pond task method ended 10 ms after start; the value at 5 indicates that it was active
+     * These each indicate that gold.pond ended 10 ms after start; the value at 5 indicates that it was active
      * and would only be drawn if there were additional columns (not shown above) because other things of interest
-     * occurred at that time.
+     * (not shown above) occurred at that time.
      * <p>
-     * When a task immediately follows another within the same timestamp value, the end of the first is omitted.
-     * In the following, for example, gold.pond ends at timestamp 10 and gold.fish begins at that same timestamp:
+     * When a task immediately follows another within the same timestamp value, the end of the first is omitted and
+     * the new task entry has '=' markers instead of '-'. In the following, for example, gold.pond ends at timestamp 10
+     * and gold.fish begins at that same timestamp, so the entry is '=-=' (the middle char serves other purposes,
+     * see next paragraph):
+     *
      * <pre>
      *                    0
      *     0| gold.pond  ---
-     *    10| gold.fish  ---
+     *    10| gold.fish  =-=
      *    20|            ---
      * </pre>
      * <p>
      * Tasks that return non-completed CompletableFutures have by definition a thread outside of BascomTask control.
      * Each of these is represented in its own column and such columns are letter-numbered beginning with 'A'. The
-     * markers are '-+-' and '+' replacing the corresponding markers used in BascomTask-controlled threads. Each task
-     * thus always has a beginning '---' marker in a BascomTask-controlled thread, it may also have a '-+-' entry
-     * on the same line in a letter-valued column.
+     * markers are '-+-' and '+', replacing the corresponding markers used in BascomTask-controlled threads.
+     * A task _always_ has a beginning '---' or '=-=' marker in a BascomTask-controlled thread, and it it _may also_
+     * have a '-+-' entry on the same line in a letter-valued column.
      *
      * @return table-formatted execution summary
      */
@@ -289,6 +304,9 @@ public class ProfilingTaskRunner implements TaskRunner {
             } else {
                 Event lastRowHeader = rowHeaders.get(sz - 1);
                 if (next.ts == lastRowHeader.ts && next.replaces(lastRowHeader)) {
+                    if (next.mark == '-') {  // Only for BT columns
+                        next.setBracket('=');
+                    }
                     rowHeaders.set(sz - 1, next);
                 } else {
                     rowHeaders.add(next);
@@ -361,7 +379,7 @@ public class ProfilingTaskRunner implements TaskRunner {
             for (ThreadTracker nextTracker : trackers) {
                 Event ex = nextTracker.events[i];
 
-                char b = ex == null ? ' ' : '-';
+                char b = ex == null ? ' ' : ex.bracket;
                 char m = (ex == null && !nextTracker.active) ? ' ' : nextTracker.mark;
                 sb.append(b);
                 sb.append(m);

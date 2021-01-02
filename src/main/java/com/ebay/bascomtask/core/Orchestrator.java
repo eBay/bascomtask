@@ -221,6 +221,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task that takes no arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param fn  function to apply to that pojo if/when task is activated
      * @param <R> type of return result
@@ -232,17 +233,19 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes no arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param fn  function to apply to that pojo if/when task is activated
      * @param <R> type of return result
      * @return Function task
      */
     default <R> CompletableFuture<R> fn(Supplier<R> fn) {
-        return fnTask(fn).light().apply();
+        return fnTask(fn).apply();
     }
 
     /**
      * Produces function task that takes one argument and produces one result.
+     * Method invocation is light by default.
      *
      * @param s1   Supplier function (returns a value)
      * @param fn   function to apply to that pojo if/when task is activated
@@ -257,6 +260,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes one argument and produces one result.
+     * Method invocation is light by default.
      *
      * @param s1   Supplier function (returns a value)
      * @param fn   function to apply to that pojo if/when task is activated
@@ -265,11 +269,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN, R> CompletableFuture<R> fn(Supplier<IN> s1, Function<IN, R> fn) {
-        return fnTask(s1,fn).light().apply();
+        return fnTask(s1,fn).apply();
     }
 
     /**
      * Produces function task that takes one non-lambda argument and produces one result.
+     * Method invocation is light by default.
      *
      * @param in   provides result to be applied to function
      * @param fn   function to apply to that pojo if/when task is activated
@@ -283,6 +288,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes one non-lambda argument and produces one result.
+     * Method invocation is light by default.
      *
      * @param in   provides result to be applied to function
      * @param fn   function to apply to that pojo if/when task is activated
@@ -291,11 +297,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN, R> CompletableFuture<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
-        return fnTask(in,fn).light().apply();
+        return fnTask(in,fn).apply();
     }
 
     /**
      * Produces function task that takes two non-lambda arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param in1   provides first value for fn
      * @param in2   provides second value for fn
@@ -311,6 +318,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes two non-lambda arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param in1   provides first value for fn
      * @param in2   provides second value for fn
@@ -321,11 +329,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
-        return fnTask(in1,in2,fn).light().apply();
+        return fnTask(in1,in2,fn).apply();
     }
 
     /**
      * Produces function task that takes mixed arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param in2   provides second value for fn
@@ -342,6 +351,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes mixed arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param in2   provides second value for fn
@@ -352,11 +362,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2, R> CompletableFuture<R> fn(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
-        return fnTask(s1, in2, fn).light().apply();
+        return fnTask(s1, in2, fn).apply();
     }
 
     /**
      * Produces function task that takes mixed arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param in1   provides first value for fn
      * @param s2    provides second value for fn
@@ -373,6 +384,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes mixed arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param in1   provides first value for fn
      * @param s2    provides second value for fn
@@ -383,11 +395,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
-        return fnTask(in1, s2, fn).light().apply();
+        return fnTask(in1, s2, fn).apply();
     }
 
     /**
      * Produces function task that takes two lambda arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param s2    provides second value for fn
@@ -405,6 +418,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes two lambda arguments and produces one result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param s2    provides second value for fn
@@ -415,11 +429,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2, R> CompletableFuture<R> fn(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
-        return fnTask(s1, s2, fn).light().apply();
+        return fnTask(s1, s2, fn).apply();
     }
 
     /**
      * Produces function task that takes one lambda argument and produces no result.
+     * Method invocation is light by default.
      *
      * @param s1   provides value for fn
      * @param fn   function to apply to that pojo if/when task is activated
@@ -433,6 +448,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes one lambda argument and produces no result.
+     * Method invocation is light by default.
      *
      * @param s1   provides value for fn
      * @param fn   function to apply to that pojo if/when task is activated
@@ -440,11 +456,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN> CompletableFuture<Void> vfn(Supplier<IN> s1, Consumer<IN> fn) {
-        return vfnTask(s1, fn).light().apply();
+        return vfnTask(s1, fn).apply();
     }
 
     /**
      * Produces function task that takes mixed arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param cf1   provides first value for fn
      * @param s2    provides second value for fn
@@ -460,6 +477,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes mixed arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param cf1   provides first value for fn
      * @param s2    provides second value for fn
@@ -469,11 +487,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(cf1,s2,fn).light().apply();
+        return vfnTask(cf1,s2,fn).apply();
     }
 
     /**
      * Produces function task that takes non-lambda arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param cf1   provides first value for fn
      * @param cf2   provides second value for fn
@@ -488,6 +507,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes non-lambda arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param cf1   provides first value for fn
      * @param cf2   provides second value for fn
@@ -497,11 +517,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(cf1,cf2,fn).light().apply();
+        return vfnTask(cf1,cf2,fn).apply();
     }
 
     /**
      * Produces function task that takes mixed arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param cf2   provides second value for fn
@@ -517,6 +538,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes mixed arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param cf2   provides second value for fn
@@ -526,11 +548,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(s1,cf2,fn).light().apply();
+        return vfnTask(s1,cf2,fn).apply();
     }
 
     /**
      * Produces function task that takes two lambda arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param s2    provides second value for fn
@@ -547,6 +570,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
 
     /**
      * Produces function task value that takes two lambda arguments and produces no result.
+     * Method invocation is light by default.
      *
      * @param s1    provides first value for fn
      * @param s2    provides second value for fn
@@ -556,6 +580,6 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return Function task
      */
     default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        return vfnTask(s1,s2,fn).light().apply();
+        return vfnTask(s1,s2,fn).apply();
     }
 }

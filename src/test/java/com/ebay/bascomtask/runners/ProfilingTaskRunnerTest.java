@@ -23,6 +23,7 @@ import static com.ebay.bascomtask.core.UberTask.*;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -136,7 +137,11 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         run(T1, 10, 20, "green", "hornet");
         String fmt = taskRunner.format();
         log(fmt);
-        assertTrue(fmt.contains("10| green.hornet    ---"));
+        String exp = "                      0  \n";
+        exp += "  0| blue.dog        --- \n";
+        exp += " 10| green.hornet    =-= \n";
+        exp += " 20|                 --- \n";
+        assertEquals(exp,fmt);
     }
 
     @Test
@@ -157,7 +162,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         run(T2, 18, 21, "green", "bird");
         String fmt = taskRunner.format();
         log(fmt);
-        assertTrue(fmt.contains(" 10| blue.pony       ---  - "));
+        assertTrue(fmt.contains(" 10| blue.pony       =-=  - "));
         assertTrue(fmt.contains(" 18| green.bird          ---"));
     }
 
@@ -189,7 +194,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         run(T1, 10, 20, 25, "gold", "fish");
         String fmt = taskRunner.format();
         log(fmt);
-        assertTrue(fmt.contains("0| gold.fish    ---  +  -+-"));
+        assertTrue(fmt.contains("0| gold.fish    =-=  +  -+-"));
     }
 
     @Test

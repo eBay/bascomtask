@@ -189,10 +189,12 @@ public interface UberTask extends TaskInterface<UberTask> {
 
         private void delay() {
             threadName = Thread.currentThread().getName();
-            try {
-                Thread.sleep(sleepForMs);
-            } catch (InterruptedException e) {
-                throw new RuntimeException("Bad interrupt", e);
+            if (sleepForMs > 0) {
+                try {
+                    Thread.sleep(sleepForMs);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Bad interrupt", e);
+                }
             }
             actualCount.incrementAndGet();
         }

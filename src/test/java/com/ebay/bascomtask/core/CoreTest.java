@@ -1029,7 +1029,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> f10 = $.task(task()).name("f10").inc(f6);
 
         $.task(task(0)).name("f11").inc(f7);
-        CompletableFuture<Integer> f12 = $.task(task()).name("f12").add(f7, f8, f9, f10);
+        CompletableFuture<Integer> f12 = $.task(task().delayFor(0)).name("f12").add(f7, f8, f9, f10);
 
         assertEquals(24,(int)f12.get());  // Execute first so all threads activated for tests below
 

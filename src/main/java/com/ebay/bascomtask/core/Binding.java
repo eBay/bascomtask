@@ -242,7 +242,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     @Override
     public void onComplete(TaskRun taskRun, Object fromBefore, boolean doneOnExit) {
-        //System.out.println("Binding complete " + this);
+        // Do nothing by default
     }
 
     void fire(String src1, String src2, boolean direct) {

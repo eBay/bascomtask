@@ -17,7 +17,7 @@ to considerable complexities. BascomTask is a lightweight task orchestration lib
 * **Optimal thread management** that spawns threads automatically only when it is advantageous to do so
 * **Lazy execution** that automatically determines what to execute while freely allowing the execution graph to be extended at any time 
 * **Fully asynchronous operation** with complete integration with Java 8+ CompletableFutures
-* Flexible and powerful mechanisms for managing **task exceptions**
+* **Smart exception handling and rollback** that is customizable and minimizes wasteful task execution
 * **Extensible task execution wrappers** with pre-existing built-ins for logging and profiling
 
 
@@ -118,7 +118,7 @@ and completed.
 to mistakenly execute a task before its parameters are ready.
 
 ## General Programming Model
-1) Task methods on are activated on demand by a call to execute, get, or other access operation on CompletableFuture 
+1) Task methods on are activated on demand by a call to execute, get, or other access operation on a CompletableFuture 
    returned from a task method. 
 2) Activation runs backward, activating that task method and all its predecessors (incoming arguments).
 3) Task methods that are ready to fire, either because all their CompletableFuture inputs have already completed or
@@ -127,6 +127,8 @@ to mistakenly execute a task before its parameters are ready.
 5) Completion runs forward. Each completion checks for each of its dependents whether that dependent has all its 
    arguments ready. All _those_ ready-to-fire task methods are collected.
 6) Return to step 4. 
+
+> Note without any extra programming effort, the framework determines what tasks can be executed in parallel.
 
 The following diagram illustrates the thread flow among 12 task method invocations (circles) activated by a
 get() call, with execution color-coded with the thread (there are 4 in this example) that executes them:
@@ -239,17 +241,18 @@ that return the value 1:
 ```
    CompletableFuture<Integer> t1 = $.fn(()->1);
 ```
-The call creates the task which is just like any other user POJO task, marks it as light, and then invokes its
+The call creates the task which is just like any other user POJO task and then invokes its
 task method to return a CompletableFuture result. The definition of this fn method Orchestrator is this:
 
 ```
     default <R> CompletableFuture<R> fn(Supplier<R> fn) {
-        return fnTask(fn).light().apply();
+        return fnTask(fn).apply();
     }
 ```
 As can be seen, fnTask is the call to make to get the task itself, which you may want to do to apply common
-methods on it such as giving it a name. For must purposes, however, the simpler and shorter fn() call will
-likely be sufficient.
+methods on it such as giving it a name or changing its weight -- unlike regular tasks, function tasks are
+'light' by default but that can be changed by marking them runSpawned(). For must purposes, however, the simpler 
+and shorter fn() call will likely be sufficient.
 
 There are number of these methods that take different kinds of lambdas, for Supplier as well as Consumer lambdas.
 For lambdas that take arguments these must be passed to the fn/fnTask methods in turn, as CompletableFutures. The 
