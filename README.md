@@ -223,25 +223,35 @@ started at the same time as the task behind _cond_.
 
 ## Function Tasks
 Sometimes it is convenient to define a task simply with a lambda function, without having to write separate
-task classes. These can be Supplier or Consumer functions, as in the following Suppler lambda that return the value 1:
+a separate class for it. These can be Supplier or Consumer functions, as in the following Suppler lambda 
+that return the value 1:
 
 ```
-   CompletableFuture<Integer> t1 = $.fn(()->1).apply();
+   CompletableFuture<Integer> t1 = $.fn(()->1);
 ```
-The call to _$.fn(()->1)_ creates the task which is just like any other user POJO task. In order to get its
-CompletableFuture result, a method must be called on it which in this case is _apply()_.
+The call creates the task which is just like any other user POJO task, marks it as light, and then invokes its
+task method to return a CompletableFuture result. The definition of this fn method Orchestrator is this:
 
-In addition to simple Supplier and Consumer lambdas, the standard variations that take one or two arguments
-can be used. These necessitate that those arguments also be passed in the _$.fn()_ call. The following example
-takes a value returned from a POJO task method, the hardwired value three, and a BiFunction that multiplies 
-them together:
+```
+    default <R> CompletableFuture<R> fn(Supplier<R> fn) {
+        return fnTask(fn).light().apply();
+    }
+```
+As can be seen, fnTask is the call to make to get the task itself, which you may want to do to apply common
+methods on it such as giving it a name. For must purposes, however, the simpler and shorter fn() call will
+likely be sufficient.
+
+There are number of these methods that take different kinds of lambdas, for Supplier as well as Consumer lambdas.
+For lambdas that take arguments these must be passed to the fn/fnTask methods in turn, as CompletableFutures. The 
+following example takes a value returned from a POJO task method, the hardwired value three, and a BiFunction 
+that multiplies them together: 
 
 ```
     CompletableFuture f1 = $.task(new MyTask()).computeSomeValue();
     CompletableFuture<Integer> task = $.fn(
             f1,
             ()->3,
-            (x,y)->x*y).apply();
+            (x,y)->x*y);
 ```
 
 ### User Task Adaptors

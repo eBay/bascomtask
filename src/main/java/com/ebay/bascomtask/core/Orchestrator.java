@@ -200,7 +200,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return CompletableFuture for the return result
      */
     default <TASK, R> CompletableFuture<R> task(TASK userTask, Function<TASK, R> fn) {
-        return fn(() -> userTask, fn).apply();
+        return fnTask(() -> userTask, fn).apply();
     }
 
     /**
@@ -212,7 +212,7 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @return CompletableFuture for void result -- doesn't return a value but can be used to initiate execution
      */
     default <TASK> CompletableFuture<Void> voidTask(TASK userTask, Consumer<TASK> fn) {
-        return vfn(() -> userTask, fn).apply();
+        return vfnTask(() -> userTask, fn).apply();
     }
 
     //////////////////////////////////////////////
@@ -226,8 +226,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R> type of return result
      * @return Function task
      */
-    default <R> SupplierTask<R> fn(Supplier<R> fn) {
+    default <R> SupplierTask<R> fnTask(Supplier<R> fn) {
         return task(new SupplierTask.SupplierTask0<>(fn));
+    }
+
+    default <R> CompletableFuture<R> fn(Supplier<R> fn) {
+        return fnTask(fn).light().apply();
     }
 
     /**
@@ -239,9 +243,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R>  type of return result
      * @return Function task
      */
-    default <IN, R> SupplierTask<R> fn(Supplier<IN> s1, Function<IN, R> fn) {
-        CompletableFuture<IN> in1 = fn(s1).apply();
+    default <IN, R> SupplierTask<R> fnTask(Supplier<IN> s1, Function<IN, R> fn) {
+        CompletableFuture<IN> in1 = fnTask(s1).apply();
         return task(new SupplierTask.SupplierTask1<>(in1, fn));
+    }
+
+    default <IN, R> CompletableFuture<R> fn(Supplier<IN> s1, Function<IN, R> fn) {
+        return fnTask(s1,fn).light().apply();
     }
 
     /**
@@ -253,8 +261,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R>  type of return result
      * @return Function task
      */
-    default <IN, R> SupplierTask<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
+    default <IN, R> SupplierTask<R> fnTask(CompletableFuture<IN> in, Function<IN, R> fn) {
         return task(new SupplierTask.SupplierTask1<>(in, fn));
+    }
+
+    default <IN, R> CompletableFuture<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
+        return fnTask(in,fn).light().apply();
     }
 
     /**
@@ -268,8 +280,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1, IN2, R> SupplierTask<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
+    default <IN1, IN2, R> SupplierTask<R> fnTask(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
         return task(new SupplierTask.SupplierTask2<>(in1, in2, fn));
+    }
+
+    default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
+        return fnTask(in1,in2,fn).light().apply();
     }
 
     /**
@@ -283,9 +299,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1, IN2, R> SupplierTask<R> fn(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
-        CompletableFuture<IN1> in1 = fn(s1).apply();
-        return fn(in1, in2, fn);
+    default <IN1, IN2, R> SupplierTask<R> fnTask(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
+        CompletableFuture<IN1> in1 = fnTask(s1).apply();
+        return fnTask(in1, in2, fn);
+    }
+
+    default <IN1, IN2, R> CompletableFuture<R> fn(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
+        return fnTask(s1, in2, fn).light().apply();
     }
 
     /**
@@ -299,9 +319,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1, IN2, R> SupplierTask<R> fn(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
-        CompletableFuture<IN2> in2 = fn(s2).apply();
-        return fn(in1, in2, fn);
+    default <IN1, IN2, R> SupplierTask<R> fnTask(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
+        CompletableFuture<IN2> in2 = fnTask(s2).apply();
+        return fnTask(in1, in2, fn);
+    }
+
+    default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
+        return fnTask(in1, s2, fn).light().apply();
     }
 
     /**
@@ -315,10 +339,14 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <R>   type of return result
      * @return Function task
      */
-    default <IN1, IN2, R> SupplierTask<R> fn(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
-        CompletableFuture<IN1> in1 = fn(s1).apply();
-        CompletableFuture<IN2> in2 = fn(s2).apply();
-        return fn(in1, in2, fn);
+    default <IN1, IN2, R> SupplierTask<R> fnTask(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
+        CompletableFuture<IN1> in1 = fnTask(s1).apply();
+        CompletableFuture<IN2> in2 = fnTask(s2).apply();
+        return fnTask(in1, in2, fn);
+    }
+
+    default <IN1, IN2, R> CompletableFuture<R> fn(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
+        return fnTask(s1, s2, fn).light().apply();
     }
 
     /**
@@ -329,9 +357,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <IN> type of input1
      * @return Function task
      */
-    default <IN> ConsumerTask vfn(Supplier<IN> s1, Consumer<IN> fn) {
-        CompletableFuture<IN> in1 = fn(s1).apply();
+    default <IN> ConsumerTask vfnTask(Supplier<IN> s1, Consumer<IN> fn) {
+        CompletableFuture<IN> in1 = fnTask(s1).apply();
         return task(new ConsumerTask.ConsumerTask1<>(in1, fn));
+    }
+
+    default <IN> CompletableFuture<Void> vfn(Supplier<IN> s1, Consumer<IN> fn) {
+        return vfnTask(s1, fn).light().apply();
     }
 
     /**
@@ -344,9 +376,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <IN2> type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        CompletableFuture<IN2> in2 = fn(s2).apply();
+    default <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
+        CompletableFuture<IN2> in2 = fnTask(s2).apply();
         return task(new ConsumerTask.ConsumerTask2<>(cf1, in2, fn));
+    }
+
+    default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
+        return vfnTask(cf1,s2,fn).light().apply();
     }
 
     /**
@@ -359,8 +395,12 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <IN2> base type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+    default <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
         return task(new ConsumerTask.ConsumerTask2<>(cf1, cf2, fn));
+    }
+
+    default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+        return vfnTask(cf1,cf2,fn).light().apply();
     }
 
     /**
@@ -373,9 +413,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <IN2> base type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        CompletableFuture<IN1> in1 = fn(s1).apply();
+    default <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+        CompletableFuture<IN1> in1 = fnTask(s1).apply();
         return task(new ConsumerTask.ConsumerTask2<>(in1, cf2, fn));
+    }
+
+    default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+        return vfnTask(s1,cf2,fn).light().apply();
     }
 
     /**
@@ -388,9 +432,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
      * @param <IN2> type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        CompletableFuture<IN1> in1 = fn(s1).apply();
-        CompletableFuture<IN2> in2 = fn(s2).apply();
+    default <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
+        CompletableFuture<IN1> in1 = fnTask(s1).apply();
+        CompletableFuture<IN2> in2 = fnTask(s2).apply();
         return task(new ConsumerTask.ConsumerTask2<>(in1, in2, fn));
+    }
+
+    default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
+        return vfnTask(s1,s2,fn).light().apply();
     }
 }

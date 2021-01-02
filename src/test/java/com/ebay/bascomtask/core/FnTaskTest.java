@@ -48,13 +48,13 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void oneTask() throws Exception {
-        CompletableFuture<Integer> cf = $.fn(() -> 1).apply();
+        CompletableFuture<Integer> cf = $.fn(() -> 1);
         int got = cf.get();
         assertEquals(1, got);
     }
 
     @Test
-    public void oneTaskGet() {
+    public void oneTaskGet() throws Exception {
         int got = $.fn(() -> 1).get();
         assertEquals(1, got);
     }
@@ -62,7 +62,7 @@ public class FnTaskTest extends BaseOrchestratorTest {
     @Test
     public void oneTaskDelayedUntilGet() throws Exception {
         Simple simple = new Simple();
-        CompletableFuture<Integer> cf = $.fn(simple::produce).apply();
+        CompletableFuture<Integer> cf = $.fn(simple::produce);
         assertEquals(0, simple.input);
         int got = cf.get();
         assertEquals(1, simple.input);
@@ -71,18 +71,18 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void twoTasks() throws Exception {
-        CompletableFuture<Integer> t1 = $.fn(() -> 1).apply();
-        CompletableFuture<Integer> t2 = $.fn(t1, x -> x + 1).apply();
+        CompletableFuture<Integer> t1 = $.fn(() -> 1);
+        CompletableFuture<Integer> t2 = $.fn(t1, x -> x + 1);
         int got = t2.get();
         assertEquals(2, got);
     }
 
     @Test
     public void futureFunction() throws Exception {
-        CompletableFuture<Integer> t1 = $.fn(() -> 3).apply();
+        CompletableFuture<Integer> t1 = $.fn(() -> 3);
         CompletableFuture<Integer> task = $.fn(
                 t1,
-                x -> x * 2).apply();
+                x -> x * 2);
 
         int got = task.get();
         assertEquals(6, got);
@@ -90,9 +90,9 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void threeTasks() throws Exception {
-        CompletableFuture<Integer> t1 = $.fn(() -> 2).name("task0").apply();
-        CompletableFuture<Integer> t2 = $.fn(t1, x -> x + 3).name("task1").apply();
-        CompletableFuture<Integer> t3 = $.fn(t1, t2, (x, y) -> x * y).name("task2").apply();
+        CompletableFuture<Integer> t1 = $.fnTask(() -> 2).name("task0").apply();
+        CompletableFuture<Integer> t2 = $.fnTask(t1, x -> x + 3).name("task1").apply();
+        CompletableFuture<Integer> t3 = $.fnTask(t1, t2, (x, y) -> x * y).name("task2").apply();
         int got = t3.get();
         assertEquals(10, got);
     }
@@ -102,7 +102,7 @@ public class FnTaskTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> task = $.fn(
                 () -> 2,
                 () -> 3,
-                (x, y) -> x * y).apply();
+                (x, y) -> x * y);
 
         int got = task.get();
         assertEquals(6, got);
@@ -110,11 +110,11 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void supFutureBiFunction() throws Exception {
-        CompletableFuture<Integer> t2 = $.fn(() -> 3).apply();
+        CompletableFuture<Integer> t2 = $.fn(() -> 3);
         CompletableFuture<Integer> task = $.fn(
                 () -> 2,
                 t2,
-                (x, y) -> x * y).apply();
+                (x, y) -> x * y);
 
         int got = task.get();
         assertEquals(6, got);
@@ -122,11 +122,11 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void futureSupBiFunction() throws Exception {
-        CompletableFuture<Integer> t1 = $.fn(() -> 2).apply();
+        CompletableFuture<Integer> t1 = $.fn(() -> 2);
         CompletableFuture<Integer> task = $.fn(
                 t1,
                 () -> 3,
-                (x, y) -> x * y).apply();
+                (x, y) -> x * y);
 
         int got = task.get();
         assertEquals(6, got);
@@ -134,12 +134,12 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void futureSupBiConsumer() throws Exception {
-        CompletableFuture<Integer> t1 = $.fn(() -> 2).apply();
+        CompletableFuture<Integer> t1 = $.fn(() -> 2);
         Simple simple = new Simple();
         CompletableFuture<Void> task = $.vfn(
                 t1,
                 () -> 3,
-                (x, y) -> simple.input = x + y).apply();
+                (x, y) -> simple.input = x + y);
 
         task.get();
         assertEquals(5, simple.input);
@@ -147,12 +147,12 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void supFutureBiConsumer() throws Exception {
-        CompletableFuture<Integer> t2 = $.fn(() -> 3).apply();
+        CompletableFuture<Integer> t2 = $.fn(() -> 3);
         Simple simple = new Simple();
         CompletableFuture<Void> task = $.vfn(
                 () -> 2,
                 t2,
-                (x, y) -> simple.input = x + y).apply();
+                (x, y) -> simple.input = x + y);
 
         task.get();
         assertEquals(5, simple.input);
@@ -160,13 +160,13 @@ public class FnTaskTest extends BaseOrchestratorTest {
 
     @Test
     public void futureFutureBiConsumer() throws Exception {
-        CompletableFuture<Integer> t1 = $.fn(() -> 2).apply();
-        CompletableFuture<Integer> t2 = $.fn(() -> 3).apply();
+        CompletableFuture<Integer> t1 = $.fn(() -> 2);
+        CompletableFuture<Integer> t2 = $.fn(() -> 3);
         Simple simple = new Simple();
         CompletableFuture<Void> task = $.vfn(
                 t1,
                 t2,
-                (x, y) -> simple.input = x + y).apply();
+                (x, y) -> simple.input = x + y);
 
         task.get();
         assertEquals(5, simple.input);
@@ -178,7 +178,7 @@ public class FnTaskTest extends BaseOrchestratorTest {
         CompletableFuture<Void> task = $.vfn(
                 () -> 2,
                 () -> 3,
-                (x, y) -> simple.input = x + y).apply();
+                (x, y) -> simple.input = x + y);
 
         task.get();
         assertEquals(5, simple.input);
