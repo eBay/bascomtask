@@ -149,6 +149,7 @@ public class Engine implements Orchestrator {
             if (!cf.isDone()) {  // Redundant with later checks, but done here to avoid bookkeeping overhead for common cases
                 BlockingQueue<CrossThreadChannel> waiting = new LinkedBlockingDeque<>(1);
                 cf.whenComplete((msg, ex) -> {
+                    System.out.println("Completed! " + cf);
                     // Prevents run() method from taking it (it's ok if it's already taken it)
                     if (!idleThreads.remove(waiting)) {
                         // This is ok, just log for information purposes

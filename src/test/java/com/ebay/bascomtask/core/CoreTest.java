@@ -449,6 +449,13 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(6, got);
     }
 
+    @Test
+    public void externalToExternal() throws Exception  {
+        CompletableFuture<Integer> cf1 = CompletableFuture.supplyAsync(()->sleepThen(20,1));
+        CompletableFuture<Integer> cf2 = $.task(task()).inc(cf1).thenApply(v->v+1);
+        assertEquals(3,(int)cf2.get());
+    }
+
     private int getFromPoolsOfSize(CompletableFuture<Integer> cf, int size) throws Exception {
         ExecutorService svc = Executors.newFixedThreadPool(size);
         try {
@@ -822,6 +829,28 @@ public class CoreTest extends BaseOrchestratorTest {
     public void addCondTrueTrue() throws Exception {
         cond(true, 1, true, 1, true);
         cond(false, 1, true, 1, true);
+    }
+
+    @Test
+    public void slowCond() throws Exception {
+        CompletableFuture<Boolean> fCond = $.task(task().delayFor(20)).name("cond").ret(true);
+        CompletableFuture<Integer> fThen = $.task(task().delayFor(1)).name("then").ret(1);
+        CompletableFuture<Integer> fElse = $.task(task().delayFor(1)).name("else").ret(2);
+
+        CompletableFuture<Integer> r = $.cond(fCond,fThen,true,fElse,true);
+
+        assertEquals(1,(int)r.get());
+    }
+
+    @Test
+    public void slowElse() throws Exception {
+        CompletableFuture<Boolean> fCond = $.task(task().delayFor(1)).name("cond").ret(false);
+        CompletableFuture<Integer> fThen = $.task(task().delayFor(1)).name("then").ret(1);
+        CompletableFuture<Integer> fElse = $.task(task().delayFor(20)).name("else").ret(2);
+
+        CompletableFuture<Integer> r = $.cond(fCond,fThen,true,fElse,true);
+
+        assertEquals(2,(int)r.get());
     }
 
     ///

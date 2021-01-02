@@ -230,6 +230,13 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new SupplierTask.SupplierTask0<>(fn));
     }
 
+    /**
+     * Produces function task value that takes no arguments and produces one result.
+     *
+     * @param fn  function to apply to that pojo if/when task is activated
+     * @param <R> type of return result
+     * @return Function task
+     */
     default <R> CompletableFuture<R> fn(Supplier<R> fn) {
         return fnTask(fn).light().apply();
     }
@@ -248,6 +255,15 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new SupplierTask.SupplierTask1<>(in1, fn));
     }
 
+    /**
+     * Produces function task value that takes one argument and produces one result.
+     *
+     * @param s1   Supplier function (returns a value)
+     * @param fn   function to apply to that pojo if/when task is activated
+     * @param <IN> type of input
+     * @param <R>  type of return result
+     * @return Function task
+     */
     default <IN, R> CompletableFuture<R> fn(Supplier<IN> s1, Function<IN, R> fn) {
         return fnTask(s1,fn).light().apply();
     }
@@ -265,6 +281,15 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new SupplierTask.SupplierTask1<>(in, fn));
     }
 
+    /**
+     * Produces function task value that takes one non-lambda argument and produces one result.
+     *
+     * @param in   provides result to be applied to function
+     * @param fn   function to apply to that pojo if/when task is activated
+     * @param <IN> base type of input
+     * @param <R>  type of return result
+     * @return Function task
+     */
     default <IN, R> CompletableFuture<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
         return fnTask(in,fn).light().apply();
     }
@@ -284,6 +309,17 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new SupplierTask.SupplierTask2<>(in1, in2, fn));
     }
 
+    /**
+     * Produces function task value that takes two non-lambda arguments and produces one result.
+     *
+     * @param in1   provides first value for fn
+     * @param in2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> base type of input1
+     * @param <IN2> base type of input2
+     * @param <R>   type of return result
+     * @return Function task
+     */
     default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
         return fnTask(in1,in2,fn).light().apply();
     }
@@ -304,6 +340,17 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return fnTask(in1, in2, fn);
     }
 
+    /**
+     * Produces function task value that takes mixed arguments and produces one result.
+     *
+     * @param s1    provides first value for fn
+     * @param in2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> type of input1
+     * @param <IN2> base type of input2
+     * @param <R>   type of return result
+     * @return Function task
+     */
     default <IN1, IN2, R> CompletableFuture<R> fn(Supplier<IN1> s1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
         return fnTask(s1, in2, fn).light().apply();
     }
@@ -324,6 +371,17 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return fnTask(in1, in2, fn);
     }
 
+    /**
+     * Produces function task value that takes mixed arguments and produces one result.
+     *
+     * @param in1   provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> base type of input1
+     * @param <IN2> type of input2
+     * @param <R>   type of return result
+     * @return Function task
+     */
     default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
         return fnTask(in1, s2, fn).light().apply();
     }
@@ -345,6 +403,17 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return fnTask(in1, in2, fn);
     }
 
+    /**
+     * Produces function task value that takes two lambda arguments and produces one result.
+     *
+     * @param s1    provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> type of input1
+     * @param <IN2> type of input2
+     * @param <R>   type of return result
+     * @return Function task
+     */
     default <IN1, IN2, R> CompletableFuture<R> fn(Supplier<IN1> s1, Supplier<IN2> s2, BiFunction<IN1, IN2, R> fn) {
         return fnTask(s1, s2, fn).light().apply();
     }
@@ -362,6 +431,14 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new ConsumerTask.ConsumerTask1<>(in1, fn));
     }
 
+    /**
+     * Produces function task value that takes one lambda argument and produces no result.
+     *
+     * @param s1   provides value for fn
+     * @param fn   function to apply to that pojo if/when task is activated
+     * @param <IN> type of input1
+     * @return Function task
+     */
     default <IN> CompletableFuture<Void> vfn(Supplier<IN> s1, Consumer<IN> fn) {
         return vfnTask(s1, fn).light().apply();
     }
@@ -381,6 +458,16 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new ConsumerTask.ConsumerTask2<>(cf1, in2, fn));
     }
 
+    /**
+     * Produces function task value that takes mixed arguments and produces no result.
+     *
+     * @param cf1   provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> base type of input1
+     * @param <IN2> type of input2
+     * @return Function task
+     */
     default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
         return vfnTask(cf1,s2,fn).light().apply();
     }
@@ -399,6 +486,16 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new ConsumerTask.ConsumerTask2<>(cf1, cf2, fn));
     }
 
+    /**
+     * Produces function task value that takes non-lambda arguments and produces no result.
+     *
+     * @param cf1   provides first value for fn
+     * @param cf2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> base type of input1
+     * @param <IN2> base type of input2
+     * @return Function task
+     */
     default <IN1, IN2> CompletableFuture<Void> vfn(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
         return vfnTask(cf1,cf2,fn).light().apply();
     }
@@ -418,6 +515,16 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new ConsumerTask.ConsumerTask2<>(in1, cf2, fn));
     }
 
+    /**
+     * Produces function task value that takes mixed arguments and produces no result.
+     *
+     * @param s1    provides first value for fn
+     * @param cf2   provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> type of input1
+     * @param <IN2> base type of input2
+     * @return Function task
+     */
     default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
         return vfnTask(s1,cf2,fn).light().apply();
     }
@@ -438,6 +545,16 @@ public interface Orchestrator extends CommonConfig, SpawnMode.SpawnModable {
         return task(new ConsumerTask.ConsumerTask2<>(in1, in2, fn));
     }
 
+    /**
+     * Produces function task value that takes two lambda arguments and produces no result.
+     *
+     * @param s1    provides first value for fn
+     * @param s2    provides second value for fn
+     * @param fn    function to apply to that pojo if/when task is activated
+     * @param <IN1> type of input1
+     * @param <IN2> type of input2
+     * @return Function task
+     */
     default <IN1, IN2> CompletableFuture<Void> vfn(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
         return vfnTask(s1,s2,fn).light().apply();
     }

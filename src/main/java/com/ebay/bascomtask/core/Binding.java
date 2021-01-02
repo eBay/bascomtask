@@ -131,7 +131,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
             pending = runAccordingToMode(pending, "activate");
         } else {
             for (BascomTaskFuture<?> next : inputs) {
-                pending = next.activate(this, pending, true);
+                pending = next.activate(this, pending);
                 if (next.isCompletedExceptionally()) {
                     // Once an exception is found, propagate it to our output
                     propagateMostUsefulFault();

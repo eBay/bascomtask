@@ -31,24 +31,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 class FateTask extends Binding<Boolean> implements TaskInterface<FateTask> {
     private static final Logger LOG = LoggerFactory.getLogger(FateTask.class);
 
-    private static final CompletableFuture<Boolean> TRUE_FUTURE = CompletableFuture.completedFuture(true);
-    private static final CompletableFuture<Boolean> FALSE_FUTURE = CompletableFuture.completedFuture(false);
-
-    //private final BascomTaskFuture<?>[] cargs;
-    private CompletableFuture<Boolean> result = FALSE_FUTURE;
-    private AtomicBoolean executed = new AtomicBoolean(false);
+    private CompletableFuture<Boolean> result = CompletableFuture.completedFuture(false);
+    private final AtomicBoolean executed = new AtomicBoolean(false);
 
     FateTask(Engine engine, CompletableFuture<?>... cfs) {
         super(engine);
-        for (int i = 0; i < cfs.length; i++) {
-            ensureWrapped(cfs[i], true);
+        for (CompletableFuture<?> cf : cfs) {
+            ensureWrapped(cf, true);
         }
-        /*
-        cargs = new BascomTaskFuture[cfs.length];
-        for (int i=0; i<cfs.length; i++) {
-            cargs[i] = ensureWrapped(cfs[i],true);
-        }
-         */
     }
 
     @Override
@@ -56,10 +46,16 @@ class FateTask extends Binding<Boolean> implements TaskInterface<FateTask> {
         return result;
     }
 
+    /**
+     * Intercepts parent method to prevent fault propagation.
+     *
+     * @param t     being thrown
+     * @param fates list of FateTasks to collect
+     */
     @Override
     void faultForward(Throwable t, List<FateTask> fates) {
         if (executed.compareAndSet(false, true)) {
-            result = TRUE_FUTURE;
+            result = CompletableFuture.completedFuture(true);
             LOG.debug("Swallowing forward-fault");
             fates.add(this);
         }

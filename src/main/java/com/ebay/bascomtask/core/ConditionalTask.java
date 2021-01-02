@@ -19,12 +19,12 @@ package com.ebay.bascomtask.core;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * If-then-else, optimized for thread execution. The task also serves as its own {@link Binding}.
+ * If-then-else or if-then (if elseFuture is null), optimized for thread execution. The task also serves as its
+ * own {@link Binding} to reduce object creation for this built-in case.
  *
  * @author Brendan McCarthy
  */
 class ConditionalTask<R> extends Binding<R> implements TaskInterface<ConditionalTask<R>> {
-    private static final CompletableFuture<Void> VOID_FUTURE = CompletableFuture.completedFuture(null);
     private final BascomTaskFuture<Boolean> condition;
     final BascomTaskFuture<R> thenFuture;
     final BascomTaskFuture<R> elseFuture;
@@ -56,7 +56,8 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
 
     private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate) {
         if (activate && bascomTaskFuture != null) {
-            pending = bascomTaskFuture.activate(this, pending, false);
+            // Activate it, but don't connect its completion yet -- that will happen once condition is resolved
+            pending = bascomTaskFuture.getBinding().activate(pending);
         }
         return pending;
     }
@@ -69,14 +70,15 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
      */
     @Override
     Binding<?> doActivate(Binding<?> pending) {
-        pending = condition.activate(this, pending, true);
+        pending = condition.activate(this, pending);
         pending = activateIf(pending, thenFuture, thenActivate);
         pending = activateIf(pending, elseFuture, elseActivate);
         return pending;
     }
 
     /**
-     * Ensures that the condition of choice is activated. This is called after the condition has completed.
+     * When condition is ready this will be called, and here we ensure the right choice is activated
+     * (if not already) and its output linked back to this object.
      *
      * @param pending to process
      * @return pending
@@ -91,7 +93,7 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
             choice = which ? thenFuture : elseFuture;
         }
         if (choice != null) {
-            pending = choice.activate(this, pending, true);
+            pending = choice.activate(this, pending);
         }
         return super.onReady(pending);
     }
@@ -102,7 +104,7 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
         if (get(condition)) {
             return thenFuture;
         } else if (elseFuture == null) {
-            return VOID_FUTURE;
+            return CompletableFuture.completedFuture(null);
         } else {
             return elseFuture;
         }

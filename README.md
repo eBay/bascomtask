@@ -6,7 +6,7 @@ of labor:
 
 * Enforcing separation of concerns between tasks
 * Unifying cross-cutting capabilities such as logging and exception handling across tasks
-* Parallel execution among tasks
+* Parallel execution among tasks that can be time-wise expensive on their own 
 
 A means to wire together and execute these tasks is needed, often referred to as "task orchestration". A common 
 challenge in making this work is specifying what can be run in parallel while ensuring strict dependency ordering.
@@ -17,6 +17,7 @@ to considerable complexities. BascomTask is a lightweight task orchestration lib
 * **Optimal thread management** that spawns threads automatically only when it is advantageous to do so
 * **Lazy execution** that automatically determines what to execute while freely allowing the execution graph to be extended at any time 
 * **Fully asynchronous operation** with complete integration with Java 8+ CompletableFutures
+* Flexible and powerful mechanisms for managing **task exceptions**
 * **Extensible task execution wrappers** with pre-existing built-ins for logging and profiling
 
 
@@ -111,7 +112,9 @@ initiates execution such that any task's inputs are executed prior to it being s
 Because of this lazy execution, it is not costly to create many tasks and only later determine 
 which ones are needed; the framework will determine the minimal spanning set of tasks to actually execute, and then 
 proceed in a dataflow-forward execution style, executing tasks once (and only when) all their inputs are available 
-and completed. Since the dependency analysis is determined from the method signatures themselves, it is not possible 
+and completed. 
+
+> Since the dependency analysis is determined from the method signatures themselves, it is not possible
 to mistakenly execute a task before its parameters are ready.
 
 ## General Programming Model
@@ -185,6 +188,13 @@ CompletableFutures that originate externally to BascomTask can be used as task m
 BascomTask-managed CompletableFutures. BascomTask-managed CompletableFutures can be used externally to BascomTask 
 just like any other CompletableFuture. BascomTask thus fits naturally into any asynchronous execution scheme.
 
+In this simple (though not very useful) example, a CompletableFuture from some other source is fed into a task and that
+output through a thenApply function:
+```
+    CompletableFuture<Integer> fromSomewereElse = ..
+    CompletableFuture<integer> result = $.task(new MyTask()).computeSomething(fromSomwhereElse))).thenAccept(v->doSomethingWith(v));
+```
+The CompletableFuture result will now reflect having applied MyTask.computeSomething to the fromSomewhereElse value.
 
 ## Conditional Execution
 
@@ -253,6 +263,9 @@ that multiplies them together:
             ()->3,
             (x,y)->x*y);
 ```
+Consumer functions (producing void results) are called with vfn/vfnTask rather than fn/fnTask. They produce a
+CompletableFuture<Void> that _must_ be accessed (e.g. by get() or execute()) in order to make the function execute. 
+
 
 ### User Task Adaptors
 A variation of the _task()_ call can adapt POJO tasks that do not have interfaces and/or do not take or 

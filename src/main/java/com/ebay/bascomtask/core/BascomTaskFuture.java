@@ -104,7 +104,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         binding.onCompletion(lbs);
     }
 
-    Binding<?> activate(Binding<?> becomingActivated, Binding<?> pending, boolean callArgReady) {
+    Binding<?> activate(Binding<?> becomingActivated, Binding<?> pending) {
         boolean complete = true;
         if (listenerBindings != null) {
             // If this CF has already completed, listenerBindings will be null
@@ -118,7 +118,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         }
 
         pending = binding.activate(pending);
-        if (complete && callArgReady) {
+        if (complete) {
             // Only propagate forward if not done already
             pending = becomingActivated.argReady(pending);
         }
