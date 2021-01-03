@@ -413,45 +413,45 @@ NEVER_SPAWN.
 
 ### Task Runners
 The execution of each task method can be intercepted/decorated by adding (any number of) TaskRunners to an 
-Orchestrator, again on a per Orchestrator basis or for all Orchestrators through GlobalConfig. You can write your 
-own or use a built-in from the BascomTask library:
+Orchestrator. You can write your own or use a built-in from the BascomTask library:
 
 * LogTaskRunner for logging ingress/egress of tasks
 * StatTaskRunner for collecting aggregate timing information across tasks
-* ProfilingTaskRunner for generating execution profiles for an Orchestrator 
+* ProfilingTaskRunner for generating execution profiles for an Orchestrator
 
-The ability to customize and replace the global configuration object is particularly useful for TaskRunners like
-ProfilingTaskRunner, which are restricted to working against a single Orchestrator (unlike LogTaskRunner, for 
-example, which maintains no state). While it is straightforward to add a ProfilingTaskRunner to any individual
-Orchestrator, that can be tedious if there are many to deal with. The global configuration object provides a hook
-method that you can use to modify each Orchestrator on its creation. In the case of ProfilingTaskOrchestrator,
-we not only want to set it but also to retrieve at a later time in order to obtain its profiling graph. These
-can be stored in some global map or, as in the following example, a ThreadLocal variable; an Orchestrator
-created from that thread will be profiled with that runner, while calling report() at the desired time will print
-its results:
+There are several ways to add a TaskRunner:
+
+* Directly to an Orchestrator
+* To GlobalConfig.getConfig().first/lastInterceptWith(), in which case that same TaskRunner instance will 
+  be added to all Orchestrators
+* Add an initializer function to GlobalConfig.getConfig().initializeWith() to generate a new TaskRunner instance that
+  will be added to all new Orchestrators
+* Using ThreadLocalRunner which, in addition to the previous, stores the TaskRunner using TheadLocal storage
+  for later access
+
+ProfilingTaskRunner is a good choice for the latter options above, because it maintains state that is generally only
+useful in the context of a single Orchestrator (LogTaskRunner, as a contrary example, maintains no state). The 
+following example uses a ThreadLocalRunner to set a ProfilingTaskRunner initializer function in one method and 
+retrieve it in another method and print its report:
 
 ```java
-class Profiler {
-    private final ThreadLocal<ProfilingTaskRunner> threadRunner = new ThreadLocal<>();
+class MyProfiler {
+    private final ThreadLocalRunners<ProfilingTaskRunner> runner = new ThreadLocalRunners<>();
 
-     public static void init() {
-         GlobalConfig.setConfig(new GlobalConfig.Config() {
-             @Override
-             public void afterDefaultInitialization(Orchestrator orchestrator, Object arg) {
-                 ProfilingTaskRunner ptr = new ProfilingTaskRunner();
-                 threadRunner.set(ptr);
-                 orchestrator.firstInterceptWith(ptr);
-             }
-         });
-     }
-     
-     public static void report() {
-        ProfilingTaskRunner ptr = threadRunner.get();
-        System.out.println(ptr.format());
+    public static void init() {
+        runner.firstInterceptWith(ProfilingTaskRunner::new);
+    }
+    
+    public static void report() {
+        ProfilingTaskRunner ptr = runner.getAndClear();
+        if (ptr != null) {
+            System.out.println(ptr.format());
+        }
     }
 }
 ```
-
+Between the call to _init()_ and _report()_, if an Orchestrator is created then its profile will be printed in
+the call to _report()_.
 
 ---
 ## License Information

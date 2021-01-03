@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BiConsumer;
 
 /**
  * Maintains configuration settings that will be applied to new Orchestrators.
@@ -37,16 +38,20 @@ public class GlobalConfig {
 
     private static Config globalConfig = DEFUALT_CONFIG;
 
+    interface ExtendedConfig extends CommonConfig {
+        void initializeWith(BiConsumer<Orchestrator,Object> fn);
+    }
 
     /**
      * Default implementation maintains values that are transferred to an Orchestrator on demand.
      */
-    public abstract static class Config implements CommonConfig {
+    public abstract static class Config implements ExtendedConfig {
         protected ExecutorService executorService;
         protected final List<TaskRunner> first = new ArrayList<>();
         protected final List<TaskRunner> last = new ArrayList<>();
         protected SpawnMode spawnMode;
         protected long timeoutMs;
+        protected final List<BiConsumer<Orchestrator,Object>> initializers = new ArrayList<>();
 
         protected Config() {
             restoreConfigurationDefaults(null);
@@ -67,6 +72,9 @@ public class GlobalConfig {
             }
             for (TaskRunner next : last) {
                 orchestrator.lastInterceptWith(next);
+            }
+            for (BiConsumer<Orchestrator,Object> next : initializers) {
+                next.accept(orchestrator,arg);
             }
             afterDefaultInitialization(orchestrator, arg);
         }
@@ -89,6 +97,7 @@ public class GlobalConfig {
             setTimeoutMs(0);
             removeAllTaskRunners();
             restoreDefaultExecutorService();
+            initializers.clear();
         }
 
         @Override
@@ -151,6 +160,11 @@ public class GlobalConfig {
         public void removeAllTaskRunners() {
             first.clear();
             last.clear();
+        }
+
+        @Override
+        public void initializeWith(BiConsumer<Orchestrator,Object> fn) {
+            initializers.add(fn);
         }
     }
 
