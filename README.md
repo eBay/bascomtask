@@ -453,6 +453,10 @@ class MyProfiler {
 Between the call to _init()_ and _report()_, if an Orchestrator is created then its profile will be printed in
 the call to _report()_.
 
+Also of note is that the configuration object returned by GlobalConfig.getConfig() can be replaced entirely, with an
+instance from a custom class extending the existing configuration class or an entirely different one. A use case
+that leverages this capability might be to pull configuration information from an external configuration store.
+
 ---
 ## License Information
        
