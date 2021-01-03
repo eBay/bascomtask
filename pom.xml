@@ -3,8 +3,9 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.ebay.bascomtask</groupId>
-    <artifactId>bascomtask</artifactId>
+    <artifactId>bascomtask-project</artifactId>
     <version>2.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Java lightweight parallel task orchestration</description>
@@ -46,20 +47,9 @@
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
-    <dependencies>
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.1.7</version>
-        </dependency>
-
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.1</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <modules>
+      <module>bascomtask-core</module>
+    </modules>
 
     <build>
         <plugins>
