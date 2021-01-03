@@ -426,7 +426,7 @@ example, which maintains no state). While it is straightforward to add a Profili
 Orchestrator, that can be tedious if there are many to deal with. The global configuration object provides a hook
 method that you can use to modify each Orchestrator on its creation. In the case of ProfilingTaskOrchestrator,
 we not only want to set it but also to retrieve at a later time in order to obtain its profiling graph. These
-can be stored in some global map or, as in the following example, a ThreadLocal variable; then any Orchestrator
+can be stored in some global map or, as in the following example, a ThreadLocal variable; an Orchestrator
 created from that thread will be profiled with that runner, while calling report() at the desired time will print
 its results:
 
