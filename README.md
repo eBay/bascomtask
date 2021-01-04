@@ -207,9 +207,11 @@ level, the condition is known during graph construction, allowing a simple choic
    boolean cond = ...
    CompletableFuture f1 = cond ? $.task(new Task1()).compute1(...) : $.task(new Task2()).compute2(...);
 ```
-Sometimes, however, the condition itself must be executed by a task. While this can be handled within a nested task,
-BascomTask provides a convenience form for this case. Suppose we have a task _SomeConditionTask_ with a method that
-produces a boolean result, then the following can be applied:
+Sometimes, however, the condition itself must be executed by a task. While you can compute _cond_ by a _get()_ on
+the task method the produces the boolean condition, that would block until completed, and you may not even want
+the entire conditional block to be executed in the first place. That could be avoided by moving the conditional logic 
+itself to its own task, but BascomTask already provides a convenience form for. Suppose we have a task 
+_SomeConditionTask_ with a method that produces a boolean result, then the following can be applied:
 
 ```
    CompletableFuture<Boolean> cond = $.task(new SomeConditionTask()).computeCondition(...);
