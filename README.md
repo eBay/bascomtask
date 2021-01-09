@@ -77,11 +77,11 @@ but for clarity they are separated:
     }
     
     public interface ICombinerTask extends TaskInterface<ICombinerTask> {
-        CompletableFture<String> combine(CompletableFuture<String> a, CompletableFuture<String> b);
+        CompletableFuture<String> combine(CompletableFuture<String> a, CompletableFuture<String> b);
     }
 
     public class CombinerTask implements ICombinerTask {
-        public CompletableFture<String> combine(CompletableFuture<String> a, CompletableFuture<String> b) {
+        public CompletableFuture<String> combine(CompletableFuture<String> a, CompletableFuture<String> b) {
             return get(a) + ' ' + get(b);
         }
     }
@@ -98,8 +98,8 @@ With the above task definitions in place, we can wire them together like this:
    class MyService {
        String getMessage() {
            Orchestrator $ = Orchestrator.create();
-           CompletableFuture<String> left = $.task(new EchoTask().echo("Hello"));
-           CompletableFuture<String> right = $.task(new EchoTask().echo("world"));
+           CompletableFuture<String> left = $.task(new EchoTask()).echo("Hello");
+           CompletableFuture<String> right = $.task(new EchoTask()).echo("world");
            CompletableFuture<String> combine = $.task(new CombinerTask()).combine(left, right);
            return cmobine.get();
        }

@@ -36,19 +36,22 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     final Engine engine;
 
-    // Set to true when this binding's task method will be or has been executed
+    // Set to true when this binding's task is scheduled for execution, either immediately oe once its
+    // arguments are ready; only ever set from false to true, and that only happens once
     private final AtomicBoolean activated = new AtomicBoolean(false);
 
     // Subset of args that are BascomTaskFutures
     private final List<BascomTaskFuture<?>> inputs = new ArrayList<>();
 
-    // Only ever gets reset from false to true, not thread-safety issue
+    // Only ever gets reset from false to true, not a thread-safety issue as it doesn't matter if it
+    // it set to true multiple times
     private boolean started = false;
 
     // The output for this task method invocation
     private final BascomTaskFuture<RETURNTYPE> output = new BascomTaskFuture<>(this);
 
-    // Number of inputs that are completed and ready
+    // Number of inputs that are completed and ready; when these reaches the threshold, all arguments are
+    // available and the task method is ready to fire (execute)
     private final AtomicInteger readyCount = new AtomicInteger();
 
     // Cached because logging/profiling can call repeatedly
