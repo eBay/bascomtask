@@ -560,21 +560,44 @@ public class CoreTest extends BaseOrchestratorTest {
     @Test(expected = TimeoutExceededException.class)
     public void timeoutOrchestrator() throws Exception {
         $.setTimeout(5, TimeUnit.MILLISECONDS);
-        $.task(task(0).delayFor(20)).ret(1).get();
+        CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).name("delayed").ret(1);
+        $.task(task(0)).name("follow").inc(f1).get();
     }
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobal() throws Exception {
-        GlobalConfig.getConfig().setTimeout(5, TimeUnit.MILLISECONDS);
+        GlobalConfig.getConfig().setTimeout(20, TimeUnit.MILLISECONDS);
         $ = Orchestrator.create("timer");  // So it picks up global settings
-        $.task(task(0).delayFor(20)).ret(1).get();
+        CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).name("delayed").ret(1);
+        $.task(task(0)).name("follow").inc(f1).get();
     }
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobalSpawned() throws Exception {
-        GlobalConfig.getConfig().setTimeout(5, TimeUnit.MILLISECONDS);
+        GlobalConfig.getConfig().setTimeout(20, TimeUnit.MILLISECONDS);
         $ = Orchestrator.create("timer");  // So it picks up global settings
-        $.task(task(0).delayFor(20)).runSpawned().ret(1).get();
+        CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).runSpawned().name("delayed").ret(1);
+        $.task(task(0)).name("follow").inc(f1).get();
+    }
+
+    @Test(expected = TimeoutExceededException.class)
+    public void timeoutGetSpawned() throws Exception {
+        CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).runSpawned().name("delayed").ret(1);
+        $.task(task(0)).name("follow").inc(f1).get(20,TimeUnit.MILLISECONDS);
+    }
+
+    @Test(expected = TimeoutExceededException.class)
+    public void timeouOnOnePathOnly() throws Exception {
+        CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).runSpawned().name("f1-delayed").ret(1);
+        CompletableFuture<Integer> f2 = $.task(task(0)).name("f2-follow").inc(f1);
+
+        int exp = mode == SpawnMode.NEVER_SPAWN ? 0 : 1;
+        CompletableFuture<Integer> g1 = $.task(task(exp).delayFor(4)).runSpawned().name("g1-delayed").ret(1);
+        CompletableFuture<Integer> g2 = $.task(task(exp)).name("g2-follow").inc(g1);
+
+        $.execute(20,f2,g2);
+        assertEquals(2,(int)g2.get());
+        f2.get();
     }
 
     @Test

@@ -30,7 +30,7 @@ class ExternalBinding<RETURNTYPE> extends Binding<RETURNTYPE> {
     }
 
     @Override
-    Binding<?> doActivate(Binding<?> pending) {
+    Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
         return pending;
     }
 

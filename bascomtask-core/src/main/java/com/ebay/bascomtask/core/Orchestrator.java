@@ -104,7 +104,17 @@ public interface Orchestrator extends CommonConfig {
      *
      * @param futures to execute
      */
-    void execute(CompletionStage<?>... futures);
+    default void execute(CompletionStage<?>... futures) {
+        execute(0, futures);
+    }
+
+    /**
+     * Like {@link #execute(CompletionStage[])}, but establishes a timeout after which new tasks activated by this
+     * call will not be started.
+     * @param timeoutMs timout in milliseconds
+     * @param futures to execute
+     */
+    void execute(long timeoutMs, CompletionStage<?>... futures);
 
     /**
      * Variant of {@link #execute(CompletionStage[])} that waits for all of its arguments to finish and
@@ -112,7 +122,18 @@ public interface Orchestrator extends CommonConfig {
      *
      * @param futures to execute and then wait on
      */
-    void executeAndWait(CompletableFuture<?>... futures);
+    default void executeAndWait(CompletableFuture<?>... futures) {
+        executeAndWait(0,futures);
+    }
+
+    /**
+     * Like {@link #executeAndWait(CompletableFuture[])}, but establishes a timeout after which new tasks
+     * activated by this call will not be started.
+     *
+     * @param timeoutMs timout in milliseconds
+     * @param futures to execute
+     */
+    void executeAndWait(long timeoutMs, CompletableFuture<?>... futures);
 
     /**
      * Execute the supplied future depending on the supplied condition. The future is not executed until

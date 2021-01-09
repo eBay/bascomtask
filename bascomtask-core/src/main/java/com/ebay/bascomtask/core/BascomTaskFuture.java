@@ -104,7 +104,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         binding.onCompletion(lbs);
     }
 
-    Binding<?> activate(Binding<?> becomingActivated, Binding<?> pending) {
+    Binding<?> activate(Binding<?> becomingActivated, Binding<?> pending, TimeBox timeBox) {
         boolean complete = true;
         if (listenerBindings != null) {
             // If this CF has already completed, listenerBindings will be null
@@ -117,7 +117,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
             }
         }
 
-        pending = binding.activate(pending);
+        pending = binding.activate(pending,timeBox);
         if (complete) {
             // Only propagate forward if not done already
             pending = becomingActivated.argReady(pending);
@@ -139,7 +139,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     //////////////////////////////////////////////////////////////////////
 
     @Override
-    public T get() throws InterruptedException {
+    public T get() throws InterruptedException, ExecutionException {
         binding.engine.executeAndReuseUntilReady(this);
         try {
             return super.get();
@@ -147,6 +147,18 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
             throw rethrow(e);
         }
     }
+
+    @Override
+    public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        binding.engine.executeAndReuseUntilReady(this, timeout,unit);
+        try {
+            return super.get();
+        } catch (ExecutionException e) {
+            throw rethrow(e);
+        }
+    }
+
+    // TODO onTimeout
 
     @Override
     public T join() {

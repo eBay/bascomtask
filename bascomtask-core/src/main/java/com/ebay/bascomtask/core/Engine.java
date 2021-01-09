@@ -146,8 +146,17 @@ public class Engine implements Orchestrator {
     }
 
     void executeAndReuseUntilReady(CompletableFuture<?> cf) {
-        execute(cf);
-        waitUntilComplete(cf);
+        executeAndReuseUntilReady(cf,timeoutMs);
+    }
+
+    void executeAndReuseUntilReady(CompletableFuture<?> cf, long timeout, TimeUnit timeUnit) {
+        timeout = timeUnit.toMillis(timeout);
+        executeAndReuseUntilReady(cf,timeout);
+    }
+
+    void executeAndReuseUntilReady(CompletableFuture<?> cf, long timeoutMs) {
+        execute(timeoutMs,cf);
+        waitUntilComplete(timeoutMs,cf);
     }
 
     /**
@@ -156,10 +165,11 @@ public class Engine implements Orchestrator {
      * tasks) in the meantime since that thread would block on the the read call while we otherwise would have to
      * pull a new task from the thread pool.
      *
+     * @param timeoutMs here prevents main-thread reuse if is not zero (meaning no timeout is in effect)
      * @param cf to start are watch for completion
      */
-    private void waitUntilComplete(CompletableFuture<?> cf) {
-        if (getSpawnMode().isMainThreadReusable()) {
+    private void waitUntilComplete(long timeoutMs, CompletableFuture<?> cf) {
+        if (getSpawnMode().isMainThreadReusable() && timeoutMs==0) {
             if (!cf.isDone()) {  // Redundant with later checks, but done here to avoid bookkeeping overhead for common cases
                 BlockingQueue<CrossThreadChannel> waiting = new LinkedBlockingDeque<>(1);
                 cf.whenComplete((msg, ex) -> {
@@ -220,54 +230,37 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public void execute(CompletionStage<?>... futures) {
-        final long ms = getTimeoutMs();
-        if (ms > 0 && !isBtManagedThread.get()) {
-            // It would be wasteful to do this on BT-managed threads which during execution could easily
-            // result in this method being called recursively
-            executedTimed(ms, futures);
-        } else {
-            executeInternal("untimed", futures);
-        }
+    public void execute(long timeoutMs, CompletionStage<?>... futures) {
+        TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
+        execute(timeBox,futures);
     }
 
-    private void executedTimed(long ms, CompletionStage<?>[] futures) {
-        executorService.execute(() -> executeInternal("timed", futures));
-        boolean timedOut;
-        try {
-            timedOut = !executorService.awaitTermination(ms, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            timedOut = true;
-        }
-        if (timedOut) {
-            String msg = timeoutMs == 0 ? "Global" : "Local";
-            throw new TimeoutExceededException(msg + " timeout " + ms + " exceeded");
-        }
-    }
-
-    @Override
-    public void executeAndWait(CompletableFuture<?>... futures) {
-        execute(futures);
-        for (CompletableFuture<?> next : futures) {
-            try {
-                next.get();
-            } catch (Exception ignored) {
-                // do nothing since our only purpose here is to wait; subsequent external calls
-                // to get() will deal with the exception
-            }
-        }
-    }
-
-    private void executeInternal(String src, CompletionStage<?>... futures) {
+    private void execute(TimeBox timeBox, CompletionStage<?>... futures) {
         Binding<?> pending = null;
         for (CompletionStage<?> next : futures) {
             if (next instanceof BascomTaskFuture) {
                 BascomTaskFuture<?> bascomTaskFuture = (BascomTaskFuture<?>) next;
-                pending = bascomTaskFuture.getBinding().activate(pending);
+                pending = bascomTaskFuture.getBinding().activate(pending,timeBox);
             }
         }
         if (pending != null) {
+            String src = timeBox.timeBudget > 0 ? "timed" : "untimed";
             pending.fire("execute", src, true);
+        }
+    }
+
+
+    @Override
+    public void executeAndWait(long timeoutMs, CompletableFuture<?>... futures) {
+        TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
+        execute(timeBox,futures);
+        for (CompletableFuture<?> next : futures) {
+            try {
+                next.get(timeBox.timeBudget,TimeUnit.MILLISECONDS);
+            } catch (Exception ignored) {
+                // do nothing since our only purpose here is to wait; subsequent external calls
+                // to get() will deal with the exception
+            }
         }
     }
 

@@ -17,6 +17,7 @@
 package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.exceptions.TaskNotStartedException;
+import com.ebay.bascomtask.exceptions.TimeoutExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Runtime bookkeeping for a method invocation on a user task.
@@ -36,9 +38,9 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     final Engine engine;
 
-    // Set to true when this binding's task is scheduled for execution, either immediately oe once its
-    // arguments are ready; only ever set from false to true, and that only happens once
-    private final AtomicBoolean activated = new AtomicBoolean(false);
+    // Set (once and only once) to a TimeBox (as supplied by a user call) when this binding's task is scheduled
+    // for execution, either immediately oe once its arguments are ready
+    private final AtomicReference<TimeBox> activated = new AtomicReference<>(null);
 
     // Subset of args that are BascomTaskFutures
     private final List<BascomTaskFuture<?>> inputs = new ArrayList<>();
@@ -69,7 +71,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
      */
     Binding(Engine engine, CompletableFuture<RETURNTYPE> cf) {
         this.engine = engine;
-        this.activated.set(true);
+        this.activated.set(TimeBox.NO_TIMEOUT);
         output.bind(cf);
     }
 
@@ -122,19 +124,19 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
      * @param pending possibly null Binding (task) that needs to be started
      * @return ready and needing to-be-executed Binding (task) that needs to be started
      */
-    final Binding<?> activate(Binding<?> pending) {
-        if (activated.compareAndSet(false, true)) {
-            pending = doActivate(pending);
+    final Binding<?> activate(Binding<?> pending, TimeBox timeBox) {
+        if (activated.compareAndSet(null, timeBox)) {
+            pending = doActivate(pending, timeBox);
         }
         return pending;
     }
 
-    Binding<?> doActivate(Binding<?> pending) {
+    Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
         if (inputs.size() == 0) {
             pending = runAccordingToMode(pending, "activate");
         } else {
             for (BascomTaskFuture<?> next : inputs) {
-                pending = next.activate(this, pending);
+                pending = next.activate(this, pending, timeBox);
                 if (next.isCompletedExceptionally()) {
                     // Once an exception is found, propagate it to our output
                     propagateMostUsefulFault();
@@ -214,7 +216,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     final Binding<?> argReady(Binding<?> pending) {
         if (readyCount.incrementAndGet() == inputs.size()) {
             pending = runAccordingToMode(pending, "completion");
-            pending = onReady(pending);
+            pending = onReady(pending, activated.get());
         }
         return pending;
     }
@@ -225,7 +227,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
      * @param pending to process
      * @return pending
      */
-    Binding<?> onReady(Binding<?> pending) {
+    Binding<?> onReady(Binding<?> pending, TimeBox timeBox) {
         return pending;
     }
 
@@ -249,7 +251,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     }
 
     void fire(String src1, String src2, boolean direct) {
-        if (activated.get()) {  // Only activated tasks are executed
+        if (activated.get() != null) {  // Only activated tasks are executed
             if (!output.isCompletedExceptionally()) {
                 //if (engine.areThereAnyExceptions()) {  // Don't fire if any exceptions have happened
                 //output.faultForward(new TaskNotStartedException("Fault detected"));
@@ -306,7 +308,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
                 throw new RuntimeException("Return value is not a CompletableFuture " + this);
             }
         } catch (Exception e) {
-            LOG.debug("Exception-exit {} from {}-{}", name, src1, src2);
+            LOG.debug("Exception-exit {} from {}-{}: {}", name, src1, src2, e.getMessage());
             faultForward(e);
         }
     }
@@ -384,6 +386,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     @Override
     public final Object run() {
         try {
+            activated.get().check(this);
             return invokeTaskMethod();
         } finally {
             endedAt = System.currentTimeMillis();

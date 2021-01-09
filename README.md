@@ -459,6 +459,23 @@ Also of note is that the configuration object returned by GlobalConfig.getConfig
 instance from a custom class extending the existing configuration class or an entirely different one. A use case
 that leverages this capability might be to pull configuration information from an external configuration store.
 
+
+## Timeouts
+CompletableFutures provide a variant of get() that takes timeout args, and in Java 9+ provide onTimeout() methods. 
+The BascomTask execute and executeWait methods, which each take a list of CompletableFutures that should be executed, 
+also take such optional arguments. Any of these calls has the same effect of ensuring that the calling thread does not 
+wait longer than the provided duration, and throw a TimeoutException if so.
+
+Threads spawned during execution are not subject to the same timeouts, neither in standard CompletableFutures nor 
+BascomTask-managed CompletableFutures. What BascomTask will do is to ensure that threads created in service of a 
+call with an exceeded timeout will not begin execution of new tasks. Tasks in spawned threads that are already 
+underway will not be interrupted.
+
+In addition, a timeout is a configurable value that can be set on an Orchestrator (or globally for all Orchestrators). 
+That timeout value is applied to requests that have not provided an explicit timeout on their own. For example, 
+a call to CompletableFuture.get() without arguments will pick up the timeout set on an Orchestrator if one has been set. 
+A TimeoutExceededException, which unlike the built-in Java TimeoutException is unchecked, is thrown in this case.
+
 ---
 ## License Information
        

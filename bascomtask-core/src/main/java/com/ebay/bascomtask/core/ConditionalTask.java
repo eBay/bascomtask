@@ -54,10 +54,10 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
         this.elseActivate = elseActivate;
     }
 
-    private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate) {
+    private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate, TimeBox timeBox) {
         if (activate && bascomTaskFuture != null) {
             // Activate it, but don't connect its completion yet -- that will happen once condition is resolved
-            pending = bascomTaskFuture.getBinding().activate(pending);
+            pending = bascomTaskFuture.getBinding().activate(pending,timeBox);
         }
         return pending;
     }
@@ -69,10 +69,10 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
      * @return pending
      */
     @Override
-    Binding<?> doActivate(Binding<?> pending) {
-        pending = condition.activate(this, pending);
-        pending = activateIf(pending, thenFuture, thenActivate);
-        pending = activateIf(pending, elseFuture, elseActivate);
+    Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
+        pending = condition.activate(this, pending, timeBox);
+        pending = activateIf(pending, thenFuture, thenActivate, timeBox);
+        pending = activateIf(pending, elseFuture, elseActivate, timeBox);
         return pending;
     }
 
@@ -84,7 +84,7 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
      * @return pending
      */
     @Override
-    Binding<?> onReady(Binding<?> pending) {
+    Binding<?> onReady(Binding<?> pending, TimeBox timeBox) {
         Boolean which = get(condition);
         BascomTaskFuture<R> choice;
         if (elseFuture == null) {
@@ -93,9 +93,9 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
             choice = which ? thenFuture : elseFuture;
         }
         if (choice != null) {
-            pending = choice.activate(this, pending);
+            pending = choice.activate(this, pending, timeBox);
         }
-        return super.onReady(pending);
+        return super.onReady(pending, timeBox);
     }
 
 
