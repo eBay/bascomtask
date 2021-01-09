@@ -14,27 +14,15 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  **************************************************************************/
-package com.ebay.bascomtask;
+package com.ebay.bascomtask.core;
 
-import com.ebay.bascomtask.core.*;
-import com.ebay.bascomtask.runners.LogTaskRunnerTest;
-import com.ebay.bascomtask.runners.ProfilingTaskRunnerTest;
-import com.ebay.bascomtask.runners.StatTaskRunnerTest;
-import com.ebay.bascomtask.timings.TimingTest;
-import org.junit.runner.RunWith;
-import org.junit.runners.Suite;
-
-@RunWith(Suite.class)
-@Suite.SuiteClasses({
-        UtilsTest.class,
-        CoreTest.class,
-        BascomTaskFutureTest.class,
-        FnTaskTest.class,
-        TaskRunnerTest.class,
-        LogTaskRunnerTest.class,
-        ProfilingTaskRunnerTest.class,
-        StatTaskRunnerTest.class,
-        TimingTest.class
-})
-public class FullTestSuite {
+/**
+ * Sample response to being interrupted on timeout.
+ *
+ * @author Brendan Mccarthy
+ */
+public class TaskInterruptedException extends RuntimeException {
+    public TaskInterruptedException(String msg) {
+        super(msg);
+    }
 }

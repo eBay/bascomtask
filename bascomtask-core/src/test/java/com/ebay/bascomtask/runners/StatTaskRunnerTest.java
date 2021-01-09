@@ -17,7 +17,6 @@
 package com.ebay.bascomtask.runners;
 
 import com.ebay.bascomtask.core.BaseOrchestratorTest;
-import com.ebay.bascomtask.core.GlobalConfig;
 import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;

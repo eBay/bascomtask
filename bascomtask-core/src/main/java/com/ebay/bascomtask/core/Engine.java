@@ -18,7 +18,6 @@ package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.exceptions.InvalidTaskException;
 import com.ebay.bascomtask.exceptions.InvalidTaskMethodException;
-import com.ebay.bascomtask.exceptions.TimeoutExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +38,7 @@ public class Engine implements Orchestrator {
     private String name;
 
     private long timeoutMs = 0;
+    private TimeoutStrategy timeoutStrategy;
     private ExecutorService executorService;
     private SpawnMode spawnMode;
 
@@ -51,6 +51,7 @@ public class Engine implements Orchestrator {
     private final AtomicInteger threadCounter = new AtomicInteger(0);
 
     // BT-managed threads are flagged for bookkeeping purposes
+    // TODO still needed?
     private final ThreadLocal<Boolean> isBtManagedThread = ThreadLocal.withInitial(() -> false);
 
     // For passing work (i.e. running tasks) back to the main thread
@@ -69,8 +70,8 @@ public class Engine implements Orchestrator {
     Engine(String name, Object arg) {
         this.name = name;
         this.uniqueIndex = engineCounter.incrementAndGet();
-        GlobalConfig.Config config = GlobalConfig.getConfig();
-        config.updateConfigurationOn(this,arg);
+        GlobalOrchestratorConfig.Config config = GlobalOrchestratorConfig.getConfig();
+        config.updateConfigurationOn(this, arg);
     }
 
     @Override
@@ -103,7 +104,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public void restoreConfigurationDefaults(Object arg) {
-        GlobalConfig.getConfig().updateConfigurationOn(this,arg);
+        GlobalOrchestratorConfig.getConfig().updateConfigurationOn(this, arg);
     }
 
     @Override
@@ -113,7 +114,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public void setSpawnMode(SpawnMode mode) {
-        this.spawnMode = mode==null ? SpawnMode.WHEN_NEEDED : mode;
+        this.spawnMode = mode == null ? SpawnMode.WHEN_NEEDED : mode;
     }
 
     @Override
@@ -124,6 +125,16 @@ public class Engine implements Orchestrator {
     @Override
     public void setTimeoutMs(long ms) {
         this.timeoutMs = ms;
+    }
+
+    @Override
+    public TimeoutStrategy getTimeoutStrategy() {
+        return timeoutStrategy;
+    }
+
+    @Override
+    public void setTimeoutStrategy(TimeoutStrategy strategy) {
+        this.timeoutStrategy = strategy;
     }
 
     @Override
@@ -138,7 +149,7 @@ public class Engine implements Orchestrator {
 
     @Override
     public void restoreDefaultExecutorService() {
-        this.executorService = GlobalConfig.getConfig().getExecutorService();
+        this.executorService = GlobalOrchestratorConfig.getConfig().getExecutorService();
     }
 
     boolean isMainThread() {
@@ -146,17 +157,17 @@ public class Engine implements Orchestrator {
     }
 
     void executeAndReuseUntilReady(CompletableFuture<?> cf) {
-        executeAndReuseUntilReady(cf,timeoutMs);
+        executeAndReuseUntilReady(cf, timeoutMs);
     }
 
     void executeAndReuseUntilReady(CompletableFuture<?> cf, long timeout, TimeUnit timeUnit) {
         timeout = timeUnit.toMillis(timeout);
-        executeAndReuseUntilReady(cf,timeout);
+        executeAndReuseUntilReady(cf, timeout);
     }
 
     void executeAndReuseUntilReady(CompletableFuture<?> cf, long timeoutMs) {
-        execute(timeoutMs,cf);
-        waitUntilComplete(timeoutMs,cf);
+        execute(timeoutMs, cf);
+        waitUntilComplete(timeoutMs, cf);
     }
 
     /**
@@ -166,10 +177,10 @@ public class Engine implements Orchestrator {
      * pull a new task from the thread pool.
      *
      * @param timeoutMs here prevents main-thread reuse if is not zero (meaning no timeout is in effect)
-     * @param cf to start are watch for completion
+     * @param cf        to start are watch for completion
      */
     private void waitUntilComplete(long timeoutMs, CompletableFuture<?> cf) {
-        if (getSpawnMode().isMainThreadReusable() && timeoutMs==0) {
+        if (getSpawnMode().isMainThreadReusable() && timeoutMs == 0) {
             if (!cf.isDone()) {  // Redundant with later checks, but done here to avoid bookkeeping overhead for common cases
                 BlockingQueue<CrossThreadChannel> waiting = new LinkedBlockingDeque<>(1);
                 cf.whenComplete((msg, ex) -> {
@@ -206,7 +217,7 @@ public class Engine implements Orchestrator {
         }
     }
 
-    void run(Runnable runnable, Thread parentThread) {
+    void run(Runnable runnable, Thread parentThread, TimeBox timeBox) {
         BlockingQueue<CrossThreadChannel> waiting = idleThreads.poll();
         if (waiting != null) { // Check for a waiting thread first
             CrossThreadChannel channel = new CrossThreadChannel(parentThread, runnable);
@@ -221,9 +232,11 @@ public class Engine implements Orchestrator {
             Thread.currentThread().setName(nm);
             LOG.debug("Spawned thread \"{}\" --> \"{}\"", parentThread.getName(), nm);
             isBtManagedThread.set(true);
+            timeBox.register(this);
             try {
                 runnable.run();
             } finally {
+                timeBox.deregister();
                 isBtManagedThread.set(false);
             }
         });
@@ -232,31 +245,43 @@ public class Engine implements Orchestrator {
     @Override
     public void execute(long timeoutMs, CompletionStage<?>... futures) {
         TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
-        execute(timeBox,futures);
+        executeWithMonitoringIfNeeded(timeBox, futures);
     }
 
-    private void execute(TimeBox timeBox, CompletionStage<?>... futures) {
+    /**
+     * Initiates execution, and if the TimeoutStrategy calls for it, and ensures timeBox is
+     * properly setup for monitoring.
+     *
+     * @param timeBox governs timeouts
+     * @param futures to execute
+     */
+    private void executeWithMonitoringIfNeeded(TimeBox timeBox, CompletionStage<?>... futures) {
         Binding<?> pending = null;
         for (CompletionStage<?> next : futures) {
             if (next instanceof BascomTaskFuture) {
                 BascomTaskFuture<?> bascomTaskFuture = (BascomTaskFuture<?>) next;
-                pending = bascomTaskFuture.getBinding().activate(pending,timeBox);
+                pending = bascomTaskFuture.getBinding().activate(pending, timeBox);
             }
         }
-        if (pending != null) {
-            String src = timeBox.timeBudget > 0 ? "timed" : "untimed";
-            pending.fire("execute", src, true);
+        timeBox.monitorIfNeeded(this);
+        timeBox.register(this);
+        try {
+            if (pending != null) {
+                String src = timeBox.timeBudget > 0 ? "timed" : "untimed";
+                pending.fire("execute", src, true);
+            }
+        } finally {
+            timeBox.deregister();
         }
     }
-
 
     @Override
     public void executeAndWait(long timeoutMs, CompletableFuture<?>... futures) {
         TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
-        execute(timeBox,futures);
+        executeWithMonitoringIfNeeded(timeBox, futures);
         for (CompletableFuture<?> next : futures) {
             try {
-                next.get(timeBox.timeBudget,TimeUnit.MILLISECONDS);
+                next.get(timeBox.timeBudget, TimeUnit.MILLISECONDS);
             } catch (Exception ignored) {
                 // do nothing since our only purpose here is to wait; subsequent external calls
                 // to get() will deal with the exception

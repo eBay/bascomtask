@@ -118,11 +118,11 @@ and completed.
 to mistakenly execute a task before its parameters are ready.
 
 ## General Programming Model
-1) Task methods on are activated on demand by a call to execute, get, or other access operation on a CompletableFuture 
-   returned from a task method. 
-2) Activation runs backward, activating that task method and all its predecessors (incoming arguments).
-3) Task methods that are ready to fire, either because all their CompletableFuture inputs have already completed or
-   because they have no CompletableFuture inputs, are collected. 
+1) Task methods on are activated (scheduled for execution) on demand by a call to execute, get, or other access
+   operation on a CompletableFuture returned from a task method. 
+2) Activation works recursively backward, activating that task method and all its predecessors (incoming arguments).
+3) Task methods that are ready to fire (begin execution), either because all their CompletableFuture inputs have
+   already completed or because they have no CompletableFuture inputs, are collected. 
 4) All except one are spawned to new threads and all are started (one is kept for execution by the processing thread). 
 5) Completion runs forward. Each completion checks for each of its dependents whether that dependent has all its 
    arguments ready. All _those_ ready-to-fire task methods are collected.
@@ -269,7 +269,8 @@ that multiplies them together:
             (x,y)->x*y);
 ```
 Consumer functions (producing void results) are called with vfn/vfnTask rather than fn/fnTask. They produce a
-CompletableFuture<Void> that _must_ be accessed (e.g. by get() or execute()) in order to make the function execute. 
+CompletableFuture<Void> that _must_ be accessed (e.g. by a get() or execute() call) in order to make the 
+function execute. 
 
 
 ### User Task Adaptors
@@ -382,14 +383,14 @@ as with normal execution flow, a thread is spawned (orange) to handle the second
 but that task has already generated an exception and that outcome remains unchanged. The original caller to
 get() will see a MyException thrown. Should any call, by this or other threads get() be made on any other 
 task method output, the results are fixed: all the yellow-filled task methods will return a valid value while
-all the others will throw an Exception of the indicated type.
+all the others will throw an Exception that is of the indicated type.
 
 
 ## Configuration
 
 Orchestrators have various configuration options for controlling or extending core behavior. These can be set
-on an individual orchestrator or on GlobalConfig.getConfig() which will then copy all of its settings to 
-orchestrators when they are created. The GlobalConfig configuration object can also be entirely replaced if desired,
+on an individual orchestrator or on GlobalOrchestratorConfig.getConfig() which will then copy all of its settings to 
+orchestrators when they are created. The GlobalOrchestratorConfig configuration object can also be entirely replaced if desired,
 allowing complete control over Orchestrator initialization.
 
 ### Customizing the Thread Spawning Strategy
@@ -424,9 +425,9 @@ Orchestrator. You can write your own or use a built-in from the BascomTask libra
 There are several ways to add a TaskRunner:
 
 * Directly to an Orchestrator
-* To GlobalConfig.getConfig().first/lastInterceptWith(), in which case that same TaskRunner instance will 
+* To GlobalOrchestratorConfig.getConfig().first/lastInterceptWith(), in which case that same TaskRunner instance will 
   be added to all Orchestrators
-* Add an initializer function to GlobalConfig.getConfig().initializeWith() to generate a new TaskRunner instance that
+* Add an initializer function to GlobalOrchestratorConfig.getConfig().initializeWith() to generate a new TaskRunner instance that
   will be added to all new Orchestrators
 * Using ThreadLocalRunner which, in addition to the previous, stores the TaskRunner using TheadLocal storage
   for later access
@@ -455,26 +456,33 @@ class MyProfiler {
 Between the call to _init()_ and _report()_, if an Orchestrator is created then its profile will be printed in
 the call to _report()_.
 
-Also of note is that the configuration object returned by GlobalConfig.getConfig() can be replaced entirely, with an
-instance from a custom class extending the existing configuration class or an entirely different one. A use case
-that leverages this capability might be to pull configuration information from an external configuration store.
+In addition to the options above, the configuration object returned by GlobalOrchestratorConfig.getConfig() can be 
+replaced entirely with an instance from a custom class extending the existing configuration class or an entirely 
+different one. A use case that leverages this capability might be to pull configuration information from an 
+external configuration store.
 
 
-## Timeouts
-CompletableFutures provide a variant of get() that takes timeout args, and in Java 9+ provide onTimeout() methods. 
-The BascomTask execute and executeWait methods, which each take a list of CompletableFutures that should be executed, 
-also take such optional arguments. Any of these calls has the same effect of ensuring that the calling thread does not 
-wait longer than the provided duration, and throw a TimeoutException if so.
+### Timeouts
+CompletableFutures provide a variant of get() that takes timeout arguments. The BascomTask execute and executeWait 
+methods, which each take a list of CompletableFutures that should be executed, also take such optional arguments. 
+Any of these calls has the same effect of ensuring that the calling thread does not wait longer than the provided 
+duration, and throw a java.util.concurrent.TimeoutException if so. 
 
-Threads spawned during execution are not subject to the same timeouts, neither in standard CompletableFutures nor 
-BascomTask-managed CompletableFutures. What BascomTask will do is to ensure that threads created in service of a 
-call with an exceeded timeout will not begin execution of new tasks. Tasks in spawned threads that are already 
-underway will not be interrupted.
+Threads spawned during execution are not subject to the same timeouts in standard CompletableFutures and by default 
+also BascomTask-managed CompletableFutures. What BascomTask will do at a minimum is to ensure that threads created in 
+service of a call with an exceeded timeout will not begin execution of new tasks. 
 
-In addition, a timeout is a configurable value that can be set on an Orchestrator (or globally for all Orchestrators). 
-That timeout value is applied to requests that have not provided an explicit timeout on their own. For example, 
-a call to CompletableFuture.get() without arguments will pick up the timeout set on an Orchestrator if one has been set. 
-A TimeoutExceededException, which unlike the built-in Java TimeoutException is unchecked, is thrown in this case.
+Thread interrupts can be enabled in BascomTask by setting a TimeoutStrategy on an Orchestrator (or globally for all 
+Orchestrators), see the TimeoutStrategy enum for options. A timeout value is likewise configurable value and will 
+apply to any request that does not itself provide an explicit timeout. For example, a call to CompletableFuture.get() 
+without arguments will pick up the timeout set on an Orchestrator if one has been set. By default, 
+there is no timeout set. 
+
+Accessing a CompletableFuture whose execution path was spawned and timeout out will result in an exception. This
+_may_ be a BascomTask TimeoutExceededException, which unlike java.util.concurrent.TimeoutException is unchecked. 
+If interrupts are enabled, the response may be something different if a task has handled the interrupt
+and thrown a different exception.
+
 
 ---
 ## License Information

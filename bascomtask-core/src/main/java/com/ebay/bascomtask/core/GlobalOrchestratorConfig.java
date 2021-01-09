@@ -27,7 +27,7 @@ import java.util.function.BiConsumer;
  *
  * @author Brendan McCarthy
  */
-public class GlobalConfig {
+public class GlobalOrchestratorConfig {
     public final static int DEFAULT_FIXED_THREADPOOL_SIZE = 20;
     private static final ExecutorService DEFAULT_EXECUTOR_SERVICE = Executors.newFixedThreadPool(DEFAULT_FIXED_THREADPOOL_SIZE);
 
@@ -39,7 +39,7 @@ public class GlobalConfig {
     private static Config globalConfig = DEFUALT_CONFIG;
 
     interface ExtendedConfig extends CommonConfig {
-        void initializeWith(BiConsumer<Orchestrator,Object> fn);
+        void initializeWith(BiConsumer<Orchestrator, Object> fn);
     }
 
     /**
@@ -51,7 +51,8 @@ public class GlobalConfig {
         protected final List<TaskRunner> last = new ArrayList<>();
         protected SpawnMode spawnMode;
         protected long timeoutMs;
-        protected final List<BiConsumer<Orchestrator,Object>> initializers = new ArrayList<>();
+        protected TimeoutStrategy timeoutStrategy = TimeoutStrategy.PREVENT_NEW;
+        protected final List<BiConsumer<Orchestrator, Object>> initializers = new ArrayList<>();
 
         protected Config() {
             restoreConfigurationDefaults(null);
@@ -66,6 +67,7 @@ public class GlobalConfig {
         final public void updateConfigurationOn(Orchestrator orchestrator, Object arg) {
             orchestrator.setSpawnMode(getSpawnMode());
             orchestrator.setTimeoutMs(getTimeoutMs());
+            orchestrator.setTimeoutStrategy(getTimeoutStrategy());
             orchestrator.setExecutorService(getExecutorService());
             for (TaskRunner next : first) {
                 orchestrator.firstInterceptWith(next);
@@ -73,8 +75,8 @@ public class GlobalConfig {
             for (TaskRunner next : last) {
                 orchestrator.lastInterceptWith(next);
             }
-            for (BiConsumer<Orchestrator,Object> next : initializers) {
-                next.accept(orchestrator,arg);
+            for (BiConsumer<Orchestrator, Object> next : initializers) {
+                next.accept(orchestrator, arg);
             }
             afterDefaultInitialization(orchestrator, arg);
         }
@@ -95,6 +97,7 @@ public class GlobalConfig {
             globalConfig = DEFUALT_CONFIG;
             setSpawnMode(SpawnMode.WHEN_NEEDED);
             setTimeoutMs(0);
+            setTimeoutStrategy(TimeoutStrategy.PREVENT_NEW);
             removeAllTaskRunners();
             restoreDefaultExecutorService();
             initializers.clear();
@@ -118,6 +121,16 @@ public class GlobalConfig {
         @Override
         public void setTimeoutMs(long ms) {
             this.timeoutMs = ms;
+        }
+
+        @Override
+        public TimeoutStrategy getTimeoutStrategy() {
+            return timeoutStrategy;
+        }
+
+        @Override
+        public void setTimeoutStrategy(TimeoutStrategy strategy) {
+            this.timeoutStrategy = strategy;
         }
 
         @Override
@@ -163,7 +176,7 @@ public class GlobalConfig {
         }
 
         @Override
-        public void initializeWith(BiConsumer<Orchestrator,Object> fn) {
+        public void initializeWith(BiConsumer<Orchestrator, Object> fn) {
             initializers.add(fn);
         }
     }

@@ -17,14 +17,12 @@
 package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.exceptions.TaskNotStartedException;
-import com.ebay.bascomtask.exceptions.TimeoutExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -198,6 +196,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     final void onCompletion(List<Binding<?>> bindings) {
         completedAt = System.currentTimeMillis();
+        activated.get().checkForInterruptsNeeded(this);
         Binding<?> pending = null;
         for (Binding<?> next : bindings) {
             pending = next.argReady(pending);
@@ -264,7 +263,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
                 if (sz == 0) {
                     chooseThreadAndFire(this, this, parentThread, null, src1, src2, direct);
                 } else {
-                    fireTaskThruRunners(localRunners, sz-1, parentThread, this, src1, src2, direct);
+                    fireTaskThruRunners(localRunners, sz - 1, parentThread, this, src1, src2, direct);
                 }
             }
         }
@@ -272,12 +271,12 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
 
     private void fireTaskThruRunners(List<TaskRunner> runners, int index, Thread parentThread, TaskRun under, String src1, String src2, boolean direct) {
         TaskRunner next = runners.get(index);
-        if (index==0) {
+        if (index == 0) {
             Object fromBefore = next.before(under);
             chooseThreadAndFire(next, under, parentThread, fromBefore, src1, src2, direct);
         } else {
             PlaceHolderRunner phr = new PlaceHolderRunner(next, parentThread, under);
-            fireTaskThruRunners(runners, index-1,parentThread, phr, src1, src2, direct);
+            fireTaskThruRunners(runners, index - 1, parentThread, phr, src1, src2, direct);
 
         }
     }
@@ -287,7 +286,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
             fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src1, src2);
         } else {
             Runnable runnable = () -> fireFirstRunner(taskRunner, taskRun, parentThread, fromBefore, src1, src2);
-            engine.run(runnable, parentThread);
+            engine.run(runnable, parentThread, activated.get());
         }
     }
 
@@ -368,7 +367,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
      */
     void faultForward(Throwable t, List<FateTask> fates) {
         if (output.completeExceptionally(t)) {
-            LOG.debug("Faulting forward {} with {}", this, t.getMessage());
+            LOG.debug("Faulting forward {}: {}", this, t.getMessage());
             output.propagateException(t, fates);
         }
     }
@@ -386,7 +385,8 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     @Override
     public final Object run() {
         try {
-            activated.get().check(this);
+            // Avoid actually invoking the task method if a timeout has been exceeded, always.
+            activated.get().checkIfTimeoutExceeded(this);
             return invokeTaskMethod();
         } finally {
             endedAt = System.currentTimeMillis();

@@ -47,8 +47,8 @@ public class ThreadLocalRunners<RUNNER extends TaskRunner> {
      * @param fn to generate the TaskRunner to add
      */
     public void firstInterceptWith(Supplier<RUNNER> fn) {
-        GlobalConfig.getConfig().initializeWith(($,arg)-> {
-            firstSet($,fn);
+        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> {
+            firstSet($, fn);
         });
     }
 
@@ -58,22 +58,22 @@ public class ThreadLocalRunners<RUNNER extends TaskRunner> {
      * @param fn to generate the TaskRunner to add
      */
     public void lastInterceptWith(Supplier<RUNNER> fn) {
-        GlobalConfig.getConfig().initializeWith(($,arg)-> {
-            lastSet($,fn);
+        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> {
+            lastSet($, fn);
         });
     }
 
     /**
      * Adds a TaskRunner to each new Orchestrator at the head of the list if the supplied predicate is true.
      * The predicate arguments are the same as those for
-     * {@link GlobalConfig.Config#afterDefaultInitialization(Orchestrator, Object)}.
+     * {@link GlobalOrchestratorConfig.Config#afterDefaultInitialization(Orchestrator, Object)}.
      *
      * @param fn to generate the TaskRunner to add
      */
-    public void firstInterceptWith(Supplier<RUNNER> fn, BiPredicate<Orchestrator,Object> pred) {
-        GlobalConfig.getConfig().initializeWith(($,arg)-> {
-            if (pred.test($,arg)) {
-                firstSet($,fn);
+    public void firstInterceptWith(Supplier<RUNNER> fn, BiPredicate<Orchestrator, Object> pred) {
+        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> {
+            if (pred.test($, arg)) {
+                firstSet($, fn);
             }
         });
     }
@@ -81,14 +81,14 @@ public class ThreadLocalRunners<RUNNER extends TaskRunner> {
     /**
      * Adds a TaskRunner to each new Orchestrator to the tail of the list if the supplied predicate is true.
      * The predicate arguments are the same as those for
-     * {@link GlobalConfig.Config#afterDefaultInitialization(Orchestrator, Object)}.
+     * {@link GlobalOrchestratorConfig.Config#afterDefaultInitialization(Orchestrator, Object)}.
      *
      * @param fn to generate the TaskRunner to add
      */
-    public void lastInterceptWith(Supplier<RUNNER> fn, BiPredicate<Orchestrator,Object> pred) {
-        GlobalConfig.getConfig().initializeWith(($,arg)-> {
-            if (pred.test($,arg)) {
-                lastSet($,fn);
+    public void lastInterceptWith(Supplier<RUNNER> fn, BiPredicate<Orchestrator, Object> pred) {
+        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> {
+            if (pred.test($, arg)) {
+                lastSet($, fn);
             }
         });
     }

@@ -57,7 +57,7 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
     private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate, TimeBox timeBox) {
         if (activate && bascomTaskFuture != null) {
             // Activate it, but don't connect its completion yet -- that will happen once condition is resolved
-            pending = bascomTaskFuture.getBinding().activate(pending,timeBox);
+            pending = bascomTaskFuture.getBinding().activate(pending, timeBox);
         }
         return pending;
     }

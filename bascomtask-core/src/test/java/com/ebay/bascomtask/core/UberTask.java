@@ -17,6 +17,8 @@
 package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.annotations.Light;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +36,6 @@ import static org.junit.Assert.fail;
  * @author Brendan Mccarthy
  */
 public interface UberTask extends TaskInterface<UberTask> {
-
     /**
      * Enables regular vs. light calls to be made on methods of {@link UberTask}.
      */
@@ -117,6 +118,7 @@ public interface UberTask extends TaskInterface<UberTask> {
     UberTasker delayFor(int ms);
 
     class UberTasker implements UberTask {
+        private static final Logger LOG = LoggerFactory.getLogger(UberTasker.class);
 
         private String threadName = null;
         private final int expectedExecutionCount;
@@ -188,14 +190,17 @@ public interface UberTask extends TaskInterface<UberTask> {
         }
 
         private void delay() {
+            LOG.debug("U-START " + getName());
             threadName = Thread.currentThread().getName();
             if (sleepForMs > 0) {
                 try {
                     Thread.sleep(sleepForMs);
                 } catch (InterruptedException e) {
-                    throw new RuntimeException("Bad interrupt", e);
+                    LOG.debug("U-INT " + getName());
+                    throw new TaskInterruptedException("Interrupted during delay");
                 }
             }
+            LOG.debug("U-EXIT " + getName());
             actualCount.incrementAndGet();
         }
 

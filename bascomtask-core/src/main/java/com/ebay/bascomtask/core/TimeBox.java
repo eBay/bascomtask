@@ -20,6 +20,9 @@ import com.ebay.bascomtask.exceptions.TimeoutExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Records user-requested timeout durations and detects when that timeout has been exceeded.
  *
@@ -28,10 +31,18 @@ import org.slf4j.LoggerFactory;
 class TimeBox {
     private static final Logger LOG = LoggerFactory.getLogger(TimeBox.class);
 
+    // Static instance used for no-timeout case (timeBudget==0) since there is no need to have a unique
+    // instance for values that will always be the same
     static final TimeBox NO_TIMEOUT = new TimeBox(0);
 
+    // How many milliseconds before the timeout
     final long timeBudget;
+
+    // When did the clock start, in milliseconds
     final long start;
+
+    // Records threads to be interrupted, when the TimeoutStrategy in effect calls for interrupts
+    private List<Thread> activeThreeads = null;
 
     /**
      * A timeBudget of zero means no timeout check will later be made.
@@ -45,20 +56,103 @@ class TimeBox {
 
     @Override
     public String toString() {
-        if (timeBudget==0) {
+        if (timeBudget == 0) {
             return "TimeBox(0)";
         } else {
             long left = (start + timeBudget) - System.currentTimeMillis();
-            String msg = left <=0 ? "EXCEEDED" : (String.valueOf(left)+"ms left");
+            String msg = isTimedOut() ? "EXCEEDED" : (left + "ms left");
             return "TimeBox(" + start + "," + timeBudget + ',' + msg + ')';
         }
     }
 
-    void check(Binding binding) {
-        if (timeBudget > 0 && System.currentTimeMillis() >= start + timeBudget) {
+    private boolean isTimedOut() {
+        return System.currentTimeMillis() >= start + timeBudget;
+    }
+
+    void checkIfTimeoutExceeded(Binding binding) {
+        if (timeBudget > 0 && isTimedOut()) {
             String msg = "Timeout " + timeBudget + " exceeded before " + binding.getTaskPlusMethodName() + ", ceasing task creation";
             LOG.debug("Throwing " + msg);
             throw new TimeoutExceededException(msg);
+        }
+    }
+
+    void checkForInterruptsNeeded(Binding binding) {
+        if (timeBudget > 0) {
+            if (binding.engine.getTimeoutStrategy() == TimeoutStrategy.INTERRUPT_AT_NEXT_OPPORTUNITY) {
+                if (isTimedOut()) {
+                    interruptRegisteredThreads();
+                }
+            }
+        }
+    }
+
+    /**
+     * Interrupts any currently-registered thread.
+     */
+    void interruptRegisteredThreads() {
+        synchronized (this) {
+            if (activeThreeads != null) {
+                int count = activeThreeads.size() - 1;  // Exclude current thread
+                if (count > 0) {
+                    String msg = " on timeout " + timeBudget + " exceeded";
+                    for (Thread next : activeThreeads) {
+                        if (next != Thread.currentThread()) {
+                            LOG.debug("Interrupting " + next.getName() + msg);
+                            next.interrupt();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Register current thread so that it may later be interrupted on timeout.
+     *
+     * @param orchestrator active
+     */
+    void register(Orchestrator orchestrator) {
+        if (orchestrator.getTimeoutStrategy() != TimeoutStrategy.PREVENT_NEW) {
+            synchronized (this) {
+                if (activeThreeads == null) {
+                    activeThreeads = new ArrayList<>();
+                }
+                activeThreeads.add(Thread.currentThread());
+            }
+        }
+    }
+
+    /**
+     * De-registers current thead and ensures monitoring thread, if present is notified if there are no
+     * more registered threads. This call must follow every {@link #register(Orchestrator)} call.
+     */
+    synchronized void deregister() {
+        if (activeThreeads != null) {
+            activeThreeads.remove(Thread.currentThread());
+            if (activeThreeads.size() == 0) {
+                notify();
+            }
+        }
+    }
+
+    /**
+     * Sets up a monitoring thread if needed.
+     *
+     * @param orchestrator context
+     */
+    void monitorIfNeeded(Orchestrator orchestrator) {
+        if (orchestrator.getTimeoutStrategy() == TimeoutStrategy.INTERRUPT_IMMEDIATELY) {
+            orchestrator.getExecutorService().execute(() -> {
+                synchronized (this) {
+                    try {
+                        wait(timeBudget);
+                        interruptRegisteredThreads();
+                    } catch (InterruptedException ignore) {
+                        // do nothing
+                    }
+                }
+            });
         }
     }
 }

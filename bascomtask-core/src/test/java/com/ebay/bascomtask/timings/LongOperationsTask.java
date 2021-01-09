@@ -27,10 +27,12 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface LongOperationsTask extends TaskInterface<LongOperationsTask> {
     CompletableFuture<Long> ret(long v);
-    CompletableFuture<Long> inc(CompletableFuture<Long> cf);
-    CompletableFuture<Long> add(CompletableFuture<Long> cf1,CompletableFuture<Long> cf2);
 
-    CompletableFuture<Long> add(CompletableFuture<Long> cf1,CompletableFuture<Long> cf2,CompletableFuture<Long> cf3);
+    CompletableFuture<Long> inc(CompletableFuture<Long> cf);
+
+    CompletableFuture<Long> add(CompletableFuture<Long> cf1, CompletableFuture<Long> cf2);
+
+    CompletableFuture<Long> add(CompletableFuture<Long> cf1, CompletableFuture<Long> cf2, CompletableFuture<Long> cf3);
 
     class LongOperationsTaskImpl implements LongOperationsTask {
 
@@ -42,22 +44,23 @@ public interface LongOperationsTask extends TaskInterface<LongOperationsTask> {
         @Override
         public CompletableFuture<Long> inc(CompletableFuture<Long> cf) {
             long v = get(cf);
-            return complete(v+1);
+            return complete(v + 1);
         }
 
         @Override
         public CompletableFuture<Long> add(CompletableFuture<Long> cf1, CompletableFuture<Long> cf2) {
             long x = get(cf1);
             long y = get(cf2);
-            return complete(x+y);
+            return complete(x + y);
 
         }
+
         @Override
         public CompletableFuture<Long> add(CompletableFuture<Long> cf1, CompletableFuture<Long> cf2, CompletableFuture<Long> cf3) {
             long x = get(cf1);
             long y = get(cf2);
             long z = get(cf3);
-            return complete(x+y+z);
+            return complete(x + y + z);
         }
     }
 }

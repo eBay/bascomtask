@@ -32,7 +32,7 @@ public abstract class BaseOrchestratorTest {
 
     @Before
     public void before() {
-        GlobalConfig.getConfig().restoreConfigurationDefaults(null);
+        GlobalOrchestratorConfig.getConfig().restoreConfigurationDefaults(null);
         $ = Orchestrator.create();
         String testName = name.getMethodName();
         LOG.debug(testName);
@@ -40,7 +40,7 @@ public abstract class BaseOrchestratorTest {
 
     @Before
     public void after() {
-        GlobalConfig.getConfig().restoreConfigurationDefaults(null);
+        GlobalOrchestratorConfig.getConfig().restoreConfigurationDefaults(null);
     }
 
     static void sleep(int ms) {

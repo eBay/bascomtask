@@ -18,6 +18,7 @@ package com.ebay.bascomtask.core;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.function.*;
 
 /**
@@ -28,7 +29,7 @@ import java.util.function.*;
 public interface Orchestrator extends CommonConfig {
 
     /**
-     * Creates an Orchestrator with no additional arguments.
+     * Creates an Orchestrator with no name.
      *
      * @return new Orchestrator
      */
@@ -37,7 +38,7 @@ public interface Orchestrator extends CommonConfig {
     }
 
     /**
-     * Creates a new named Orchestrator.
+     * Creates a new named Orchestrator, which is the same as <pre>create().setName(name)</pre>;
      *
      * @return new Orchestrator
      */
@@ -49,7 +50,7 @@ public interface Orchestrator extends CommonConfig {
      * Creates an Orchestrator with the given name and argument.
      *
      * @param name optional / possibly null for this orchestrator, useful for logging
-     * @param arg  to pass to {@link GlobalConfig.Config#updateConfigurationOn(Orchestrator, Object)}.
+     * @param arg  to pass to {@link GlobalOrchestratorConfig.Config#updateConfigurationOn(Orchestrator, Object)}.
      * @return new Orchestrator
      */
     static Orchestrator create(String name, Object arg) {
@@ -80,9 +81,12 @@ public interface Orchestrator extends CommonConfig {
     TaskMeta getTaskMeta(CompletableFuture<?> cf);
 
     /**
-     * Returns the number of threads that have been spawned by this Orchestrator. A thread may have been
-     * returned to the thread pool and retrieved again, but these would count as separate logical threads
-     * as far as this return value is concerned.
+     * Returns the number of threads that have been spawned by this Orchestrator, which is a non-deterministic result
+     * since the inherent timing variations across threads may result in different spawning decisions on different
+     * runs of the same execution request.
+     *
+     * <p>Note that a physical thread may have been returned to the thread pool and retrieved again, but these would
+     * count as separate logical threads as far as this return value is concerned.
      *
      * @return number of logically-spawned threads
      */
@@ -91,16 +95,18 @@ public interface Orchestrator extends CommonConfig {
     /**
      * Initiates execution of the task methods behind each supplied CompletableFuture if they are not already started,
      * as well as the task methods needed to supply its inputs, recursively. The dependency ordering is automatically
-     * determined and strictly maintained such that ech task method is only executed when all its arguments have
-     * already completed and their CompletableFutures have completed, so a call to get their values will not block.
+     * determined and strictly maintained such that ech task method is only executed when each of its arguments is
+     * either not a CompletableFuture or if so then it is completed so a call to get its value will not block.
      *
      * <p>Each task method will only be executed once even it is passed multiple times to this method. As this method
-     * is called implicitly for any operation on a single future returned from a task, this method call is only needed
-     * to start multiple futures at once or for other situations where a singular waiting read access is not desired.
+     * is called implicitly for any operation (such as {@link CompletableFuture#get()} on a single future returned
+     * from a task, this method call is only needed to start multiple futures at the same time, or for starting tasks
+     * whose purpose is to a side-effect that occurs without any call to get a value from it, or for any other
+     * situation where an access of its value is not possible nor desirable.
      *
-     * <p>This call only starts but does not necessarily wait for any of the started tasks to complete. More specifically,
-     * it does not wait on any threads that are spawned to complete. Access a value on any BT-managed CompletableFuture
-     * or call {@link #executeAndWait(CompletableFuture[])} to force waiting.
+     * <p>This call only starts ('activates') but does not necessarily wait for any of the started tasks to complete.
+     * More specifically, it does not wait on any threads that are spawned to complete. Access a value on any
+     * BT-managed CompletableFuture or call {@link #executeAndWait(CompletableFuture[])} to force waiting.
      *
      * @param futures to execute
      */
@@ -109,36 +115,78 @@ public interface Orchestrator extends CommonConfig {
     }
 
     /**
-     * Like {@link #execute(CompletionStage[])}, but establishes a timeout after which new tasks activated by this
-     * call will not be started.
+     * Variant of {@link #execute(long, CompletionStage[])} with TimeUnit option.
+     *
+     * @param timeout to set
+     * @param timeUnit units
+     * @param futures to execut
+     */
+    default void execute(long timeout, TimeUnit timeUnit, CompletionStage<?>... futures) {
+        execute(timeUnit.toMillis(timeout),futures);
+    }
+
+    /**
+     * Like {@link #execute(CompletionStage[])}, but establishes a timeout which will affect execution
+     * as defined by the TimeoutStrategy in effect.
+     *
      * @param timeoutMs timout in milliseconds
-     * @param futures to execute
+     * @param futures   to execute
      */
     void execute(long timeoutMs, CompletionStage<?>... futures);
 
     /**
-     * Variant of {@link #execute(CompletionStage[])} that waits for all of its arguments to finish and
-     * complete (meaning any call to get their value will not block).
+     * Variant of {@link #execute(CompletionStage[])} that waits for all of its arguments to complete,
+     * ignoring any exceptions. After this call, any call on the supplied futures will not block since
+     * they have already completed (successfully or exceptionally).
      *
      * @param futures to execute and then wait on
      */
     default void executeAndWait(CompletableFuture<?>... futures) {
-        executeAndWait(0,futures);
+        executeAndWait(0, futures);
     }
 
     /**
-     * Like {@link #executeAndWait(CompletableFuture[])}, but establishes a timeout after which new tasks
-     * activated by this call will not be started.
+     * Variant of {@link #executeAndWait(long, CompletableFuture[])} with TimeUnit option.
+     *
+     * @param timeout to set
+     * @param timeUnit units
+     * @param futures to execut
+     */
+    default void executeAndWait(long timeout, TimeUnit timeUnit, CompletableFuture<?>... futures) {
+        executeAndWait(timeUnit.toMillis(timeout),futures);
+    }
+
+    /**
+     * Variant of {@link #executeAndWait(CompletableFuture[])}, but establishes a timeout which will affect
+     * execution as defined by the TimeoutStrategy in effect.
      *
      * @param timeoutMs timout in milliseconds
-     * @param futures to execute
+     * @param futures   to execute
      */
     void executeAndWait(long timeoutMs, CompletableFuture<?>... futures);
 
     /**
-     * Execute the supplied future depending on the supplied condition. The future is not executed until
-     * condition completes, and condition is only executed if the output from this method is activated
-     * (reachable from a required CompletableFuture).
+     * Ties the 'fates' of the supplied CompletableFutures together, which means that as soon as there is a fault on
+     * any one of them, back-pressure is applied to prevent any of the remaining tasks or their predecessors (as
+     * determined recursively) from starting if they have not already been started, and forcing a
+     * {@link com.ebay.bascomtask.exceptions.TaskNotStartedException} on any CompletableFuture that was prevented
+     * from starting in that manner.
+     *
+     * <p>A return result of 'true' can be used to initiate compensating actions on any task that previously
+     * completed. Any such action can know whether any previous CompletableFuture was completed or not by calling
+     * {@link CompletableFuture#isCompletedExceptionally()}.
+     *
+     * <p>Note that this method is only activated if the return value is activated.
+     *
+     * @param cfs to tie together
+     * @return true if at least one of the supplied arguments generated an exception
+     */
+    CompletableFuture<Boolean> fate(CompletableFuture<?>... cfs);
+
+    /**
+     * Execute the supplied CompletableFuture depending on the supplied condition. The CompletableFuture is not
+     * executed until the supplied condition completes, and that supplied condition is only executed if the output from
+     * this method is activated (reachable from a required CompletableFuture).
      *
      * @param condition  to first evaluate
      * @param thenFuture to execute if condition evaluates to true
@@ -151,10 +199,12 @@ public interface Orchestrator extends CommonConfig {
 
     /**
      * Variant of {@link #cond(CompletableFuture, CompletableFuture)} with an additional boolean argument
-     * indicating whether to proactively start executing thenFuture when condition is activated.
-     * That would be before the result of condition is known, so proactively starting either
-     * future may be wasteful but it will also be faster. The returned void future does not
-     * do anything except providing a way to activate this object.
+     * indicating whether to proactively start executing thenFuture at the same time as condition.
+     * Executing thenFuture in that way may be wasteful since condition may eventually evaluate to false,
+     * but the overall result will be faster when condition evaluates to true.
+     *
+     * <p>Note that this method will not be activated until an access operation is performed on the
+     * return value, even though it is a void result.
      *
      * @param condition    to first evaluate
      * @param thenFuture   to execute if condition evaluates to true
@@ -183,9 +233,10 @@ public interface Orchestrator extends CommonConfig {
 
     /**
      * Variant of {@link #cond(CompletableFuture, CompletableFuture, CompletableFuture)} with additional boolean
-     * arguments indicating whether to proactively start executing the thenFuture and/or the elseFuture when
-     * condition is activated. That would be before the result of condition is known, so proactively starting
-     * either future may be wasteful but it will also be faster.
+     * arguments indicating whether to proactively start executing thenFuture and/or elseFuture when
+     * condition is activated. Executing either of those futures in that way may be wasteful since the eventual
+     * condition result may choose the alternate, but the overall result will be faster when condition chooses
+     * a proactively activated choice.
      *
      * @param condition    to first evaluate
      * @param thenFuture   chosen if condition evaluates to true
@@ -200,19 +251,33 @@ public interface Orchestrator extends CommonConfig {
                                   CompletableFuture<R> elseFuture, boolean elseActivate);
 
     /**
-     * Creates a task wrapper on a user pojo that implements an interface X that in turn implements TaskInterface&lt;X&gt;.
-     * The result is a wrapper object that has the same signature as its pojo argument, such that any
-     * CompletableFuture-returning task methods invoked on this wrapper are not executed right away -- they will
-     * be executed by if/when any read operation on the returned CompletableFuture or by passing that CompletableFuture
-     * to {@link #execute(CompletionStage[])}. Because of that lazy evaluation, tasks can be added with little
-     * performance penalty while only later choosing which ones are actually needed. The userTask argument can be
-     * freely wrapped any number of times by calling this method (as well as similar methods).
+     * Creates a task wrapper around any user POJO with the requirement that that POJO implements an interface X
+     * that in turn implements TaskInterface&lt;X&gt;.The result is a wrapper object that has the same signature
+     * as its pojo argument, such that any CompletableFuture-returning task methods invoked on this wrapper are not
+     * executed right away --they will be executed if/when any read operation on the returned CompletableFuture is
+     * performed or by passing that CompletableFuture to {@link #execute(CompletionStage[])} or any of its variants.
+     * Because of that lazy evaluation, tasks can be added with little performance penalty while only later choosing
+     * which ones are actually needed.
      *
-     * <p>A 'read operation' in this context refers to standard CompletableFuture access operations that initiate execution.
-     * This includes simple operations such as {@link CompletableFuture#get()} as well as any composition operations
-     * such as {@link CompletableFuture#thenApply(Function)} with the exception of the 'compose' variations such as
-     * {@link CompletableFuture#thenCompose(Function)} whose _fn_ argument can only be started with
-     * {@link #execute(CompletionStage[])}.
+     * <p>The userTask argument can be freely wrapped any number of times by calling this method (as well as similar
+     * methods). In other words, there is a many-to-one relationship between these wrappers and the target user POJO,
+     * which may be of interest for stateful user POJO tasks or simply for avoiding the overhead of repeatedly
+     * creating user task instances. In the following example, 4 task wrappers around the same user POJO task
+     * instance are created:
+     * <pre>
+     *     MyTask myTask = new MyTask();
+     *     CompletableFuture f1 = $.task(myTask).doSomething();
+     *     CompletableFuture f2 = $.task(myTask).doSomething();  // or doSomethingElse()
+     *     MyTask wrapper = $.task(myTask);
+     *     CompletableFuture f3 = wrapper.doSomething();
+     *     CompletableFuture f4 = wrapper.doSomething();  // or doSomethingElse()
+     * </pre>
+     *
+     * <p>Note that a 'read operation' in this context refers to standard CompletableFuture access operations that
+     * initiate execution. This includes simple operations such as {@link CompletableFuture#get()} as well as any
+     * composition operations such as {@link CompletableFuture#thenApply(Function)} with the exception of the
+     * 'compose' variations such as {@link CompletableFuture#thenCompose(Function)} whose _fn_ argument can only be
+     * started with {@link #execute(CompletionStage[])}.
      *
      * <p>If a task method returns anything other than a CompletableFuture, it is executed right away, with
      * any predecessors executed in the same thread-spawning manner as occurs when CompletableFutures are activated.
@@ -223,8 +288,6 @@ public interface Orchestrator extends CommonConfig {
      * @return a wrapper around the supplied userTask with the properties described above
      */
     <BASE, SUB extends TaskInterface<BASE>> BASE task(SUB userTask);
-
-    CompletableFuture<Boolean> fate(CompletableFuture<?>... cfs);
 
     /**
      * Creates a task wrapper on any user pojo task method. This is useful when having POJOs extend TaskInterface and/or

@@ -16,9 +16,6 @@
  **************************************************************************/
 package com.ebay.bascomtask.core;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -46,7 +43,6 @@ import java.util.function.*;
  * @author Brendan McCarthy
  */
 class BascomTaskFuture<T> extends CompletableFuture<T> {
-    private static final Logger LOG = LoggerFactory.getLogger(BascomTaskFuture.class);
 
     // The Binding for which this object holds the output
     private final Binding<T> binding;
@@ -117,7 +113,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
             }
         }
 
-        pending = binding.activate(pending,timeBox);
+        pending = binding.activate(pending, timeBox);
         if (complete) {
             // Only propagate forward if not done already
             pending = becomingActivated.argReady(pending);
@@ -139,7 +135,7 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     //////////////////////////////////////////////////////////////////////
 
     @Override
-    public T get() throws InterruptedException, ExecutionException {
+    public T get() throws InterruptedException {
         binding.engine.executeAndReuseUntilReady(this);
         try {
             return super.get();
@@ -149,8 +145,8 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
     }
 
     @Override
-    public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        binding.engine.executeAndReuseUntilReady(this, timeout,unit);
+    public T get(long timeout, TimeUnit unit) throws InterruptedException {
+        binding.engine.executeAndReuseUntilReady(this, timeout, unit);
         try {
             return super.get();
         } catch (ExecutionException e) {
@@ -158,7 +154,10 @@ class BascomTaskFuture<T> extends CompletableFuture<T> {
         }
     }
 
-    // TODO onTimeout
+    // Additional methods added in Java 9 for timeouts, (orTimeout and completeOnTimeout) are not
+    // handled here in order to keep Java 8 compatibility at this point. Use of those methods would
+    // not be able to leverage BascomTask's timeout/interrupt handling, but is more of an optimization
+    // issue that should not otherwise affect functionality.
 
     @Override
     public T join() {

@@ -100,12 +100,12 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
 
     @Before
     public void before() {
-        super.before();;
+        super.before();
     }
 
     @After
     public void after() {
-        super.after();;
+        super.after();
         sleep(10); // Give time for async routines to execute
         if (currentTask != null) { // This being called even before tests for some reason
             assertEquals(currentTask.exp, currentTask.count.get());

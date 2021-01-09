@@ -20,7 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Configuration settings. {@link GlobalConfig} and {@link Orchestrator} both implement this class, allowing
+ * Configuration settings. {@link GlobalOrchestratorConfig} and {@link Orchestrator} both implement this class, allowing
  * these values to be set at either level. On its creation, an Orchestrator's values are set from the current
  * global settings.
  *
@@ -29,8 +29,8 @@ import java.util.concurrent.TimeUnit;
 public interface CommonConfig {
 
     /**
-     * Restore default settings. Applied on GlobalConfig, sets default values. Applied on Orchestrator,
-     * sets values from current GlobalConfig.
+     * Restore default settings. Applied on GlobalOrchestratorConfig, sets default values. Applied on Orchestrator,
+     * sets values from current GlobalOrchestratorConfig.
      */
     void restoreConfigurationDefaults(Object arg);
 
@@ -51,15 +51,15 @@ public interface CommonConfig {
     void setSpawnMode(SpawnMode mode);
 
     /**
-     * Gets the current timeout, which defaults to meaning no timeout.
+     * Gets the current timeout. The default is zero, meaning no timeout is in effect.
      *
      * @return current timeout
      */
     long getTimeoutMs();
 
     /**
-     * Sets the current timeout. When set to a value greater than zero, the calling thread will wait and all
-     * task execution will be done by spawned threads. The default is zero, meaning there will be no timeouts.
+     * Sets the current timeout. When set to a value greater than zero, the behavior defined by the current
+     * {@link #getTimeoutStrategy()} will apply.
      *
      * @param ms duration in milliseconds, zero means no timeout will be applied
      */
@@ -75,11 +75,25 @@ public interface CommonConfig {
         setTimeoutMs(timeUnit.toMillis(duration));
     }
 
+    /**
+     * Gets the current timeout strategy, default is {@link TimeoutStrategy#PREVENT_NEW}.
+     *
+     * @return default or strategy last set by {@link #setTimeoutStrategy(TimeoutStrategy)}
+     */
+    TimeoutStrategy getTimeoutStrategy();
+
+    /**
+     * Sets the strategy to apply if a timeout greater than zero is in effect and is exceeded.
+     *
+     * @param strategy to set
+     */
+    void setTimeoutStrategy(TimeoutStrategy strategy);
+
     ExecutorService getExecutorService();
 
     /**
      * Resets the service used by this framework for spawning threads. Global default is
-     * Executors.newFixedThreadPool({@link GlobalConfig#DEFAULT_FIXED_THREADPOOL_SIZE}.
+     * Executors.newFixedThreadPool({@link GlobalOrchestratorConfig#DEFAULT_FIXED_THREADPOOL_SIZE}.
      *
      * @param executorService to set as new default
      */

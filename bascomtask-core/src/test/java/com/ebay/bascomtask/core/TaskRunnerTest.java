@@ -153,13 +153,20 @@ public class TaskRunnerTest {
     @Before
     public void before() {
         count.set(0);
-        GlobalConfig.getConfig().removeAllTaskRunners();
+        GlobalOrchestratorConfig.getConfig().removeAllTaskRunners();
+    }
+
+    @Test
+    public void noRunners() throws Exception {
+        Orchestrator $ = Orchestrator.create();
+        $.removeAllTaskRunners();
+        assertEquals(1, (int) $.task(task()).ret(1).get());
     }
 
     @Test
     public void oneRunner() throws Exception {
         MockRunner mockRunner = new MockRunner(0);
-        GlobalConfig.getConfig().firstInterceptWith(mockRunner);
+        GlobalOrchestratorConfig.getConfig().firstInterceptWith(mockRunner);
 
         Orchestrator $ = Orchestrator.create();
         $.task(task()).ret(1).get();
@@ -170,8 +177,8 @@ public class TaskRunnerTest {
     public void twoRunners() throws Exception {
         MockRunner firstMockRunner = new MockRunner(0);
         MockRunner secondMockRunner = new MockRunner(1);
-        GlobalConfig.getConfig().firstInterceptWith(firstMockRunner);
-        GlobalConfig.getConfig().lastInterceptWith(secondMockRunner);
+        GlobalOrchestratorConfig.getConfig().firstInterceptWith(firstMockRunner);
+        GlobalOrchestratorConfig.getConfig().lastInterceptWith(secondMockRunner);
 
         Orchestrator $ = Orchestrator.create();
         $.task(task()).ret(1).get();
@@ -205,8 +212,8 @@ public class TaskRunnerTest {
     @Test
     public void globalGlobalLocal() throws Exception {
         Orchestrator $ = Orchestrator.create();
-        GlobalConfig.Config globalConfig = GlobalConfig.getConfig();
-        run3($,globalConfig, globalConfig, $);
+        GlobalOrchestratorConfig.Config globalConfig = GlobalOrchestratorConfig.getConfig();
+        run3($, globalConfig, globalConfig, $);
     }
 
     @Test
@@ -218,7 +225,7 @@ public class TaskRunnerTest {
     @Test
     public void localGlobalLocal() throws Exception {
         Orchestrator $ = Orchestrator.create();
-        GlobalConfig.Config globalConfig = GlobalConfig.getConfig();
+        GlobalOrchestratorConfig.Config globalConfig = GlobalOrchestratorConfig.getConfig();
         run3($, $, globalConfig, $);
     }
 
@@ -226,14 +233,14 @@ public class TaskRunnerTest {
     public void parV() throws Exception {
         MockRunner firstMockRunner = new MockRunner(0);
         MockRunner secondMockRunner = new MockRunner(1);
-        GlobalConfig.getConfig().firstInterceptWith(firstMockRunner);
-        GlobalConfig.getConfig().lastInterceptWith(secondMockRunner);
+        GlobalOrchestratorConfig.getConfig().firstInterceptWith(firstMockRunner);
+        GlobalOrchestratorConfig.getConfig().lastInterceptWith(secondMockRunner);
 
         Orchestrator $ = Orchestrator.create();
         CompletableFuture<Integer> left = $.task(task()).name("left").ret(1);
         CompletableFuture<Integer> right = $.task(task()).name("right").ret(2);
         CompletableFuture<Integer> add = $.task(task()).name("bottom").add(left, (right));
-        assertEquals(3, (int)add.get());
+        assertEquals(3, (int) add.get());
 
         firstMockRunner.verify(3, 2, 1);
         secondMockRunner.verify(3, 2, 1);
@@ -247,8 +254,8 @@ public class TaskRunnerTest {
         MockRunner gr2 = new MockRunner(0);
         MockRunner or1 = new MockRunner(0);
         MockRunner or2 = new MockRunner(0);
-        GlobalConfig.getConfig().firstInterceptWith(gr1);
-        GlobalConfig.getConfig().firstInterceptWith(gr2);
+        GlobalOrchestratorConfig.getConfig().firstInterceptWith(gr1);
+        GlobalOrchestratorConfig.getConfig().firstInterceptWith(gr2);
 
         Orchestrator $ = Orchestrator.create();
         $.firstInterceptWith(or1);

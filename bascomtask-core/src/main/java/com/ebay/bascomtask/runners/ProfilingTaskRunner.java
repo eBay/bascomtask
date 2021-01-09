@@ -83,7 +83,7 @@ public class ProfilingTaskRunner implements TaskRunner {
         public String toString() {
             String nm = getClass().getSimpleName();
             String mn = taskRun.getTaskPlusMethodName();
-            return nm + "(" + mn + ", ["+threadTracker.threadName+"], level="+level+")";
+            return nm + "(" + mn + ", [" + threadTracker.threadName + "], level=" + level + ")";
 
         }
 

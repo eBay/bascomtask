@@ -17,7 +17,6 @@
 package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.annotations.Light;
-import com.ebay.bascomtask.exceptions.TaskNotStartedException;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

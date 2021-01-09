@@ -35,6 +35,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.ebay.bascomtask.core.UberTask.*;
@@ -242,13 +243,13 @@ public class CoreTest extends BaseOrchestratorTest {
         $.setName("face");
         CompletableFuture<Integer> leftEar = $.task(task()).name("leftEar").ret(1);
         CompletableFuture<Integer> rightEar = $.task(task()).name("rightEar").ret(2);
-        CompletableFuture<Integer> nose = $.task(task()).name("nose").add(leftEar,(rightEar));
+        CompletableFuture<Integer> nose = $.task(task()).name("nose").add(leftEar, (rightEar));
 
-        assertEquals(3,(int)nose.get());  // Execute first so all are executed and we can test threads below
-        assertEquals(1,(int)leftEar.get());
-        assertEquals(2,(int)rightEar.get());
+        assertEquals(3, (int) nose.get());  // Execute first so all are executed and we can test threads below
+        assertEquals(1, (int) leftEar.get());
+        assertEquals(2, (int) rightEar.get());
 
-        threadCheck(1,1,2,3,0,0);
+        threadCheck(1, 1, 2, 3, 0, 0);
     }
 
     private void vAdd(Weight leftWeight, Weight rightWeight, boolean sameIfNormalMode, boolean ifNeverMain, boolean ifAlwaysSpawn) throws Exception {
@@ -450,40 +451,63 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test
-    public void externalToExternal() throws Exception  {
-        CompletableFuture<Integer> cf1 = CompletableFuture.supplyAsync(()->sleepThen(20,1));
-        CompletableFuture<Integer> cf2 = $.task(task()).inc(cf1).thenApply(v->v+1);
-        assertEquals(3,(int)cf2.get());
+    public void externalToExternal() throws Exception {
+        CompletableFuture<Integer> cf1 = CompletableFuture.supplyAsync(() -> sleepThen(20, 1));
+        CompletableFuture<Integer> cf2 = $.task(task()).inc(cf1).thenApply(v -> v + 1);
+        assertEquals(3, (int) cf2.get());
     }
 
-    private int getFromPoolsOfSize(CompletableFuture<Integer> cf, int size) throws Exception {
-        ExecutorService svc = Executors.newFixedThreadPool(size);
-
-        try {
-            GlobalConfig.getConfig().setExecutorService(svc);
-            return cf.get();
-        } finally {
-            GlobalConfig.getConfig().restoreDefaultExecutorService();
+    private <T extends TaskInterface<T>> T spawn(T t, boolean spawn) {
+        if (spawn) {
+            t = t.runSpawned();
         }
+        return t;
     }
 
-    @Test
-    public void poolSizeExceeded() throws Exception {
+    public void poolSizeExceeded(boolean spawn, Function<ExecutorService, Orchestrator> fn) throws Exception {
+        ExecutorService svc = Executors.newFixedThreadPool(1);
+        Orchestrator $ = fn.apply(svc);
         UberTask task = task(3).delayFor(100);
-        CompletableFuture<Integer> t1 = $.task(task).ret(1);
-        CompletableFuture<Integer> t2 = $.task(task).ret(2);
-        CompletableFuture<Integer> t3 = $.task(task).ret(4);
-        CompletableFuture<Integer> add = $.task(task().delayFor(0)).add(t1, t2, t3);
-        int got = getFromPoolsOfSize(add, 1);
+        CompletableFuture<Integer> t1 = spawn($.task(task), spawn).ret(1);
+        CompletableFuture<Integer> t2 = spawn($.task(task), spawn).ret(2);
+        CompletableFuture<Integer> t3 = spawn($.task(task), spawn).ret(4);
+        CompletableFuture<Integer> add = spawn($.task(task().delayFor(0)), spawn).add(t1, t2, t3);
+        int got = add.get();
         assertEquals(7, got);
     }
 
+    private void poolSizeExceededGlobal(boolean spawn) throws Exception {
+        poolSizeExceeded(spawn, svc -> {
+            GlobalOrchestratorConfig.getConfig().setExecutorService(svc);
+            return new Engine("foo", null);
+        });
+    }
+
+    private void poolSizeExceededLocal(boolean spawn) throws Exception {
+        poolSizeExceeded(spawn, svc -> {
+            $.setExecutorService(svc);
+            return $;
+        });
+    }
+
     @Test
-    public void poolSizeExceededInSpawnedThread() throws Exception {
-        CompletableFuture<Integer> t1 = $.task(task()).runSpawned().ret(1);
-        CompletableFuture<Integer> t2 = $.task(task()).runSpawned().inc(t1);
-        int got = getFromPoolsOfSize(t2, 1);
-        assertEquals(2, got);
+    public void poolSizeExceededGlobal() throws Exception {
+        poolSizeExceededGlobal(false);
+    }
+
+    @Test
+    public void poolSizeExceededLocal() throws Exception {
+        poolSizeExceededLocal(false);
+    }
+
+    @Test
+    public void poolSizeExceededGlobalSpawning() throws Exception {
+        poolSizeExceededGlobal(true);
+    }
+
+    @Test
+    public void poolSizeExceededLocalSpawning() throws Exception {
+        poolSizeExceededLocal(true);
     }
 
     @Test
@@ -559,14 +583,16 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutOrchestrator() throws Exception {
-        $.setTimeout(5, TimeUnit.MILLISECONDS);
+        long duration = 5;
+        $.setTimeout(duration, TimeUnit.MILLISECONDS);
+        assertEquals(duration, $.getTimeoutMs());
         CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).name("delayed").ret(1);
         $.task(task(0)).name("follow").inc(f1).get();
     }
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobal() throws Exception {
-        GlobalConfig.getConfig().setTimeout(20, TimeUnit.MILLISECONDS);
+        GlobalOrchestratorConfig.getConfig().setTimeout(20, TimeUnit.MILLISECONDS);
         $ = Orchestrator.create("timer");  // So it picks up global settings
         CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).name("delayed").ret(1);
         $.task(task(0)).name("follow").inc(f1).get();
@@ -574,7 +600,7 @@ public class CoreTest extends BaseOrchestratorTest {
 
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGlobalSpawned() throws Exception {
-        GlobalConfig.getConfig().setTimeout(20, TimeUnit.MILLISECONDS);
+        GlobalOrchestratorConfig.getConfig().setTimeout(20, TimeUnit.MILLISECONDS);
         $ = Orchestrator.create("timer");  // So it picks up global settings
         CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).runSpawned().name("delayed").ret(1);
         $.task(task(0)).name("follow").inc(f1).get();
@@ -583,7 +609,7 @@ public class CoreTest extends BaseOrchestratorTest {
     @Test(expected = TimeoutExceededException.class)
     public void timeoutGetSpawned() throws Exception {
         CompletableFuture<Integer> f1 = $.task(task(1).delayFor(60)).runSpawned().name("delayed").ret(1);
-        $.task(task(0)).name("follow").inc(f1).get(20,TimeUnit.MILLISECONDS);
+        $.task(task(0)).name("follow").inc(f1).get(20, TimeUnit.MILLISECONDS);
     }
 
     @Test(expected = TimeoutExceededException.class)
@@ -595,9 +621,54 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> g1 = $.task(task(exp).delayFor(4)).runSpawned().name("g1-delayed").ret(1);
         CompletableFuture<Integer> g2 = $.task(task(exp)).name("g2-follow").inc(g1);
 
-        $.execute(20,f2,g2);
-        assertEquals(2,(int)g2.get());
+        $.execute(20, f2, g2);
+        assertEquals(2, (int) g2.get());
         f2.get();
+    }
+
+    private void timeout(TimeoutStrategy strategy, int exp) throws Exception {
+        try {
+            $.setTimeoutStrategy(strategy);
+            $.setTimeoutMs(5);
+            CompletableFuture<Integer> f1 = $.task(task(exp).delayFor(20)).name("f1").ret(1);
+
+            CompletableFuture<Integer> f2 = $.task(task(0).delayFor(60)).name("f2").ret(1);
+            CompletableFuture<Integer> f3 = $.task(task(0)).runSpawned().name("f3").add(f1, f2);
+            f3.get();
+        } catch (TaskInterruptedException | TimeoutExceededException e) {
+            return;
+        }
+        fail("No exception");
+    }
+
+    @Test
+    public void timeoutNextOpportunity() throws Exception {
+        timeout(TimeoutStrategy.INTERRUPT_AT_NEXT_OPPORTUNITY, 1);
+    }
+
+    @Test
+    public void timeoutImmediately() throws Exception {
+        int exp = (mode == SpawnMode.NEVER_SPAWN || mode == SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT) ? 1 : 0;
+        timeout(TimeoutStrategy.INTERRUPT_IMMEDIATELY, exp);
+    }
+
+    @Test
+    public void waitAndtimeoutImmediately() throws Exception {
+        try {
+            $.setTimeoutStrategy(TimeoutStrategy.INTERRUPT_IMMEDIATELY);
+            int exp = mode == SpawnMode.NEVER_SPAWN || mode == SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT ? 1 : 0;
+            CompletableFuture<Integer> f1 = $.task(task(exp).delayFor(20)).name("f1").ret(1);
+            CompletableFuture<Integer> f2 = $.task(task(0).delayFor(20)).name("f2").ret(1);
+            CompletableFuture<Integer> f3 = $.task(task(0).delayFor(20)).name("f3").ret(1);
+
+            $.executeAndWait(5, TimeUnit.MILLISECONDS, f1, f2, f3);
+            f1.get();
+            f2.get();
+            f3.get();
+        } catch (TaskInterruptedException | TimeoutExceededException e) {
+            return;
+        }
+        fail("No timeout");
     }
 
     @Test
@@ -862,9 +933,9 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> fThen = $.task(task().delayFor(1)).name("then").ret(1);
         CompletableFuture<Integer> fElse = $.task(task().delayFor(1)).name("else").ret(2);
 
-        CompletableFuture<Integer> r = $.cond(fCond,fThen,true,fElse,true);
+        CompletableFuture<Integer> r = $.cond(fCond, fThen, true, fElse, true);
 
-        assertEquals(1,(int)r.get());
+        assertEquals(1, (int) r.get());
     }
 
     @Test
@@ -873,9 +944,9 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> fThen = $.task(task().delayFor(1)).name("then").ret(1);
         CompletableFuture<Integer> fElse = $.task(task().delayFor(20)).name("else").ret(2);
 
-        CompletableFuture<Integer> r = $.cond(fCond,fThen,true,fElse,true);
+        CompletableFuture<Integer> r = $.cond(fCond, fThen, true, fElse, true);
 
-        assertEquals(2,(int)r.get());
+        assertEquals(2, (int) r.get());
     }
 
     ///
@@ -1033,7 +1104,7 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(2, (int) f2.get());
         assertEquals(3, (int) f3.get());
 
-        threadCheck(3,3,4,7,0,0);
+        threadCheck(3, 3, 4, 7, 0, 0);
 
         sleep(30);
     }
@@ -1045,32 +1116,32 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> f3 = $.task(task().delayFor(20)).name("f3").ret(3);
 
         $.task(task(0)).name("f4").inc(f1);
-        CompletableFuture<Integer> f5 = $.task(task()).name("f5").add(f1,f2);
-        CompletableFuture<Integer> f6 = $.task(task().delayFor(0)).name("f6").add(f2,f3);
+        CompletableFuture<Integer> f5 = $.task(task()).name("f5").add(f1, f2);
+        CompletableFuture<Integer> f6 = $.task(task().delayFor(0)).name("f6").add(f2, f3);
 
         CompletableFuture<Integer> f7 = $.task(task()).name("f7").inc(f5);
-        CompletableFuture<Integer> f8 = $.task(task()).name("f8").add(f5,f6);
+        CompletableFuture<Integer> f8 = $.task(task()).name("f8").add(f5, f6);
         CompletableFuture<Integer> f9 = $.task(task()).name("f9").inc(f6);
         CompletableFuture<Integer> f10 = $.task(task()).name("f10").inc(f6);
 
         $.task(task(0)).name("f11").inc(f7);
         CompletableFuture<Integer> f12 = $.task(task().delayFor(0)).name("f12").add(f7, f8, f9, f10);
 
-        assertEquals(24,(int)f12.get());  // Execute first so all threads activated for tests below
+        assertEquals(24, (int) f12.get());  // Execute first so all threads activated for tests below
 
-        assertEquals(1,(int)f1.get());
-        assertEquals(2,(int)f2.get());
-        assertEquals(3,(int)f3.get());
+        assertEquals(1, (int) f1.get());
+        assertEquals(2, (int) f2.get());
+        assertEquals(3, (int) f3.get());
 
-        assertEquals(3,(int)f5.get());
-        assertEquals(5,(int)f6.get());
+        assertEquals(3, (int) f5.get());
+        assertEquals(5, (int) f6.get());
 
-        assertEquals(4,(int)f7.get());
-        assertEquals(8,(int)f8.get());
-        assertEquals(6,(int)f9.get());
-        assertEquals(6,(int)f10.get());
+        assertEquals(4, (int) f7.get());
+        assertEquals(8, (int) f8.get());
+        assertEquals(6, (int) f9.get());
+        assertEquals(6, (int) f10.get());
 
-        threadCheck(4,4,5,10,0,0);
+        threadCheck(4, 4, 5, 10, 0, 0);
 
         sleep(30);
     }

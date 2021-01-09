@@ -141,7 +141,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         exp += "  0| blue.dog        --- \n";
         exp += " 10| green.hornet    =-= \n";
         exp += " 20|                 --- \n";
-        assertEquals(exp,fmt);
+        assertEquals(exp, fmt);
     }
 
     @Test
@@ -202,11 +202,11 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
         ProfilingTaskRunner taskRunner = new ProfilingTaskRunner();
 
-        assertEquals(0,$.getNumberOfInterceptors());
+        assertEquals(0, $.getNumberOfInterceptors());
 
         $.firstInterceptWith(taskRunner);
 
-        assertEquals(1,$.getNumberOfInterceptors());
+        assertEquals(1, $.getNumberOfInterceptors());
 
         $.task(task()).name("blue").ret(1).get();
 
@@ -218,7 +218,7 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void globalConfigReplace() throws Exception {
-        GlobalConfig.setConfig(new GlobalConfig.Config() {
+        GlobalOrchestratorConfig.setConfig(new GlobalOrchestratorConfig.Config() {
             @Override
             public void afterDefaultInitialization(Orchestrator orchestrator, Object arg) {
                 ProfilingTaskRunner ptr = new ProfilingTaskRunner();
