@@ -47,9 +47,7 @@ public class ThreadLocalRunners<RUNNER extends TaskRunner> {
      * @param fn to generate the TaskRunner to add
      */
     public void firstInterceptWith(Supplier<RUNNER> fn) {
-        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> {
-            firstSet($, fn);
-        });
+        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> firstSet($, fn));
     }
 
     /**
@@ -58,9 +56,7 @@ public class ThreadLocalRunners<RUNNER extends TaskRunner> {
      * @param fn to generate the TaskRunner to add
      */
     public void lastInterceptWith(Supplier<RUNNER> fn) {
-        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> {
-            lastSet($, fn);
-        });
+        GlobalOrchestratorConfig.getConfig().initializeWith(($, arg) -> lastSet($, fn));
     }
 
     /**

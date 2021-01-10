@@ -279,12 +279,12 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
 
     @Test
     public void globalConfigSetFirstConditionTrue() throws Exception {
-        testConditionFalse(true);
+        testConditionTrue(true);
     }
 
     @Test
     public void globalConfigSetLastConditionTrue() throws Exception {
-        testConditionFalse(false);
+        testConditionTrue(false);
     }
 
     private void testConditionFalse(boolean firstElseLast) throws Exception {

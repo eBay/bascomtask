@@ -16,11 +16,13 @@
  **************************************************************************/
 package com.ebay.bascomtask.core;
 
+import com.ebay.bascomtask.annotations.Light;
 import org.junit.Test;
 
+import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 /**
  * Utilities test.
@@ -41,5 +43,32 @@ public class UtilsTest extends BaseOrchestratorTest {
         };
         Utils.formatFullSignature(sb, base, args);
         assertEquals(base + "(3,foo,+7,-)", sb.toString());
+    }
+
+    static class Base {
+        @Light
+        public int bar() {return 1;}
+    }
+
+    static class Sub extends Base {
+        public int bar() {return super.bar();}
+    }
+
+    @Test
+    public void annotationPresent() throws Exception {
+        Method method = Sub.class.getMethod("bar");
+        Sub sub = new Sub();
+        assertEquals(1,sub.bar()); // just to keep static analysis tools happy
+        Light ann = Utils.getAnnotation(sub,method,Light.class);
+        assertNotNull(ann);
+    }
+
+    @Test
+    public void annotationNoPresent() throws Exception {
+        Method method = Sub.class.getMethod("bar");
+        Sub sub = new Sub();
+        assertEquals(1,sub.bar()); // just to keep static analysis tools happy
+        Override ann = Utils.getAnnotation(sub,method,Override.class);
+        assertNull(ann);
     }
 }

@@ -69,7 +69,7 @@ class TimeBox {
         return System.currentTimeMillis() >= start + timeBudget;
     }
 
-    void checkIfTimeoutExceeded(Binding binding) {
+    void checkIfTimeoutExceeded(Binding<?> binding) {
         if (timeBudget > 0 && isTimedOut()) {
             String msg = "Timeout " + timeBudget + " exceeded before " + binding.getTaskPlusMethodName() + ", ceasing task creation";
             LOG.debug("Throwing " + msg);
@@ -77,7 +77,7 @@ class TimeBox {
         }
     }
 
-    void checkForInterruptsNeeded(Binding binding) {
+    void checkForInterruptsNeeded(Binding<?> binding) {
         if (timeBudget > 0) {
             if (binding.engine.getTimeoutStrategy() == TimeoutStrategy.INTERRUPT_AT_NEXT_OPPORTUNITY) {
                 if (isTimedOut()) {

@@ -71,19 +71,17 @@ public class CoreTest extends BaseOrchestratorTest {
         return mode == null ? SpawnMode.WHEN_NEEDED : mode;
     }
 
-    private void checkSameThreads(UberTask t1, UberTask t2, boolean sameIfNormalMode, boolean sameUnlessExplicit, boolean ifNeverMain, boolean ifAlwaysSpawn) {
+    private void checkSameThreads(UberTask t1, UberTask t2, boolean sameIfNormalMode, boolean ifNeverMain, boolean ifAlwaysSpawn) {
         boolean same = t1.ranInSameThread(t2);
         boolean cmp;
         SpawnMode mode = getEffectiveMode();
         switch (mode) {
             case NEVER_SPAWN:
+            case DONT_SPAWN_UNLESS_EXPLICIT:
                 cmp = true;
                 break;
             case NEVER_MAIN:
                 cmp = ifNeverMain;
-                break;
-            case DONT_SPAWN_UNLESS_EXPLICIT:
-                cmp = sameUnlessExplicit;
                 break;
             case WHEN_NEEDED:
             case WHEN_NEEDED_NO_REUSE:
@@ -127,7 +125,7 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
 
-    private void threadCheck(int whenNeeded, int whenNeededNoReuse, int neverMain, int alwaysSpawn, int neverSpawn, int dontSpawnUnlessExplicit) {
+    private void threadCheck(int whenNeeded, int whenNeededNoReuse, int neverMain, int alwaysSpawn, int dontSpawnUnlessExplicit) {
         final SpawnMode mode = getEffectiveMode();
         int expThreadCount;
         switch (mode) {
@@ -144,7 +142,7 @@ public class CoreTest extends BaseOrchestratorTest {
                 expThreadCount = alwaysSpawn;
                 break;
             case NEVER_SPAWN:
-                expThreadCount = neverSpawn;
+                expThreadCount = 0;
                 break;
             case DONT_SPAWN_UNLESS_EXPLICIT:
                 expThreadCount = dontSpawnUnlessExplicit;
@@ -181,6 +179,22 @@ public class CoreTest extends BaseOrchestratorTest {
         naming(new NamingTask.OverridesNothing());
         naming(new NamingTask.OverridesGet());
         naming(new NamingTask.OverridesGetAndSet());
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void nopsOnTaskInterface() {
+        NamingTask task = new NamingTask.OverridesNothing();
+        assertEquals(task, task.light());
+        assertEquals(task, task.runSpawned());
+        assertEquals(NamingTask.OverridesNothing.class.getSimpleName(), $.task(task).getName());
+        task.name("etc");
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void faultOnGet() {
+        CompletableFuture<Integer> cf = new CompletableFuture<>();
+        cf.completeExceptionally(new RuntimeException());
+        task(0).inc(cf);  // Should fault on get(cf)
     }
 
     @Test
@@ -249,7 +263,21 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(1, (int) leftEar.get());
         assertEquals(2, (int) rightEar.get());
 
-        threadCheck(1, 1, 2, 3, 0, 0);
+        threadCheck(1, 1, 2, 3, 0);
+    }
+
+    @Test
+    public void spawnedVWithNaming() throws Exception {
+        $.setName("face");
+        CompletableFuture<Integer> leftEar = $.task(task()).runSpawned().name("leftEar").ret(1);
+        CompletableFuture<Integer> rightEar = $.task(task()).runSpawned().name("rightEar").ret(2);
+        CompletableFuture<Integer> nose = $.task(task()).runSpawned().name("nose").add(leftEar, (rightEar));
+
+        assertEquals(3, (int) nose.get());  // Execute first so all are executed and we can test threads below
+        assertEquals(1, (int) leftEar.get());
+        assertEquals(2, (int) rightEar.get());
+
+        threadCheck(2, 3, 3, 3, 2);
     }
 
     private void vAdd(Weight leftWeight, Weight rightWeight, boolean sameIfNormalMode, boolean ifNeverMain, boolean ifAlwaysSpawn) throws Exception {
@@ -261,7 +289,7 @@ public class CoreTest extends BaseOrchestratorTest {
         int got = v.get();
         assertEquals(6, got);
 
-        checkSameThreads(left, right, sameIfNormalMode, true, ifNeverMain, ifAlwaysSpawn);
+        checkSameThreads(left, right, sameIfNormalMode, ifNeverMain, ifAlwaysSpawn);
     }
 
     @Test
@@ -284,7 +312,7 @@ public class CoreTest extends BaseOrchestratorTest {
         int got = bf.get();
         assertEquals(4, got);
 
-        checkSameThreads(left, right, sameIfNormalMode, true, sameIfNormalMode, ifAlwaysSpawn);
+        checkSameThreads(left, right, sameIfNormalMode, sameIfNormalMode, ifAlwaysSpawn);
     }
 
     @Test
@@ -464,6 +492,22 @@ public class CoreTest extends BaseOrchestratorTest {
         return t;
     }
 
+    @Test
+    public void orchestratorCreate() {
+        class Holder {
+            Orchestrator orc;
+            Object arg;
+        }
+        Holder holder = new Holder();
+        GlobalOrchestratorConfig.getConfig().initializeWith((orc,arg)->{holder.orc = orc; holder.arg=arg;});
+        Object x = new Object();
+        String name = "sample_name";
+        $ = Orchestrator.create(name,x);
+        assertEquals(name,$.getName());
+        assertSame($,holder.orc);
+        assertSame(x,holder.arg);
+    }
+
     public void poolSizeExceeded(boolean spawn, Function<ExecutorService, Orchestrator> fn) throws Exception {
         ExecutorService svc = Executors.newFixedThreadPool(1);
         Orchestrator $ = fn.apply(svc);
@@ -621,7 +665,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> g1 = $.task(task(exp).delayFor(4)).runSpawned().name("g1-delayed").ret(1);
         CompletableFuture<Integer> g2 = $.task(task(exp)).name("g2-follow").inc(g1);
 
-        $.execute(20, f2, g2);
+        $.execute(20, TimeUnit.MILLISECONDS, f2, g2);
         assertEquals(2, (int) g2.get());
         f2.get();
     }
@@ -1104,7 +1148,7 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(2, (int) f2.get());
         assertEquals(3, (int) f3.get());
 
-        threadCheck(3, 3, 4, 7, 0, 0);
+        threadCheck(3, 3, 4, 7, 0);
 
         sleep(30);
     }
@@ -1141,7 +1185,7 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(6, (int) f9.get());
         assertEquals(6, (int) f10.get());
 
-        threadCheck(4, 4, 5, 10, 0, 0);
+        threadCheck(4, 4, 5, 10, 0);
 
         sleep(30);
     }

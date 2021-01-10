@@ -17,8 +17,6 @@
 package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.annotations.Light;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -118,8 +116,6 @@ public interface UberTask extends TaskInterface<UberTask> {
     UberTasker delayFor(int ms);
 
     class UberTasker implements UberTask {
-        private static final Logger LOG = LoggerFactory.getLogger(UberTasker.class);
-
         private String threadName = null;
         private final int expectedExecutionCount;
         private int sleepForMs = 20;
@@ -190,17 +186,14 @@ public interface UberTask extends TaskInterface<UberTask> {
         }
 
         private void delay() {
-            LOG.debug("U-START " + getName());
             threadName = Thread.currentThread().getName();
             if (sleepForMs > 0) {
                 try {
                     Thread.sleep(sleepForMs);
                 } catch (InterruptedException e) {
-                    LOG.debug("U-INT " + getName());
                     throw new TaskInterruptedException("Interrupted during delay");
                 }
             }
-            LOG.debug("U-EXIT " + getName());
             actualCount.incrementAndGet();
         }
 
@@ -330,6 +323,8 @@ public interface UberTask extends TaskInterface<UberTask> {
 
         @Override
         public CompletableFuture<Integer> incIf(CompletableFuture<Integer> x, CompletableFuture<Boolean> b) {
+            checkDone(x);
+            checkDone(b);
             int v = get(x);
             if (get(b)) {
                 v++;

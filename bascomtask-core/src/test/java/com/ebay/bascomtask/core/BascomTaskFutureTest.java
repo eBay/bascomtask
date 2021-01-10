@@ -17,7 +17,6 @@
 package com.ebay.bascomtask.core;
 
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
@@ -25,7 +24,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 /**
  * Test CompletableFutures activation.
@@ -98,9 +97,14 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         return currentTask.hit();
     }
 
-    @Before
-    public void before() {
-        super.before();
+    private void hit(int exp, int got) {
+        assertEquals(exp, got);
+        hit();
+    }
+
+    private void verify(int exp, int got, Throwable ex) {
+        assertEquals(exp, got);
+        assertNull(ex);
     }
 
     @After
@@ -113,15 +117,94 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     }
 
     @Test
+    public void toStringFormat() {
+        final String NAME = "foo-bar-baz";
+        CompletableFuture<Integer> cf = $.task(task(0)).name(NAME).ret(0);
+        assertTrue(cf.toString().contains(NAME));
+    }
+
+    @Test
+    public void get() throws Exception {
+        CompletableFuture<Integer> cf = $.task(task(1)).retHit(8);
+        assertEquals(8, (int) cf.get());
+    }
+
+    @Test
+    public void join() {
+        CompletableFuture<Integer> cf = $.task(task(1)).retHit(8);
+        assertEquals(8, (int) cf.join());
+    }
+
+    @Test
+    public void getNow() {
+        CompletableFuture<Integer> cf = $.task(task(1)).retHit(8);
+        assertEquals(8, (int) cf.getNow(99));
+    }
+
+    @Test
     public void thenAccept() {
         CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
-        cf.thenAccept(v -> hit());
+        assertNotNull(cf.thenAccept(v -> hit()));
     }
+
+    @Test
+    public void thenAcceptAsync() {
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenAcceptAsync(v -> hit()));
+    }
+
+    @Test
+    public void thenAcceptAsyncExecutor() {
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenAcceptAsync(v -> hit(), executor));
+    }
+
+
+    @Test
+    public void thenAcceptBoth() {
+        CompletableFuture<Integer> other = $.task(task(1)).ret(5);
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenAcceptBoth(other, (x, y) -> hit(6, x + y)));
+    }
+
+    @Test
+    public void thenAcceptBothAsync() {
+        CompletableFuture<Integer> other = $.task(task(1)).ret(5);
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenAcceptBothAsync(other, (x, y) -> hit(6, x + y)));
+    }
+
+    @Test
+    public void thenAcceptBothAsyncExecutor() {
+        CompletableFuture<Integer> other = $.task(task(1)).ret(3);
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenAcceptBothAsync(other, (x, y) -> hit(4, x + y), executor));
+    }
+
+
+    @Test
+    public void thenRun() {
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenRun(this::hit));
+    }
+
+    @Test
+    public void thenRunAsync() {
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenRunAsync(this::hit));
+    }
+
+    @Test
+    public void thenRunAsyncExecutor() {
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        assertNotNull(cf.thenRunAsync(this::hit, executor));
+    }
+
 
     @Test
     public void thenApply() {
         CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
-        cf.thenApply(v -> hit());
+        assertNotNull(cf.thenApply(v -> hit()));
     }
 
     @Test
@@ -140,9 +223,17 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     }
 
     @Test
-    public void thenApplyAsync() {
+    public void thenApplyAsync() throws Exception {
         CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
-        cf.thenApplyAsync(v -> hit());
+        int got = cf.thenApplyAsync(v -> hit()).get();
+        assertEquals(1, got);
+    }
+
+    @Test
+    public void thenApplyAsyncExecutor() throws Exception {
+        CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
+        int got = cf.thenApplyAsync(v -> hit(), executor).get();
+        assertEquals(1, got);
     }
 
     @Test
@@ -166,12 +257,46 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     }
 
     @Test
+    public void thenCombineAsyncExecutor() throws Exception {
+        CountingTask task = task(0);
+        CompletableFuture<Integer> cf1 = $.task(task).ret(1);
+        CompletableFuture<Integer> cf2 = $.task(task).ret(1);
+        CompletableFuture<Integer> combine = cf1.thenCombineAsync(cf2, Integer::sum, executor);
+        int got = combine.get();
+        assertEquals(2, got);
+    }
+
+    @Test
     public void thenCompose() throws Exception {
         final int RV = 9;
         CountingTask task = task(0);
         CompletableFuture<Integer> cf1 = $.task(task).ret(1);
         CompletableFuture<Integer> cf2 = $.task(task).ret(RV);
         CompletableFuture<Integer> compose = cf1.thenCompose(v -> cf2);
+        $.execute(cf2);  // Required because cf2 is otherwise invisible
+        int got = compose.get();
+        assertEquals(RV, got);
+    }
+
+    @Test
+    public void thenComposeAsync() throws Exception {
+        final int RV = 9;
+        CountingTask task = task(0);
+        CompletableFuture<Integer> cf1 = $.task(task).ret(1);
+        CompletableFuture<Integer> cf2 = $.task(task).ret(RV);
+        CompletableFuture<Integer> compose = cf1.thenComposeAsync(v -> cf2);
+        $.execute(cf2);  // Required because cf2 is otherwise invisible
+        int got = compose.get();
+        assertEquals(RV, got);
+    }
+
+    @Test
+    public void thenComposeAsyncExecutor() throws Exception {
+        final int RV = 9;
+        CountingTask task = task(0);
+        CompletableFuture<Integer> cf1 = $.task(task).ret(1);
+        CompletableFuture<Integer> cf2 = $.task(task).ret(RV);
+        CompletableFuture<Integer> compose = cf1.thenComposeAsync(v -> cf2, executor);
         $.execute(cf2);  // Required because cf2 is otherwise invisible
         int got = compose.get();
         assertEquals(RV, got);
@@ -185,7 +310,6 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         int got = compose.get();
         assertEquals(8, got);
     }
-
 
     @Test
     public void applyToEither() throws Exception {
@@ -203,6 +327,16 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
         CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
         CompletableFuture<Integer> combine = cf1.applyToEitherAsync(cf2, x -> x * 5);
+        int got = combine.get();
+        assertEquals(5, got);
+    }
+
+    @Test
+    public void applyToEitherAsyncExecutor() throws Exception {
+        CountingTask task = task(2);
+        CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
+        CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
+        CompletableFuture<Integer> combine = cf1.applyToEitherAsync(cf2, x -> x * 5, executor);
         int got = combine.get();
         assertEquals(5, got);
     }
@@ -230,12 +364,45 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     }
 
     @Test
+    public void runAfterEitherAsyncExecutor() throws Exception {
+        final int RV = 9;
+        CountingTask task = task(2);
+        CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
+        CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
+        CompletableFuture<Void> combine = cf1.runAfterEitherAsync(cf2, () -> currentTask.holder.set(RV), executor);
+        combine.get();
+        assertEquals(RV, currentTask.holder.get());
+    }
+
+    @Test
     public void runAfterBoth() throws Exception {
         final int RV = 9;
         CountingTask task = task(2);
         CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
         CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
         CompletableFuture<Void> combine = cf1.runAfterBoth(cf2, () -> currentTask.holder.set(RV));
+        combine.get();
+        assertEquals(RV, currentTask.holder.get());
+    }
+
+    @Test
+    public void runAfterBothAsync() throws Exception {
+        final int RV = 9;
+        CountingTask task = task(2);
+        CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
+        CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
+        CompletableFuture<Void> combine = cf1.runAfterBothAsync(cf2, () -> currentTask.holder.set(RV));
+        combine.get();
+        assertEquals(RV, currentTask.holder.get());
+    }
+
+    @Test
+    public void runAfterBothAsyncExecutor() throws Exception {
+        final int RV = 9;
+        CountingTask task = task(2);
+        CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
+        CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
+        CompletableFuture<Void> combine = cf1.runAfterBothAsync(cf2, () -> currentTask.holder.set(RV), executor);
         combine.get();
         assertEquals(RV, currentTask.holder.get());
     }
@@ -261,32 +428,37 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     }
 
     @Test
+    public void acceptEitherAsyncExecutor() throws Exception {
+        CountingTask task = task(2);
+        CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
+        CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
+        CompletableFuture<Void> either = cf1.acceptEitherAsync(cf2, x -> currentTask.holder.set(x), executor);
+        either.get();
+        assertEquals(1, currentTask.holder.get());
+    }
+
+    @Test
     public void whenComplete() throws Exception {
-        final int HV = 5;
-        CompletableFuture<Integer> cf1 = $.task(task(1)).retHit(1);
-        cf1.whenComplete((v, ex) -> currentTask.holder.set(HV));
-        assertEquals(1, (int) cf1.get());
-        assertEquals(HV, currentTask.holder.get());
+        int expectedValue = 567;
+        CompletableFuture<Integer> cf1 = $.task(task(1)).retHit(expectedValue);
+        int got = cf1.whenComplete((v, ex) -> verify(expectedValue, v, ex)).get();
+        assertEquals(expectedValue,got);
     }
 
     @Test
     public void whenCompleteAsync() throws Exception {
-        final int HV = 5;
-        CompletableFuture<Integer> cf1 = $.task(task(1)).retHit(1);
-        cf1.whenCompleteAsync((v, ex) -> currentTask.holder.set(HV));
-        assertEquals(1, (int) cf1.get());
-        sleep(10);
-        assertEquals(HV, currentTask.holder.get());
+        int expectedValue = 567;
+        CompletableFuture<Integer> cf1 = $.task(task(1)).retHit(expectedValue);
+        int got = cf1.whenCompleteAsync((v, ex) -> verify(expectedValue, v, ex)).get();
+        assertEquals(expectedValue,got);
     }
 
     @Test
     public void whenCompleteAsyncExecutor() throws Exception {
-        final int HV = 5;
-        CompletableFuture<Integer> cf1 = $.task(task(1)).retHit(1);
-        cf1.whenCompleteAsync((v, ex) -> currentTask.holder.set(HV), executor);
-        assertEquals(1, (int) cf1.get());
-        sleep(10);
-        assertEquals(HV, currentTask.holder.get());
+        int expectedValue = 567;
+        CompletableFuture<Integer> cf1 = $.task(task(1)).retHit(expectedValue);
+        int got = cf1.whenCompleteAsync((v, ex) -> verify(expectedValue, v, ex),executor).get();
+        assertEquals(expectedValue,got);
     }
 
     @Test

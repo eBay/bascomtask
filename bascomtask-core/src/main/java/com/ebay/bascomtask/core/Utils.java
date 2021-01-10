@@ -20,6 +20,11 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Assorted utilities.
+ *
+ * @author Brendan McCarthy
+ */
 class Utils {
     static <T extends Annotation> T getAnnotation(Object x, Method method, Class<T> annotationType) {
         if (x != null) {

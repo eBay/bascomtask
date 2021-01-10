@@ -38,6 +38,8 @@ import static org.junit.Assert.assertTrue;
 public class TimingTest {
     private static final Logger LOG = LoggerFactory.getLogger(TimingTest.class);
 
+    private static int LOOP_COUNT = 1000;
+
     public static Level levelSave;
 
     @BeforeClass
@@ -56,12 +58,22 @@ public class TimingTest {
         logger.setLevel(levelSave);
     }
 
-    private void run(int times, double expectedMaxMs, String loc, Function<Long, Long> fn, Function<Long, Long> expecting) {
-        for (long i = 100; i < times; i++) { // Warmup
+    /**
+     * Runs fn repeatedly after a warmup, testing to ensure that there's no egregious slowness.
+     * Typically the average max should be much lower that the supplied expectedMaxMs to avoid failure for an
+     * occasional system overload irregularity.
+     *
+     * @param expectedMaxMs verify that avg for all runs does not exceed this
+     * @param loc           description to include in log output
+     * @param fn            to run on eac loop
+     * @param expecting     verify each run
+     */
+    private void run(double expectedMaxMs, String loc, Function<Long, Long> fn, Function<Long, Long> expecting) {
+        for (long i = 100; i < LOOP_COUNT; i++) { // Warmup
             fn.apply(i);
         }
         long start = System.nanoTime();
-        for (long i = 0; i < times; i++) {
+        for (long i = 0; i < LOOP_COUNT; i++) {
             long got = fn.apply(i);
             long exp = expecting.apply(i);
             if (exp != got) {
@@ -69,24 +81,24 @@ public class TimingTest {
             }
         }
         long duration = System.nanoTime() - start;
-        double avg = (duration / (float) times) / 1000000;
-        String msg = String.format("Avg time for %d loops on \"%s\": %.2fms%n", times, loc, avg);
+        double avg = (duration / (float) LOOP_COUNT) / 1000000;
+        String msg = String.format("Avg time for %d loops on \"%s\": %.2fms%n", LOOP_COUNT, loc, avg);
         LOG.info(msg);
         assertTrue(avg < expectedMaxMs);
     }
 
     @Test
     public void diamondTest() {
-        run(1000, 1, "diamond", GraphVariations::diamond, v -> (v + 1) * 2);
+        run(1, "diamond", GraphVariations::diamond, v -> (v + 1) * 2);
     }
 
     @Test
     public void gridTest() {
-        run(1000, 1.5, "grid3x3", GraphVariations::grid3x3, v -> v * 27);
+        run(1.5, "grid3x3", GraphVariations::grid3x3, v -> v * 27);
     }
 
     @Test
     public void stacksTest() {
-        run(1000, 2, "stacks", GraphVariations::stacks, v -> v * 16 + 10);
+        run(2, "stacks", GraphVariations::stacks, v -> v * 16 + 10);
     }
 }

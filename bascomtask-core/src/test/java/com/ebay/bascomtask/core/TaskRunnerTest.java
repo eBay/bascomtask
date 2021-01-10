@@ -29,8 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static com.ebay.bascomtask.core.UberTask.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Tests configuration of TaskRunners.
@@ -86,6 +85,7 @@ public class TaskRunnerTest {
         final AtomicInteger completedHits = new AtomicInteger(0);
         final AtomicBoolean matched = new AtomicBoolean(false);
         private final String name;
+        TaskRun taskRun;
 
         MockRunner(int expPos) {
             this.name = ord(expPos);
@@ -100,6 +100,10 @@ public class TaskRunnerTest {
         public Object before(TaskRun taskRun) {
             beforeHits.incrementAndGet();
             ordering.clear();
+            this.taskRun = taskRun;
+            assertEquals(0,taskRun.getStartedAt());
+            assertEquals(0,taskRun.getEndedAt());
+            assertEquals(0,taskRun.getCompletedAt());
             return matched;
         }
 
@@ -111,11 +115,17 @@ public class TaskRunnerTest {
             which.incrementAndGet();
             AtomicBoolean ab = (AtomicBoolean) fromBefore;
             ab.set(true);
+            assertNotEquals(0,taskRun.getStartedAt());
+            assertEquals(0,taskRun.getEndedAt());
+            assertEquals(0,taskRun.getCompletedAt());
             return taskRun.run();
         }
 
         @Override
         public void onComplete(TaskRun taskRun, Object fromBefore, boolean doneOnExit) {
+            assertNotEquals(0,taskRun.getStartedAt());
+            assertNotEquals(0,taskRun.getEndedAt());
+            assertEquals(0,taskRun.getCompletedAt());
             completedHits.incrementAndGet();
         }
 
@@ -168,9 +178,27 @@ public class TaskRunnerTest {
         MockRunner mockRunner = new MockRunner(0);
         GlobalOrchestratorConfig.getConfig().firstInterceptWith(mockRunner);
 
+        final String NAME = "blue";
         Orchestrator $ = Orchestrator.create();
-        $.task(task()).ret(1).get();
+        UberTasker task = task();
+        $.task(task).name(NAME).ret(1).get();
         mockRunner.verify(1, 1, 0);
+
+        assertTrue(mockRunner.toString().contains("first"));
+
+        assertSame(task,mockRunner.taskRun.getTask());
+        assertEquals(NAME+".ret",mockRunner.taskRun.getName());
+        assertEquals(NAME+".ret",mockRunner.taskRun.getTaskPlusMethodName());
+        StringBuilder sb = new StringBuilder();
+        mockRunner.taskRun.formatActualSignature(sb);
+        assertEquals(NAME+".ret(1)",sb.toString());
+
+        assertNotEquals(0,mockRunner.taskRun.getStartedAt());
+        assertNotEquals(0,mockRunner.taskRun.getEndedAt());
+        assertNotEquals(0,mockRunner.taskRun.getCompletedAt());
+
+        assertTrue(mockRunner.taskRun.getStartedAt() <= mockRunner.taskRun.getEndedAt());
+        assertTrue(mockRunner.taskRun.getEndedAt() <= mockRunner.taskRun.getCompletedAt());
     }
 
     @Test
