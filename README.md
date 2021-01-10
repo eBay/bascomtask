@@ -40,10 +40,12 @@ its argument might be:
     }
 ```
 
-Notice how the generic parameter to TaskInterface is the interface itself (IEchoTask in this example). There are no
-other requirements or restrictions on task classes other than providing an interface like the above. Task methods can 
-have any number and type of parameter, and there can be any number of task methods on a class. The task class may
-be stateful or not, depending on programming needs.
+Notice how the generic parameter to TaskInterface is the interface itself (IEchoTask in this example). 
+
+> The requirements to task-enable any POJO into a task are minimal: implement a marker interface (TaskInterface) that 
+> has no methods that need to be overridden. There are no other requirements or restrictions on task classes.
+> Task methods can have any number of and type of parameter, and there can be any number of task methods on a class. 
+> The task class may be stateful or not, depending on programming needs.
 
 ## Invoking a Task
 The example above can be invoked as follows. On the left, for reference, is how we would invoke the task using only
@@ -55,7 +57,7 @@ Java code. On the right the same task invocation is run through BascomTask:
 2 | String msg =  new EchoTask().echo("hello"); | String msg = $.task(new EchoTask()).echo("hello");
 
 The difference is that instead of invoking the task method directly on the user POJO, that POJO is first added to
-a BascomTask Orchestrator and then invoked (we use '$' as the variable name for an Orchestrator, but that is just
+a BascomTask Orchestrator before being invoked (we use '$' as the variable name for an Orchestrator, but that is just
 a convention that makes it stand out more). The benefit for this extra effort, in this simple example, is only that 
 the task is managed by the framework and facilities such as logging and profiling apply. 
 The real gains come when we aim for parallel execution if tasks. 
@@ -65,7 +67,7 @@ The first step toward parallelism is to employ CompletableFutures as the medium 
 maximizes opportunities for mapping different tasks to different threads. This is illustrated in the following 
 modification of the previous example that includes an additional task for combining space-separated strings. 
 We could have simple added the _combine()_ method same _EchoTask_ (a single task can have multiple diverse methods), 
-but for clarity they are separated:
+but for clarity they are separated in this example:
 
 ```java
     public interface IEchoTask extends TaskInterface<IEchoTask> {
@@ -86,9 +88,9 @@ but for clarity they are separated:
         }
     }
 ```
-This example makes use of _get()_ and _complete()_ methods, which are convenience methods defined in _TaskInterface_ 
-for getting and setting values from/to CompletableFutures. They are convenient but not mandatory; examining their simple
-implementations will make that apparent.
+The above makes calls to _get()_ and _complete()_, which are convenience methods defined in _TaskInterface_ 
+for getting and setting values from/to CompletableFutures. These are examples of convenience methods, not otherwise
+mandatory, defined on _TaskInterface_
 
 With the above task definitions in place, we can wire them together like this:
 
@@ -105,13 +107,13 @@ With the above task definitions in place, we can wire them together like this:
        }
    }
 ```
-With this, the left and right echo tasks will be executed in parallel and when they both complete then the CombinerTask 
-will be executed. This works because the actual execution does start until the _get()_ call. The framework works 
-backward from that call, recursively determining all the tasks that are required to complete that call, then
-initiates execution such that any task's inputs are executed prior to it being started.
-Because of this lazy execution, it is not costly to create many tasks and only later determine 
-which ones are needed; the framework will determine the minimal spanning set of tasks to actually execute, and then 
-proceed in a dataflow-forward execution style, executing tasks once (and only when) all their inputs are available 
+With this, the left and right echo tasks will be executed in parallel and when they both complete then (and only then)
+the CombinerTask will be executed. This works because the actual execution does start until the _get()_ call. 
+The framework works backward from the _get()_ call, recursively determining all the tasks that are required to complete 
+that call, then initiates execution such that any task's inputs are executed prior to it being started.
+Because of this lazy execution, it is not costly to create many tasks and only later determine which ones are needed; 
+the framework will determine the minimal spanning set of tasks to actually execute, and then proceed in a 
+dataflow-forward execution style, executing tasks once (and only when) all their inputs are available 
 and completed. 
 
 > Since the dependency analysis is determined from the method signatures themselves, it is not possible
@@ -167,23 +169,24 @@ assuming it arrives as the last argument for task 12. The result is now availabl
 thread caller.
 
 ### Options for Task Initiation
-As in the previous examples, a task method is activated when its value is retrieved through a _get()_ call. Activating
-a task method activates all its predecessors, recursively, if they have not already been activated. Activation can
-also be done independently of retrieving a value by calling _execute()_ on an Orchestrator. That call can be useful in
-the following scenarios:
+As in the previous examples, a task method is activated (scheduled for execution) when its value is retrieved through 
+a _get()_ call. Activating a task method activates all its predecessors, recursively, if they have not already been 
+activated. Activation can also be done independently of retrieving a value by calling _execute()_ on an Orchestrator. 
+That call can be useful in the following scenarios:
 
 * For activating multiple tasks at once (_execute()_ takes a vararg list of CompletableFutures). If, for example, you
   otherwise simply call f1.get() followed by a call f2.get(), f2 won't be activated until f1 completes. While there is
   no functional impact to doing that, it might not be as efficient as activating them both at the same time with 
-  an _execute()_ call.
+  a single call to  _execute(f1,f2)_.
 * For activating a task that you don't want to wait for, e.g. a background task.
 * For activating a task that is otherwise hidden. This is a special case. In addition to  _get()_, any of the many
   methods on CompletableFuture, such as _thenApply()_, _applyToEitherAsync()_, and so on, will also implicitly activate
   their arguments. The one case where this does _not_ happen is _thenCompose()_ because its CompletableFuture argument
   is hidden in a lambda. For tha case, its argument should be activated explicitly by an _execute()_ call.
 
-There is no harm in calling _execute()_ multiple times and/or calling both execute and get for a CompletableFuture. 
-The execution graph can extended at any time in a thread-safe manner with any of these calls.
+> There is no harm in calling _execute()_ multiple times and/or calling both execute and get for a CompletableFuture. 
+The execution graph can also be freely extended at any time, even in a nested task, in a thread-safe manner with 
+any of these calls. 
 
 ### External CompletableFutures
 CompletableFutures that originate externally to BascomTask can be used as task method arguments just like any 
