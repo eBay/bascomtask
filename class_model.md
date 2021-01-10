@@ -1,1 +1,0 @@
-![model](BT.png)
