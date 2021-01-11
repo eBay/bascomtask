@@ -84,7 +84,7 @@ but for clarity they are separated in this example:
 
     public class CombinerTask implements ICombinerTask {
         public CompletableFuture<String> combine(CompletableFuture<String> a, CompletableFuture<String> b) {
-            return get(a) + ' ' + get(b);
+            return complete(get(a) + ' ' + get(b));
         }
     }
 ```
