@@ -16,6 +16,7 @@
  **************************************************************************/
 package com.ebay.bascomtask.core;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -101,12 +102,12 @@ public interface Orchestrator extends CommonConfig {
      * <p>Each task method will only be executed once even it is passed multiple times to this method. As this method
      * is called implicitly for any operation (such as {@link CompletableFuture#get()} on a single future returned
      * from a task, this method call is only needed to start multiple futures at the same time, or for starting tasks
-     * whose purpose is to a side-effect that occurs without any call to get a value from it, or for any other
-     * situation where an access of its value is not possible nor desirable.
+     * whose purpose is to perform a side-effect that occurs without any other call to access its a value from it,
+     * or for any other situation where an access of its value is not possible nor desirable.
      *
      * <p>This call only starts ('activates') but does not necessarily wait for any of the started tasks to complete.
-     * More specifically, it does not wait on any threads that are spawned to complete. Access a value on any
-     * BT-managed CompletableFuture or call {@link #executeAndWait(CompletableFuture[])} to force waiting.
+     * More specifically, it does not wait on any threads that are spawned to complete. Access a value on any of
+     * supplied arguments or substitute this call with {@link #executeAndWait(CompletableFuture[])} to force waiting.
      *
      * @param futures to execute
      */
@@ -126,7 +127,7 @@ public interface Orchestrator extends CommonConfig {
     }
 
     /**
-     * Like {@link #execute(CompletionStage[])}, but establishes a timeout which will affect execution
+     * Variant of {@link #execute(CompletionStage[])}, but establishes a timeout which will affect execution
      * as defined by the TimeoutStrategy in effect.
      *
      * @param timeoutMs timout in milliseconds
@@ -134,10 +135,11 @@ public interface Orchestrator extends CommonConfig {
      */
     void execute(long timeoutMs, CompletionStage<?>... futures);
 
+    // TODO check exception
     /**
      * Variant of {@link #execute(CompletionStage[])} that waits for all of its arguments to complete,
      * ignoring any exceptions. After this call, any call on the supplied futures will not block since
-     * they have already completed (successfully or exceptionally).
+     * they will have already completed (successfully or exceptionally).
      *
      * @param futures to execute and then wait on
      */
@@ -157,13 +159,80 @@ public interface Orchestrator extends CommonConfig {
     }
 
     /**
-     * Variant of {@link #executeAndWait(CompletableFuture[])}, but establishes a timeout which will affect
-     * execution as defined by the TimeoutStrategy in effect.
+     * Variant of {@link #executeAndWait(CompletableFuture[])}, but establishes a timeout which will affect execution
+     * as defined by the TimeoutStrategy in effect.
      *
      * @param timeoutMs timout in milliseconds
      * @param futures   to execute
      */
     void executeAndWait(long timeoutMs, CompletableFuture<?>... futures);
+
+    /**
+     * Variant of {@link #executeAndWait(CompletableFuture[])} that returns a typed result from typed input.
+     *
+     * @param futures to execute
+     * @return the completed input values
+     */
+    default <T> List<T> executeAndWait(List<CompletableFuture<T>> futures) {
+        return executeAndWait(0,futures);
+    }
+
+    /**
+     * Variant of {@link #executeAndWait(long timeout, List)} with TimeUnit option.
+     *
+     * @param timeout to set
+     * @param timeUnit units
+     * @param futures to execute
+     * @return the completed input values
+     */
+    default <T> List<T> executeAndWait(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures) {
+        return executeAndWait(timeUnit.toMillis(timeout),futures);
+    }
+
+    /**
+     * Variant of {@link #executeAndWait(long timeout, CompletableFuture[])} that returns a typed result
+     * matching the supplied typed input.
+     *
+     * @param timeoutMs timout in milliseconds
+     * @param futures to execute
+     * @return the completed input values
+     */
+    <T> List<T> executeAndWait(long timeoutMs, List<CompletableFuture<T>> futures);
+
+    /**
+     * Initiates asynchronous execution on the supplied futures all using spawned threads, keeping the calling thread
+     * free. The returned future will be completed when all the future inputs are completed. The effect is close
+     * to setting {@link SpawnMode#NEVER_MAIN} <i>and</i> invoking {@link CompletableFuture#allOf(CompletableFuture[])}
+     * on the same set of futures, except that using this method does not interfere with whatever SpawnMode is
+     * in effect. If, for example, {@link SpawnMode#NEVER_SPAWN} is set then calling this method will have no
+     * effect since that SpawnMode forces everything to be run in the calling thread.
+     *
+     * @param futures to execute
+     * @return list of futures supplied as input
+     */
+    default <T> CompletableFuture<List<T>> executeFuture(List<CompletableFuture<T>> futures) {
+        return executeFuture(0,futures);
+    }
+
+    /**
+     * Variant of {@link #executeFuture(long, List)} with TimeUnit option.
+     *
+     * @param timeout to set
+     * @param timeUnit units
+     * @param futures to execut
+     */
+    default <T> CompletableFuture<List<T>> executeFuture(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures) {
+        return executeFuture(timeUnit.toMillis(timeout),futures);
+    }
+
+    /**
+     * Variant of {@link #executeFuture(List)} but establishes a timeout which will affect execution
+     * as defined by the TimeoutStrategy in effect.
+     *
+     * @param timeoutMs timout in milliseconds
+     * @param futures   to execute
+     */
+    <T> CompletableFuture<List<T>> executeFuture(long timeoutMs, List<CompletableFuture<T>> futures);
 
     /**
      * Ties the 'fates' of the supplied CompletableFutures together, which means that as soon as there is a fault on

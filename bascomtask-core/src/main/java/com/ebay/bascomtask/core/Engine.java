@@ -25,6 +25,7 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Core implementation of orchestrator maintains task state during execution.
@@ -248,14 +249,19 @@ public class Engine implements Orchestrator {
         executeWithMonitoringIfNeeded(timeBox, futures);
     }
 
+    private void executeWithMonitoringIfNeeded(TimeBox timeBox, CompletionStage<?>... futures) {
+        executeWithMonitoringIfNeeded(timeBox,true,futures);
+    }
+
     /**
      * Initiates execution, and if the TimeoutStrategy calls for it, and ensures timeBox is
      * properly setup for monitoring.
      *
      * @param timeBox governs timeouts
+     * @param direct indicates that the call should be made in current thread, else in a newly spawned thread
      * @param futures to execute
      */
-    private void executeWithMonitoringIfNeeded(TimeBox timeBox, CompletionStage<?>... futures) {
+    private void executeWithMonitoringIfNeeded(TimeBox timeBox, boolean direct, CompletionStage<?>... futures) {
         Binding<?> pending = null;
         for (CompletionStage<?> next : futures) {
             if (next instanceof BascomTaskFuture) {
@@ -268,7 +274,7 @@ public class Engine implements Orchestrator {
         try {
             if (pending != null) {
                 String src = timeBox.timeBudget > 0 ? "timed" : "untimed";
-                pending.fire("execute", src, true);
+                pending.fire("execute", src, direct);
             }
         } finally {
             timeBox.deregister();
@@ -287,6 +293,38 @@ public class Engine implements Orchestrator {
                 // to get() will deal with the exception
             }
         }
+    }
+
+    @Override
+    public <T> List<T> executeAndWait(long timeoutMs, List<CompletableFuture<T>> futures) {
+        CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
+        futures.toArray(array);
+        executeAndWait(timeoutMs,array);
+        try {
+            return futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
+        } catch (CompletionException e) {
+            // Strip away the CompletionException since that is just an internal artifact from
+            // the join above
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) {
+                throw (RuntimeException)t;
+            } else {
+                throw new RuntimeException("Execution exception",t);
+            }
+        }
+    }
+
+    @Override
+    public <T> CompletableFuture<List<T>> executeFuture(long timeoutMs, List<CompletableFuture<T>> futures) {
+        TimeBox timeBox = new TimeBox(timeoutMs);
+        CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
+        futures.toArray(array);
+        executeWithMonitoringIfNeeded(timeBox, false, array);
+        CompletableFuture<List<T>> cfs = new CompletableFuture<>();
+        CompletableFuture.allOf(array)
+                .thenAccept(v->cfs.complete(futures.stream().map(CompletableFuture::join).collect(Collectors.toList())))
+                .exceptionally(t->{cfs.completeExceptionally(t); return null;});
+        return cfs;
     }
 
     @Override

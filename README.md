@@ -440,9 +440,11 @@ useful in the context of a single Orchestrator (LogTaskRunner, as a contrary exa
 following example uses a ThreadLocalRunner to set a ProfilingTaskRunner initializer function in one method and 
 retrieve it in another method and print its report:
 
+// TODO fix this
+
 ```java
 class MyProfiler {
-    private final ThreadLocalRunners<ProfilingTaskRunner> runner = new ThreadLocalRunners<>();
+    private static final ThreadLocalRunners<ProfilingTaskRunner> runner = new ThreadLocalRunners<>();
 
     public static void init() {
         runner.firstInterceptWith(ProfilingTaskRunner::new);

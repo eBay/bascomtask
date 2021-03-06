@@ -340,6 +340,8 @@ public interface UberTask extends TaskInterface<UberTask> {
                 get(task.faultImmediate("test"));
             } catch (ExceptionTask.FaultHappened e) {
                 return complete(x);
+            } catch (Throwable t) {
+                System.out.println("FAULT: " + t);
             }
             throw new RuntimeException("Did not fault");
         }

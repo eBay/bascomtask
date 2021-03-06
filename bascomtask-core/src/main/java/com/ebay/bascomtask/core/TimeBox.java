@@ -66,7 +66,8 @@ class TimeBox {
     }
 
     private boolean isTimedOut() {
-        return System.currentTimeMillis() >= start + timeBudget;
+        // Apply gt here rather than gte since in some spawnmodes we get to this point very quickly
+        return System.currentTimeMillis() > start + timeBudget;
     }
 
     void checkIfTimeoutExceeded(Binding<?> binding) {

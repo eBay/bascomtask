@@ -28,12 +28,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -623,6 +619,61 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(2, (int) t2.get());
         assertEquals(3, (int) t3.get());
         assertEquals(4, (int) t4.get());
+    }
+
+    @Test
+    public void executeFuture() throws Exception {
+        final int wait = 20;
+        UberTasker fasterTask = task(2).delayFor(wait);
+        UberTasker slowerTask = task().delayFor(wait*2);
+        CompletableFuture<Integer> t1 = $.task(fasterTask).name("fast1").ret(1);
+        CompletableFuture<Integer> t2 = $.task(fasterTask).name("fast2").ret(2);
+        CompletableFuture<Integer> tSlow = $.task(slowerTask).name("slow3").ret(3);
+
+        List<CompletableFuture<Integer>> list = Arrays.asList(t1,t2,tSlow);
+        CompletableFuture<List<Integer>> waitFuture = $.executeFuture(list);
+        Map<Integer,Long> map = new HashMap<>();
+        waitFuture.thenAccept(fs-> {
+            Long time = System.nanoTime();
+            fs.forEach(v->map.put(v,time));
+        });
+
+        long after = System.nanoTime();
+        Thread.sleep(wait*3); // Give enough time for tasks to complete
+
+        assertEquals(list.size(),map.size());
+        list.forEach(cf->{
+            assertTrue(cf.isDone());
+            Integer v = cf.join();
+            if (mode == SpawnMode.NEVER_SPAWN || mode == SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT) {
+                Long completionTime = map.get(v);
+                assertTrue(completionTime < after);
+            }
+        });
+    }
+
+    @Test
+    public void executeFutureTimeout() throws Exception {
+        int timeoutMs = 10;
+        int slowness = timeoutMs*3;
+        CompletableFuture<Integer> t1 = $.task(task(1).delayFor(slowness)).ret(0);
+        // This shouldn't be executed because the first task exceeds timeout
+        CompletableFuture<Integer> t2 = $.task(task(0).delayFor(0)).inc(t1);
+        List<CompletableFuture<Integer>> list = Collections.singletonList(t2);
+        CompletableFuture<List<Integer>> waitFuture = $.executeFuture(timeoutMs,TimeUnit.MILLISECONDS,list);
+        waitFuture.thenAccept(fs->System.out.println("Shouldn't see this"));
+        Thread.sleep(slowness*2); // Give time for completion
+    }
+
+    @Test(expected = TimeoutExceededException.class)
+    public void executeAndWaitTimeout() {
+        int timeoutMs = 10;
+        int slowness = timeoutMs*3;
+        CompletableFuture<Integer> t1 = $.task(task(1).delayFor(slowness)).ret(0);
+        // This shouldn't be executed because the first task exceeds timeout
+        CompletableFuture<Integer> t2 = $.task(task(0).delayFor(0)).inc(t1);
+        List<CompletableFuture<Integer>> list = Collections.singletonList(t2);
+        $.executeAndWait(timeoutMs,TimeUnit.MILLISECONDS,list);
     }
 
     @Test(expected = TimeoutExceededException.class)

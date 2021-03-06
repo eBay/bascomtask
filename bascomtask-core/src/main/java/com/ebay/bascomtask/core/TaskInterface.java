@@ -17,6 +17,7 @@
 package com.ebay.bascomtask.core;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -95,21 +96,26 @@ public interface TaskInterface<T> {
     }
 
     /**
-     * Convenience method that calls future.get() but turns any checked exceptions from
-     * that call into unchecked ones. This is useful in tasks because a task is always
-     * called with valid futures so those exceptions will never be generated. Calling this
-     * method is not a requirement as task methods can simply call future.get() directly
-     * and handle or throw the exceptions themselves.
+     * Convenience method for accessing the supplied future value that attempts to unwrap
+     * {@link java.util.concurrent.CompletionException}s in a more useful than is provided
+     * by calling the standard {@link CompletableFuture#join} operation.
      *
      * @param future to retrieve value from
      * @param <R>    type of value returned
      * @return value wrapped by the supplied future, which may or may not be null
      */
-    default <R> R get(Future<R> future) {
+    default <R> R get(CompletableFuture<R> future) {
         try {
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Unexpected access fault on future", e);
+            return future.join();
+        } catch (CompletionException e) {
+            Throwable x = e.getCause();
+            RuntimeException re;
+            if (x instanceof RuntimeException) {
+                re = (RuntimeException)x;
+            } else {
+                re = new RuntimeException("get() failed",e);
+            }
+            throw re;
         }
     }
 
