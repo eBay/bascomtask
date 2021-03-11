@@ -31,6 +31,8 @@ public interface CommonConfig {
     /**
      * Restore default settings. Applied on GlobalOrchestratorConfig, sets default values. Applied on Orchestrator,
      * sets values from current GlobalOrchestratorConfig.
+     *
+     * @param arg passed from user code
      */
     void restoreConfigurationDefaults(Object arg);
 

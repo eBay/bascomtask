@@ -41,6 +41,7 @@ public interface Orchestrator extends CommonConfig {
     /**
      * Creates a new named Orchestrator, which is the same as <pre>create().setName(name)</pre>;
      *
+     * @param name for orchestrator, used in loggin
      * @return new Orchestrator
      */
     static Orchestrator create(String name) {
@@ -119,7 +120,7 @@ public interface Orchestrator extends CommonConfig {
      * Variant of {@link #execute(long, CompletionStage[])} with TimeUnit option.
      *
      * @param timeout to set
-     * @param timeUnit units
+     * @param timeUnit time units to apply to timeout
      * @param futures to execut
      */
     default void execute(long timeout, TimeUnit timeUnit, CompletionStage<?>... futures) {
@@ -151,7 +152,7 @@ public interface Orchestrator extends CommonConfig {
      * Variant of {@link #executeAndWait(long, CompletableFuture[])} with TimeUnit option.
      *
      * @param timeout to set
-     * @param timeUnit units
+     * @param timeUnit time units to apply to timeout
      * @param futures to execut
      */
     default void executeAndWait(long timeout, TimeUnit timeUnit, CompletableFuture<?>... futures) {
@@ -171,6 +172,7 @@ public interface Orchestrator extends CommonConfig {
      * Variant of {@link #executeAndWait(CompletableFuture[])} that returns a typed result from typed input.
      *
      * @param futures to execute
+     * @param <T> Type of list items
      * @return the completed input values
      */
     default <T> List<T> executeAndWait(List<CompletableFuture<T>> futures) {
@@ -181,8 +183,9 @@ public interface Orchestrator extends CommonConfig {
      * Variant of {@link #executeAndWait(long timeout, List)} with TimeUnit option.
      *
      * @param timeout to set
-     * @param timeUnit units
+     * @param timeUnit time units to apply to timeout
      * @param futures to execute
+     * @param <T> Type of list items
      * @return the completed input values
      */
     default <T> List<T> executeAndWait(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures) {
@@ -195,6 +198,7 @@ public interface Orchestrator extends CommonConfig {
      *
      * @param timeoutMs timout in milliseconds
      * @param futures to execute
+     * @param <T> Type of list items
      * @return the completed input values
      */
     <T> List<T> executeAndWait(long timeoutMs, List<CompletableFuture<T>> futures);
@@ -208,7 +212,8 @@ public interface Orchestrator extends CommonConfig {
      * effect since that SpawnMode forces everything to be run in the calling thread.
      *
      * @param futures to execute
-     * @return list of futures supplied as input
+     * @param <T> Type of list items
+     * @return future that will be bound list of values, one for each input, iff there is at least one
      */
     default <T> CompletableFuture<List<T>> executeFuture(List<CompletableFuture<T>> futures) {
         return executeFuture(0,futures);
@@ -218,8 +223,10 @@ public interface Orchestrator extends CommonConfig {
      * Variant of {@link #executeFuture(long, List)} with TimeUnit option.
      *
      * @param timeout to set
-     * @param timeUnit units
-     * @param futures to execut
+     * @param timeUnit time units to apply to timeout
+     * @param futures to execute
+     * @param <T> Type of list items
+     * @return future that will be bound list of values, one for each input, iff there is at least one
      */
     default <T> CompletableFuture<List<T>> executeFuture(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures) {
         return executeFuture(timeUnit.toMillis(timeout),futures);
@@ -231,8 +238,47 @@ public interface Orchestrator extends CommonConfig {
      *
      * @param timeoutMs timout in milliseconds
      * @param futures   to execute
+     * @param <T> Type of list items
+     * @return future that will be bound list of values, one for each input, iff there is at least one
      */
     <T> CompletableFuture<List<T>> executeFuture(long timeoutMs, List<CompletableFuture<T>> futures);
+
+    /**
+     * Variant of {@link #executeAsReady(long, List, BiConsumer)} without a timeout.
+     *
+     * @param futures to execute
+     * @param completionFn that will be called as many times as there are entries in the futures list
+     * @param <T> type of each element
+     */
+    default <T> void executeAsReady(List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn) {
+        executeAsReady(0,futures,completionFn);
+    }
+
+    /**
+     * Variant of {@link #executeAsReady(long, List, BiConsumer)} TimeUnit option.
+     *
+     * @param timeout to set
+     * @param timeUnit time units to apply to timeout
+     * @param futures to execute
+     * @param completionFn that will be called as many times as there are entries in the futures list
+     * @param <T> type of each element
+     */
+    default <T> void executeAsReady(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn) {
+        executeAsReady(timeUnit.toMillis(timeout),futures,completionFn);
+    }
+
+    /**
+     * Execute each supplied future and as each completes, the provided completionFn is called with the result. The
+     * completion calls may be done from separate threads, but synchronization is employed so that only one thread
+     * at a time is allowed to make a completion call. The calling thread itself does not itself wait and is therefore
+     * never one to make a completion call.
+     *
+     * @param timeoutMs timout in milliseconds
+     * @param futures to execute
+     * @param completionFn that will be called as many times as there are entries in the futures list
+     * @param <T> of each each element
+     */
+    <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn);
 
     /**
      * Ties the 'fates' of the supplied CompletableFutures together, which means that as soon as there is a fault on

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 /**
  * Maintains configuration settings that will be applied to new Orchestrators.
@@ -187,5 +188,42 @@ public class GlobalOrchestratorConfig {
 
     public static void setConfig(Config config) {
         globalConfig = config;
+    }
+
+    /**
+     * Set a TaskRunner creation function that will apply to every Orchestrator created in this this thread.
+     * Each newly-created TaskRunner will be added first in the taskRunner chain.
+     *
+     * <p>The mechanism uses ThreadLocal internally and those must be closed properly to ensure cleanup of threadLocal
+     * state. A typical usage is thus:
+     * <pre><code>
+     *   try (LaneRunner&lt;MyTaskRunner&gt; laneRunner = GlobalOrchestratorConfig.interceptFirstOnCreate(MyTaskRunner::new)) {
+     *       // Perform any logic here that might create Orchestrators at any point
+     *       laneRunner.runners.forEach(r-&gt;performRunnerOperation(r));
+     *   }
+     * </code></pre>
+     *
+     * <p>Multiple TaskRunners can be installed in this way by nesting these calls.
+     *
+     * @param createFn to create a TaskRunner instance of the desired type
+     * @param <T> class of any TaskRunners that will be created
+     * @return a LaneRunner whose 'futures' member variable provides access to any TaskRunners actually created
+     */
+    public static <T extends TaskRunner> LaneRunner<T> interceptFirstOnCreate(Supplier<T> createFn) {
+        return new LaneRunner<T>(createFn,true);
+    }
+
+    /**
+     * Set a TaskRunner creation function that will apply to every Orchestrator created in this this thread.
+     * Each newly-created TaskRunner will be added first in the taskRunner chain.
+     *
+     * <p>See other considerations as described in {@link #interceptFirstOnCreate(Supplier)}.
+     *
+     * @param createFn to create a TaskRunner instance of the desired type
+     * @param <T> class of any TaskRunners that will be created
+     * @return a LaneRunner whose 'futures' member variable provides access to any TaskRunners actually created
+     */
+    public static <T extends TaskRunner> LaneRunner<T> interceptLastOnCreate(Supplier<T> createFn) {
+        return new LaneRunner<T>(createFn,false);
     }
 }

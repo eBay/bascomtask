@@ -428,39 +428,27 @@ Orchestrator. You can write your own or use a built-in from the BascomTask libra
 There are several ways to add a TaskRunner:
 
 * Directly to an Orchestrator
-* To GlobalOrchestratorConfig.getConfig().first/lastInterceptWith(), in which case that same TaskRunner instance will 
+* To GlobalOrchestratorConfig.getConfig().first/lastInterceptWith(), in which case that same TaskRunner instance will
   be added to all Orchestrators
-* Add an initializer function to GlobalOrchestratorConfig.getConfig().initializeWith() to generate a new TaskRunner instance that
-  will be added to all new Orchestrators
-* Using ThreadLocalRunner which, in addition to the previous, stores the TaskRunner using TheadLocal storage
-  for later access
+* Add an initializer function to GlobalOrchestratorConfig.getConfig().initializeWith() to generate a new TaskRunner
+  instance that will be added to all new Orchestrators
+* GlobalOrchestratorConfig.interceptFirstOnCreate()/interceptLastOnCreate() which accepts a TaskRunner creation
+  function to apply to each created orchestrator
 
-ProfilingTaskRunner is a good choice for the latter options above, because it maintains state that is generally only
-useful in the context of a single Orchestrator (LogTaskRunner, as a contrary example, maintains no state). The 
-following example uses a ThreadLocalRunner to set a ProfilingTaskRunner initializer function in one method and 
-retrieve it in another method and print its report:
-
-// TODO fix this
+The builtin ProfilingTaskRunner class is a good choice for the latter options, because it maintains state that is
+generally only useful in the context of a single Orchestrator (LogTaskRunner, as a contrary example, maintains no 
+such state). The following example sets up profiling with this mechanism:
 
 ```java
-class MyProfiler {
-    private static final ThreadLocalRunners<ProfilingTaskRunner> runner = new ThreadLocalRunners<>();
-
-    public static void init() {
-        runner.firstInterceptWith(ProfilingTaskRunner::new);
-    }
-    
-    public static void report() {
-        ProfilingTaskRunner ptr = runner.getAndClear();
-        if (ptr != null) {
-            System.out.println(ptr.format());
+class MyRunner {
+    void runWithProfiling() throws Exception {
+        try (LaneRunner<ProfilingTaskRunner> laneRunner = GlobalOrchestratorConfig.interceptFirstOnCreate(ProfilingTaskRunner::new)) {
+            // ... Invoke code here that might create Orchestrators in this thread
+            System.out.println(laneRunner.runners.get(0).format());
         }
     }
 }
 ```
-Between the call to _init()_ and _report()_, if an Orchestrator is created then its profile will be printed in
-the call to _report()_.
-
 In addition to the options above, the configuration object returned by GlobalOrchestratorConfig.getConfig() can be 
 replaced entirely with an instance from a custom class extending the existing configuration class or an entirely 
 different one. A use case that leverages this capability might be to pull configuration information from an 
@@ -488,6 +476,9 @@ _may_ be a BascomTask TimeoutExceededException, which unlike java.util.concurren
 If interrupts are enabled, the response may be something different if a task has handled the interrupt
 and thrown a different exception.
 
+
+### Change Log 
+[here](doc/Changelog.md)
 
 ---
 ## License Information

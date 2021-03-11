@@ -676,6 +676,35 @@ public class CoreTest extends BaseOrchestratorTest {
         $.executeAndWait(timeoutMs,TimeUnit.MILLISECONDS,list);
     }
 
+    @Test
+    public void executeAsReadyTimeout() throws Exception {
+        int spread = 5;
+        int timeoutMs = spread*4;
+        // If !spawning then the timeout will extend past t3 and affect t4
+        boolean spawning = !(mode == SpawnMode.NEVER_SPAWN | mode == SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT);
+        CompletableFuture<Integer> t1 = $.task(task(1).delayFor(spread*2)).name("t1").ret(1);
+        CompletableFuture<Integer> t2 = $.task(task(1).delayFor(spread*6)).name("t2").ret(2);
+        CompletableFuture<Integer> t3 = $.task(task(0).delayFor(spread)).name("t3").inc(t2);
+        CompletableFuture<Integer> t4 = $.task(task(spawning?1:0).delayFor(spread*3)).name("t4").ret(4);
+        Set<Integer> set = new HashSet<>();
+        List<Throwable> exs = new ArrayList<>();
+        $.executeAsReady(timeoutMs, TimeUnit.MILLISECONDS, Arrays.asList(t1, t2, t3, t4), (t,ex)-> {
+            if (ex == null) {
+                set.add(t);
+            } else {
+                exs.add(ex);
+            }
+        });
+        Thread.sleep(spread*10); // Give time for completion
+        assertTrue(set.contains(1));
+        assertTrue(set.contains(2));
+        if (spawning) {
+            assertTrue(set.contains(4));
+        }
+        assertEquals(spawning?1:2,exs.size());
+        assertTrue(exs.get(0) instanceof TimeoutExceededException);
+    }
+
     @Test(expected = TimeoutExceededException.class)
     public void timeoutOrchestrator() throws Exception {
         long duration = 5;

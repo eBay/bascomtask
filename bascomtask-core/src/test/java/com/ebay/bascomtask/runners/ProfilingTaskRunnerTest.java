@@ -24,8 +24,6 @@ import static org.junit.Assert.*;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Objects;
-
 /**
  * Tests ProfilingTaskRunner.
  *
@@ -237,80 +235,60 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         assertTrue(got.contains("0| single.ret    ---"));
     }
 
-    private final ThreadLocalRunners<ProfilingTaskRunner> runner = new ThreadLocalRunners<>();
+    private void expectInterceptors(int count, Orchestrator orchestrator, LaneRunner laneRunner) {
+        assertEquals(1, orchestrator.getNumberOfInterceptors());
+        assertEquals(count, laneRunner.runners.size());
+    }
 
     @Test
-    public void globalConfigSet() throws Exception {
-        try {
-            runner.firstInterceptWith(ProfilingTaskRunner::new);
+    public void installNone() throws Exception {
+        try (LaneRunner<ProfilingTaskRunner> laneRunner = GlobalOrchestratorConfig.interceptFirstOnCreate(ProfilingTaskRunner::new)) {
+            assertEquals(0, laneRunner.runners.size());
+        }
+    }
 
+    @Test
+    public void installSingle() throws Exception {
+        try (LaneRunner<ProfilingTaskRunner> laneRunner = GlobalOrchestratorConfig.interceptFirstOnCreate(ProfilingTaskRunner::new)) {
             Orchestrator $ = Orchestrator.create();
-            assertEquals(1, $.getNumberOfInterceptors());
-
+            expectInterceptors(1,$,laneRunner);;
             $.task(task()).name("single").ret(1).get();
-        } finally {
-            ProfilingTaskRunner ptr = runner.getAndClear();
-            String got = ptr.format();
-            assertTrue(got.contains("0| single.ret    ---"));
+            String got = laneRunner.runners.get(0).format();
+            assertTrue(got.contains("0| single.ret"));
         }
     }
 
-    private void testConditionTrue(boolean firstElseLast) throws Exception {
-        Object any = new Object();
+    @Test
+    public void installMulti() throws Exception {
+        try (LaneRunner<ProfilingTaskRunner> laneRunner = GlobalOrchestratorConfig.interceptLastOnCreate(ProfilingTaskRunner::new)) {
+            Orchestrator $1 = Orchestrator.create();
+            expectInterceptors(1,$1,laneRunner);;
+            $1.task(task()).name("single").ret(1).get();
+            Orchestrator $2 = Orchestrator.create();
+            expectInterceptors(2,$2,laneRunner);;
+            $2.task(task()).name("single").ret(1).get();
+            String got1 = laneRunner.runners.get(0).format();
+            assertTrue(got1.contains("0| single.ret"));
+            String got2 = laneRunner.runners.get(1).format();
+            assertTrue(got2.contains("0| single.ret"));
+        }
+    }
 
-        try {
-            if (firstElseLast) {
-                runner.firstInterceptWith(ProfilingTaskRunner::new, (orc, arg) -> Objects.equals(arg, any));
-            } else {
-                runner.lastInterceptWith(ProfilingTaskRunner::new, (orc, arg) -> Objects.equals(arg, any));
+    @Test
+    public void instalNested() throws Exception {
+        try (LaneRunner<ProfilingTaskRunner> laneRunner1 = GlobalOrchestratorConfig.interceptLastOnCreate(ProfilingTaskRunner::new)) {
+            try (LaneRunner<ProfilingTaskRunner> laneRunner2 = GlobalOrchestratorConfig.interceptLastOnCreate(ProfilingTaskRunner::new)) {
+                Orchestrator $ = Orchestrator.create();
+                assertEquals(2, $.getNumberOfInterceptors());
+                assertEquals(1, laneRunner1.runners.size());
+                assertEquals(1, laneRunner2.runners.size());
             }
-
-            Orchestrator $ = Orchestrator.create("foo", any);
-            assertEquals(1, $.getNumberOfInterceptors());
-
-            $.task(task()).name("single").ret(1).get();
-        } finally {
-            ProfilingTaskRunner ptr = runner.getAndClear();
-            String got = ptr.format();
-            System.out.println(got);
-            assertTrue(got.contains("0| single.ret    ---"));
-        }
-    }
-
-    @Test
-    public void globalConfigSetFirstConditionTrue() throws Exception {
-        testConditionTrue(true);
-    }
-
-    @Test
-    public void globalConfigSetLastConditionTrue() throws Exception {
-        testConditionTrue(false);
-    }
-
-    private void testConditionFalse(boolean firstElseLast) throws Exception {
-        try {
-            if (firstElseLast) {
-                runner.firstInterceptWith(ProfilingTaskRunner::new, (orc, arg) -> false);
-            } else {
-                runner.lastInterceptWith(ProfilingTaskRunner::new, (orc, arg) -> false);
+            try (LaneRunner<ProfilingTaskRunner> laneRunner2 = GlobalOrchestratorConfig.interceptLastOnCreate(ProfilingTaskRunner::new)) {
+                Orchestrator $ = Orchestrator.create();
+                assertEquals(2, $.getNumberOfInterceptors());
+                assertEquals(2, laneRunner1.runners.size());
+                assertEquals(1, laneRunner2.runners.size());
             }
-
-            Orchestrator $ = Orchestrator.create("foo");
-            assertEquals(0, $.getNumberOfInterceptors());
-
-            $.task(task()).name("single").ret(1).get();
-        } finally {
-            assertNull(runner.getAndClear());
         }
-    }
-
-    @Test
-    public void globalConfigSetFirstConditionFalse() throws Exception {
-        testConditionFalse(true);
-    }
-
-    @Test
-    public void globalConfigSetLastConditionFalse() throws Exception {
-        testConditionFalse(false);
     }
 }

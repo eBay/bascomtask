@@ -25,6 +25,8 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -73,6 +75,8 @@ public class Engine implements Orchestrator {
         this.uniqueIndex = engineCounter.incrementAndGet();
         GlobalOrchestratorConfig.Config config = GlobalOrchestratorConfig.getConfig();
         config.updateConfigurationOn(this, arg);
+
+        LaneRunner.apply(this);
     }
 
     @Override
@@ -325,6 +329,22 @@ public class Engine implements Orchestrator {
                 .thenAccept(v->cfs.complete(futures.stream().map(CompletableFuture::join).collect(Collectors.toList())))
                 .exceptionally(t->{cfs.completeExceptionally(t); return null;});
         return cfs;
+    }
+
+    @Override
+    public <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn) {
+        TimeBox timeBox = new TimeBox(timeoutMs);
+        CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
+        futures.toArray(array);
+        executeWithMonitoringIfNeeded(timeBox, false, array);
+        Object monitor = new Object();
+        // Invoked after above because the whenComplete() operation would otherwise itself active the
+        // BascomTaskFutures without a BascomTask-managed timeout
+        futures.forEach(cf->{
+            synchronized (monitor) {
+                cf.whenComplete(completionFn);
+            }
+        });
     }
 
     @Override

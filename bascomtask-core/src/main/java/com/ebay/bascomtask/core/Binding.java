@@ -306,7 +306,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
             } else {
                 throw new RuntimeException("Return value is not a CompletableFuture " + this);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             LOG.debug("Exception-exit {} from {}-{}: {}", name, src1, src2, e.getMessage());
             faultForward(e);
         }
