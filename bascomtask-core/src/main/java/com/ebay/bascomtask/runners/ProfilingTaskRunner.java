@@ -233,8 +233,9 @@ public class ProfilingTaskRunner implements TaskRunner {
     /**
      * Returns a tabular execution profile with events as rows and threads as columns. The first column is the
      * millisecond timestamp relative to the start of execution. The second column is the task method name. The
-     * third column represents the calling thread; if threads were spawned there will be an additional column
-     * for each.
+     * third column rightward are execution threads, labeled with unique numbers and letters except that for the
+     * thread calling this (format) method, a caret is displayed since that typically represents the calling thread
+     * for orchestration execution.
      *
      * <p>A row is created any time (millisecond granularity) during which at least one task-related event occurred.
      * A task start and end is indicated is by '---' entries, and if active between these two points then just a
@@ -348,7 +349,9 @@ public class ProfilingTaskRunner implements TaskRunner {
 
         for (ThreadTracker next : trackers) {
             String hdr;
-            if (next.isInternElseExtern()) {
+            if (Thread.currentThread().getName().equals(next.threadName)) {
+                hdr = "^";
+            } else if (next.isInternElseExtern()) {
                 hdr = String.valueOf(internCount++);
             } else {
                 hdr = String.format("%c", ('A' + externCount++));
