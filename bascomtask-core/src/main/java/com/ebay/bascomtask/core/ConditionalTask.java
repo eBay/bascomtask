@@ -76,29 +76,6 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
         return pending;
     }
 
-    /**
-     * When condition is ready this will be called, and here we ensure the right choice is activated
-     * (if not already) and its output linked back to this object.
-     *
-     * @param pending to process
-     * @return pending
-     */
-    @Override
-    Binding<?> onReady(Binding<?> pending, TimeBox timeBox) {
-        Boolean which = get(condition);
-        BascomTaskFuture<R> choice;
-        if (elseFuture == null) {
-            choice = which ? thenFuture : null;
-        } else {
-            choice = which ? thenFuture : elseFuture;
-        }
-        if (choice != null) {
-            pending = choice.activate(this, pending, timeBox);
-        }
-        return super.onReady(pending, timeBox);
-    }
-
-
     @Override
     protected Object invokeTaskMethod() {
         if (get(condition)) {
