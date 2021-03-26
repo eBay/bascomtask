@@ -33,6 +33,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.ebay.bascomtask.core.UberTask.*;
 import static com.ebay.bascomtask.core.ExceptionTask.*;
@@ -677,6 +678,43 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test
+    public void executeAsReadyInExpectedOrder() throws Exception {
+        int spread = 10;
+        // Create tasks completing a 'spread' intervals
+        CompletableFuture<Integer> t1 = $.task(task(1).delayFor(spread  )).name("t1").ret(1);
+        CompletableFuture<Integer> t2 = $.task(task(1).delayFor(spread*3)).name("t2").ret(2);
+        CompletableFuture<Integer> t3 = $.task(task(1).delayFor(0       )).name("t3").ret(3);
+        CompletableFuture<Integer> t4 = $.task(task(1).delayFor(spread*2)).name("t4").ret(4);
+
+        class Track {
+            int result;
+            long timeFromStart;
+            int count;
+        }
+        List<Track> results = new ArrayList<>();
+        long start = System.currentTimeMillis();
+        CountDownLatch latch = new CountDownLatch(4);
+        $.executeAsReady(Arrays.asList(t1, t2, t3, t4), (t,ex,count)-> {
+            Track track = new Track();
+            track.result = t;
+            track.timeFromStart = System.currentTimeMillis() - start;
+            track.count = count;
+            results.add(track);
+            latch.countDown();
+        });
+        latch.await();
+        assertEquals(4,results.size());
+        boolean spawning = !(mode == SpawnMode.NEVER_SPAWN | mode == SpawnMode.DONT_SPAWN_UNLESS_EXPLICIT);
+        List<Integer> order = spawning ? Arrays.asList(3,1,4,2) : Arrays.asList(1,2,3,4);
+        assertEquals(order,results.stream().map(t->t.result).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(3,2,1,0),results.stream().map(t->t.count).collect(Collectors.toList()));
+        if (spawning) {
+            assertTrue(results.get(0).timeFromStart < results.get(2).timeFromStart - spread);
+            assertTrue(results.get(1).timeFromStart < results.get(3).timeFromStart - spread);
+        }
+    }
+
+    @Test
     public void executeAsReadyTimeout() throws Exception {
         int spread = 5;
         int timeoutMs = spread*4;
@@ -688,7 +726,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t4 = $.task(task(spawning?1:0).delayFor(spread*3)).name("t4").ret(4);
         Set<Integer> set = new HashSet<>();
         List<Throwable> exs = new ArrayList<>();
-        $.executeAsReady(timeoutMs, TimeUnit.MILLISECONDS, Arrays.asList(t1, t2, t3, t4), (t,ex)-> {
+        $.executeAsReady(timeoutMs, TimeUnit.MILLISECONDS, Arrays.asList(t1, t2, t3, t4), (t,ex,count)-> {
             if (ex == null) {
                 set.add(t);
             } else {

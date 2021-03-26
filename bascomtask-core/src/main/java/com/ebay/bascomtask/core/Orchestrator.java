@@ -244,18 +244,18 @@ public interface Orchestrator extends CommonConfig {
     <T> CompletableFuture<List<T>> executeFuture(long timeoutMs, List<CompletableFuture<T>> futures);
 
     /**
-     * Variant of {@link #executeAsReady(long, List, BiConsumer)} without a timeout.
+     * Variant of {@link #executeAsReady(long, List, TriConsumer)} without a timeout.
      *
      * @param futures to execute
      * @param completionFn that will be called as many times as there are entries in the futures list
      * @param <T> type of each element
      */
-    default <T> void executeAsReady(List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn) {
+    default <T> void executeAsReady(List<CompletableFuture<T>> futures, TriConsumer<T,Throwable, Integer> completionFn) {
         executeAsReady(0,futures,completionFn);
     }
 
     /**
-     * Variant of {@link #executeAsReady(long, List, BiConsumer)} TimeUnit option.
+     * Variant of {@link #executeAsReady(long, List, TriConsumer)} TimeUnit option.
      *
      * @param timeout to set
      * @param timeUnit time units to apply to timeout
@@ -263,22 +263,27 @@ public interface Orchestrator extends CommonConfig {
      * @param completionFn that will be called as many times as there are entries in the futures list
      * @param <T> type of each element
      */
-    default <T> void executeAsReady(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn) {
+    default <T> void executeAsReady(long timeout, TimeUnit timeUnit, List<CompletableFuture<T>> futures, TriConsumer<T,Throwable, Integer> completionFn) {
         executeAsReady(timeUnit.toMillis(timeout),futures,completionFn);
     }
 
     /**
-     * Execute each supplied future and as each completes, the provided completionFn is called with the result. The
-     * completion calls may be done from separate threads, but synchronization is employed so that only one thread
-     * at a time is allowed to make a completion call. The calling thread itself does not itself wait and is therefore
-     * never one to make a completion call.
+     * Execute each supplied future and invoke the supplied completionFn callback with each result as soon as each
+     * result becomes individually available. The callback contains either a valid result or an exception as the
+     * first and second arguments respectively, and in either case also includes as a third argument the ordinal
+     * finishing position. Recipients can recognize when the result is complete by checking for a
+     * zero value from that third argument.
+     *
+     * <p>Completion callbacks may be done from separate threads, but synchronization is employed so that only one
+     * thread at a time is allowed to make a completion call. The calling thread does not itself wait and is
+     * therefore never one to make a completion call.
      *
      * @param timeoutMs timout in milliseconds
      * @param futures to execute
      * @param completionFn that will be called as many times as there are entries in the futures list
      * @param <T> of each each element
      */
-    <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn);
+    <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, TriConsumer<T,Throwable,Integer> completionFn);
 
     /**
      * Ties the 'fates' of the supplied CompletableFutures together, which means that as soon as there is a fault on
@@ -454,9 +459,12 @@ public interface Orchestrator extends CommonConfig {
      * @param <R> type of return result
      * @return Function task
      */
+    <R> SupplierTask<R> fnTask(Supplier<R> fn);
+    /*
     default <R> SupplierTask<R> fnTask(Supplier<R> fn) {
         return task(new SupplierTask.SupplierTask0<>(fn));
     }
+     */
 
     /**
      * Produces function task value that takes no arguments and produces one result.
@@ -480,10 +488,7 @@ public interface Orchestrator extends CommonConfig {
      * @param <R>  type of return result
      * @return Function task
      */
-    default <IN, R> SupplierTask<R> fnTask(Supplier<IN> s1, Function<IN, R> fn) {
-        CompletableFuture<IN> in1 = fnTask(s1).apply();
-        return task(new SupplierTask.SupplierTask1<>(in1, fn));
-    }
+    <IN, R> SupplierTask<R> fnTask(Supplier<IN> s1, Function<IN, R> fn);
 
     /**
      * Produces function task value that takes one argument and produces one result.
@@ -500,63 +505,60 @@ public interface Orchestrator extends CommonConfig {
     }
 
     /**
-     * Produces function task that takes one non-lambda argument and produces one result.
+     * Produces function task that takes one argument.
      * Method invocation is light by default.
      *
-     * @param in   provides result to be applied to function
-     * @param fn   function to apply to that pojo if/when task is activated
-     * @param <IN> base type of input
-     * @param <R>  type of return result
+     * @param input input to function
+     * @param fn  function to apply to that pojo if/when task is activated
+     * @param <T> unwrapped type of input
+     * @param <R> unwrapped type of type of function result
      * @return Function task
      */
-    default <IN, R> SupplierTask<R> fnTask(CompletableFuture<IN> in, Function<IN, R> fn) {
-        return task(new SupplierTask.SupplierTask1<>(in, fn));
+    <T, R> SupplierTask<R> fnTask(CompletableFuture<T> input, Function<T, R> fn);
+
+    /**
+     * Produces function result from one argument.
+     * Method invocation is light by default.
+     *
+     * @param input input to function
+     * @param fn  function to apply to input when activated
+     * @param <T> unwrapped type of input
+     * @param <R> unwrapped type of function result
+     * @return Wrapped result of calling function
+     */
+    default <T, R> CompletableFuture<R> fn(CompletableFuture<T> input, Function<T, R> fn) {
+        return fnTask(input, fn).apply();
     }
 
     /**
-     * Produces function task value that takes one non-lambda argument and produces one result.
+     * Produces function task that takes two arguments.
      * Method invocation is light by default.
      *
-     * @param in   provides result to be applied to function
-     * @param fn   function to apply to that pojo if/when task is activated
-     * @param <IN> base type of input
-     * @param <R>  type of return result
+     * @param firstInput   first input
+     * @param secondInput  second input
+     * @param fn function to apply to inputs when activated
+     * @param <T> unwrapped base type of first input
+     * @param <U> unwrapped base type of second input
+     * @param <R> unwrapped type of function result
      * @return Function task
      */
-    default <IN, R> CompletableFuture<R> fn(CompletableFuture<IN> in, Function<IN, R> fn) {
-        return fnTask(in, fn).apply();
-    }
+    <T,U,R> SupplierTask<R> fnTask(CompletableFuture<T> firstInput, CompletableFuture<U> secondInput, BiFunction<T, U, R> fn);
+
 
     /**
-     * Produces function task that takes two non-lambda arguments and produces one result.
+     * Produces function result from two arguments.
      * Method invocation is light by default.
      *
-     * @param in1   provides first value for fn
-     * @param in2   provides second value for fn
-     * @param fn    function to apply to that pojo if/when task is activated
-     * @param <IN1> base type of input1
-     * @param <IN2> base type of input2
-     * @param <R>   type of return result
-     * @return Function task
+     * @param firstInput   first input
+     * @param secondInput  second input
+     * @param fn function to apply to inputs when activated
+     * @param <T> unwrapped base type of first input
+     * @param <U> unwrapped base type of second input
+     * @param <R> unwrapped type of function result
+     * @return Wrapped result of calling function
      */
-    default <IN1, IN2, R> SupplierTask<R> fnTask(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
-        return task(new SupplierTask.SupplierTask2<>(in1, in2, fn));
-    }
-
-    /**
-     * Produces function task value that takes two non-lambda arguments and produces one result.
-     * Method invocation is light by default.
-     *
-     * @param in1   provides first value for fn
-     * @param in2   provides second value for fn
-     * @param fn    function to apply to that pojo if/when task is activated
-     * @param <IN1> base type of input1
-     * @param <IN2> base type of input2
-     * @param <R>   type of return result
-     * @return Function task
-     */
-    default <IN1, IN2, R> CompletableFuture<R> fn(CompletableFuture<IN1> in1, CompletableFuture<IN2> in2, BiFunction<IN1, IN2, R> fn) {
-        return fnTask(in1, in2, fn).apply();
+    default <T, U, R> CompletableFuture<R> fn(CompletableFuture<T> firstInput, CompletableFuture<U> secondInput, BiFunction<T, U, R> fn) {
+        return fnTask(firstInput, secondInput, fn).apply();
     }
 
     /**

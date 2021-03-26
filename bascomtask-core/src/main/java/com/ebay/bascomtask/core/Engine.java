@@ -25,8 +25,7 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.function.*;
 import java.util.stream.Collectors;
 
 /**
@@ -332,17 +331,17 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, BiConsumer<T,Throwable> completionFn) {
+    public <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, TriConsumer<T,Throwable,Integer> completionFn) {
         TimeBox timeBox = new TimeBox(timeoutMs);
         CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
         futures.toArray(array);
+        AtomicInteger countDown = new AtomicInteger(futures.size());
         executeWithMonitoringIfNeeded(timeBox, false, array);
-        Object monitor = new Object();
         // Invoked after above because the whenComplete() operation would otherwise itself active the
         // BascomTaskFutures without a BascomTask-managed timeout
         futures.forEach(cf->{
-            synchronized (monitor) {
-                cf.whenComplete(completionFn);
+            synchronized (countDown) {
+                cf.whenComplete((v,t)->completionFn.apply(v,t,countDown.decrementAndGet()));
             }
         });
     }
@@ -401,6 +400,29 @@ public class Engine implements Orchestrator {
         FateTask task = new FateTask(this, cfs);
         return task.getOutput();
     }
+
+    @Override
+    public <R> SupplierTask<R> fnTask(Supplier<R> fn) {
+        return new SupplierTask.SupplierTask0<>(this, fn);
+    }
+
+    @Override
+    public <IN, R> SupplierTask<R> fnTask(Supplier<IN> s1, Function<IN, R> fn) {
+        CompletableFuture<IN> in1 = fnTask(s1).apply();
+        return new SupplierTask.SupplierTask1<>(this, in1,fn);
+    }
+
+    @Override
+    public <T, R> SupplierTask<R> fnTask(CompletableFuture<T> input, Function<T, R> fn) {
+        return new SupplierTask.SupplierTask1<>(this, input,fn);
+    }
+
+    @Override
+    public <T,U,R> SupplierTask<R> fnTask(CompletableFuture<T> firstInput, CompletableFuture<U> secondInput, BiFunction<T,U,R> fn) {
+        return new SupplierTask.SupplierTask2<>(this,firstInput,secondInput,fn);
+    }
+
+
 
     /**
      * Extracts the interface BASE from TaskInterface<BASE> in the class hierarchy.

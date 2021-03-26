@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
 
+import static com.ebay.bascomtask.core.UberTask.task;
 import static org.junit.Assert.*;
 
 /**
@@ -63,7 +64,7 @@ public class FnTaskTest extends BaseOrchestratorTest {
     public void oneTaskDelayedUntilGet() throws Exception {
         Simple simple = new Simple();
         CompletableFuture<Integer> cf = $.fn(simple::produce);
-        assertEquals(0, simple.input);
+        assertEquals(1, simple.input);
         int got = cf.get();
         assertEquals(1, simple.input);
         assertEquals(1, got);
@@ -209,5 +210,15 @@ public class FnTaskTest extends BaseOrchestratorTest {
         assertEquals(0, simple.input);
         cf.get();
         assertEquals(v, simple.input);
+    }
+
+    @Test
+    public void fnExecuteAndWait() {
+        CompletableFuture<Integer> cf1 = $.task(task()).ret(1);
+        CompletableFuture<Integer> cf2 = $.fn(cf1,x->x+1);
+        //System.out.println(cf2.join());
+        $.executeAndWait(cf1,cf2);
+        System.out.println("E&W");
+        assertEquals(Integer.valueOf(2),cf2.join());
     }
 }

@@ -25,7 +25,8 @@ import java.util.function.Supplier;
 
 /**
  * Function tasks added through 'fn()' methods on {@link Orchestrator} allow CompletableFuture tasks to
- * be created from lambda expressions that supply a return value.
+ * be created from lambda expressions that supply a return value. The inputs are bundled into the task,
+ * and the result is obtained by invoking {@link #apply()} on this task.
  *
  * @author Brendan McCarthy
  */
@@ -37,13 +38,42 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
      */
     CompletableFuture<R> apply();
 
-    /**
-     * Convenience method that evaluates lambda expression right away.
-     *
-     * @return evaluated value
-     */
-    default R get() {
-        return get(apply());
+    abstract class BaseSupplierTask<R> extends Binding<R> implements SupplierTask<R> {
+        private String name = null;
+
+        public BaseSupplierTask(Engine engine) {
+            super(engine);
+        }
+
+        @Override
+        public BaseSupplierTask<R> name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        @Override
+        String doGetExecutionName() {
+            if (name==null) {
+                return "FunctionTask";
+            } else {
+                return name;
+            }
+        }
+
+        @Override
+        public TaskInterface<?> getTask() {
+            return null;
+        }
+
+        @Override
+        public void formatActualSignature(StringBuilder sb) {
+
+        }
+
+        @Override
+        protected Object invokeTaskMethod() {
+            throw new RuntimeException("Invalid internal state for function task " + this);
+        }
     }
 
     /**
@@ -51,10 +81,11 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
      *
      * @param <R> type of return result
      */
-    class SupplierTask0<R> implements SupplierTask<R> {
+    class SupplierTask0<R> extends BaseSupplierTask<R> {
         private final Supplier<R> fn;
 
-        public SupplierTask0(Supplier<R> fn) {
+        public SupplierTask0(Engine engine, Supplier<R> fn) {
+            super(engine);
             this.fn = fn;
         }
 
@@ -68,50 +99,62 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
     /**
      * An SupplierTask that takes 1 argument.
      *
-     * @param <IN> type of input
+     * @param <T> type of input
      * @param <R>  type of return result
      */
-    class SupplierTask1<IN, R> implements SupplierTask<R> {
-        private final Function<IN, R> fn;
-        private final CompletableFuture<IN> cf;
+    class SupplierTask1<T, R> extends BaseSupplierTask<R> {
+        private final Function<T, R> fn;
+        final BascomTaskFuture<T> input;
 
-        public SupplierTask1(CompletableFuture<IN> cf, Function<IN, R> fn) {
-            this.cf = cf;
+        public SupplierTask1(Engine engine, CompletableFuture<T> input, Function<T, R> fn) {
+            super(engine);
             this.fn = fn;
+            this.input = ensureWrapped(input,true);
+        }
+
+        @Override
+        Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
+            return input.activate(this, pending, timeBox);
         }
 
         @Override
         @Light
         public CompletableFuture<R> apply() {
-            IN v = get(cf);
-            return complete(fn.apply(v));
+            T value = get(input);
+            return complete(fn.apply(value));
         }
     }
 
     /**
      * An SupplierTask that takes 2 arguments.
      *
-     * @param <IN1> type of first input
-     * @param <IN2> type of second input
-     * @param <R>   type of return result
+     * @param <T> type of input
+     * @param <R>  type of return result
      */
-    class SupplierTask2<IN1, IN2, R> implements SupplierTask<R> {
-        private final BiFunction<IN1, IN2, R> fn;
-        private final CompletableFuture<IN1> cf1;
-        private final CompletableFuture<IN2> cf2;
+    class SupplierTask2<T,U,R> extends BaseSupplierTask<R> {
+        private final BiFunction<T,U,R> fn;
+        final BascomTaskFuture<T> firstInput;
+        final BascomTaskFuture<U> secondInput;
 
-        public SupplierTask2(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiFunction<IN1, IN2, R> fn) {
-            this.cf1 = cf1;
-            this.cf2 = cf2;
+        public SupplierTask2(Engine engine, CompletableFuture<T> firstInput, CompletableFuture<U> secondInput, BiFunction<T,U,R> fn) {
+            super(engine);
             this.fn = fn;
+            this.firstInput = ensureWrapped(firstInput,true);
+            this.secondInput = ensureWrapped(secondInput,true);
+        }
+
+        @Override
+        Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
+            pending = firstInput.activate(this, pending, timeBox);
+            return secondInput.activate(this,pending,timeBox);
         }
 
         @Override
         @Light
         public CompletableFuture<R> apply() {
-            IN1 v1 = get(cf1);
-            IN2 v2 = get(cf2);
-            return complete(fn.apply(v1, v2));
+            T firstValue = get(firstInput);
+            U secondValue = get(secondInput);
+            return complete(fn.apply(firstValue,secondValue));
         }
     }
 }
