@@ -8,3 +8,4 @@
 1. Added a variant of Orchestrator.executeWait() that works likewise with a uniform set of items.
 1. Added Orchestrator.executeAsReady() for streaming results.   
 1. Replaced ThreadLocalRunner with LaneRunner which for managing TaskRunners works more consistently and easily against asynchronous execution.
+1. Return parameterized Optional from cond/2 rather than void

@@ -1017,11 +1017,20 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test
-    public void singleCond() throws Exception {
-        CompletableFuture<Boolean> c1 = $.task(task(1)).ret(true);
-        CompletableFuture<Void> cv = $.task(task(1)).consume();
-        CompletableFuture<Void> cond = $.cond(c1, cv);
-        cond.get();
+    public void singleCondTrue() throws Exception {
+        CompletableFuture<Boolean> cb = $.task(task(1)).ret(true);
+        CompletableFuture<Integer> c1 = $.task(task(1)).ret(2);
+        Optional<Integer> cond = $.cond(cb, c1).get();
+        assertTrue(cond.isPresent());
+        assertEquals(2,(int)cond.get());
+    }
+
+    @Test
+    public void singleCondFalse() throws Exception {
+        CompletableFuture<Boolean> cb = $.task(task(1)).ret(false);
+        CompletableFuture<Integer> c1 = $.task(task(0)).ret(2);
+        Optional<Integer> cond = $.cond(cb, c1).get();
+        assertFalse(cond.isPresent());
     }
 
     @Test
@@ -1034,9 +1043,8 @@ public class CoreTest extends BaseOrchestratorTest {
 
     private void cond(boolean cond, int thenCount, boolean thenActivate) throws Exception {
         CompletableFuture<Boolean> c1 = $.task(task(1)).name("chooser").ret(cond);
-        CompletableFuture<Void> p1 = $.task(task(thenCount)).name("then").consume();
-        CompletableFuture<Void> r = $.cond(c1, p1, thenActivate);
-        r.get();
+        CompletableFuture<Integer> p1 = $.task(task(thenCount)).name("then").ret(2);
+        $.cond(c1, p1, thenActivate).get();
 
         sleep(25);  // Give tasks time to complete and update actualCount
     }
@@ -1207,8 +1215,8 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> f3 = $.task(task(exp)).name("f3").ret(3);
 
         CompletableFuture<Boolean> fb = $.fate(f1, f2, f3);
-        CompletableFuture<Void> fr = $.task(task()).name("fr").consume();
-        CompletableFuture<Void> fv = $.cond(fb, fr);
+        CompletableFuture<Integer> fr = $.task(task()).name("fr").ret(8);
+        CompletableFuture<Optional<Integer>> fv = $.cond(fb, fr);
         fv.get();
 
         assertEquals(1, (int) f1.get());

@@ -17,6 +17,7 @@
 package com.ebay.bascomtask.core;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -304,16 +305,16 @@ public interface Orchestrator extends CommonConfig {
     CompletableFuture<Boolean> fate(CompletableFuture<?>... cfs);
 
     /**
-     * Execute the supplied CompletableFuture depending on the supplied condition. The CompletableFuture is not
+     * Execute the supplied CompletableFuture if the supplied condition evaluates to true. The CompletableFuture is not
      * executed until the supplied condition completes, and that supplied condition is only executed if the output from
      * this method is activated (reachable from a required CompletableFuture).
      *
      * @param condition  to first evaluate
      * @param thenFuture to execute if condition evaluates to true
-     * @return thenFuture or elseFuture
+     * @return thenFuture optional which only has value if condition evaluates to true
      */
-    default CompletableFuture<Void> cond(CompletableFuture<Boolean> condition,
-                                         CompletableFuture<Void> thenFuture) {
+    default <R> CompletableFuture<Optional<R>> cond(CompletableFuture<Boolean> condition,
+                                                    CompletableFuture<R> thenFuture) {
         return cond(condition, thenFuture, false);
     }
 
@@ -329,10 +330,10 @@ public interface Orchestrator extends CommonConfig {
      * @param condition    to first evaluate
      * @param thenFuture   to execute if condition evaluates to true
      * @param thenActivate iff true then start executing at same time as condition
-     * @return thenFuture or elseFuture
+     * @return thenFuture optional which only has value if condition evaluates to true
      */
-    CompletableFuture<Void> cond(CompletableFuture<Boolean> condition,
-                                 CompletableFuture<Void> thenFuture, boolean thenActivate);
+    <R> CompletableFuture<Optional<R>> cond(CompletableFuture<Boolean> condition,
+                                            CompletableFuture<R> thenFuture, boolean thenActivate);
 
     /**
      * Execute one of two choices depending on the result of the supplied condition. Neither choice is
@@ -360,24 +361,25 @@ public interface Orchestrator extends CommonConfig {
      *
      * @param condition    to first evaluate
      * @param thenFuture   chosen if condition evaluates to true
-     * @param thenActivate iff true then start executing at same time as condition
+     * @param thenActivate iff true then start executing thenFuture at same time as condition
      * @param elseFuture   chosen if condition evaluates to false
-     * @param elseActivate iff true then start executing at same time as condition
+     * @param elseActivate iff true then start executing elseFuture at same time as condition
      * @param <R>          type of return result
-     * @return thenFuture or elseFuture
+     * @return thenFuture or elseFuture result
      */
     <R> CompletableFuture<R> cond(CompletableFuture<Boolean> condition,
                                   CompletableFuture<R> thenFuture, boolean thenActivate,
                                   CompletableFuture<R> elseFuture, boolean elseActivate);
 
     /**
-     * Creates a task wrapper around any user POJO with the requirement that that POJO implements an interface X
-     * that in turn implements TaskInterface&lt;X&gt;.The result is a wrapper object that has the same signature
-     * as its pojo argument, such that any CompletableFuture-returning task methods invoked on this wrapper are not
-     * executed right away --they will be executed if/when any read operation on the returned CompletableFuture is
-     * performed or by passing that CompletableFuture to {@link #execute(CompletionStage[])} or any of its variants.
-     * Because of that lazy evaluation, tasks can be added with little performance penalty while only later choosing
-     * which ones are actually needed.
+     * Creates a task wrapper around any POJO class whose interface X in turn implements TaskInterface&lt;X&gt;.
+     * The returned wrapper also implements interface X, but delays the actual execution of all methods invoked
+     * on it until the value from the returned CompletableFuture is accessed, e.g. through
+     * {@link CompletableFuture#get()}. Internally, the effect of calling any such method is to create
+     * dependency links between the task method and its arguments, for later execution if/when activated.
+     * The dependency linkages so created have little performance cost so it is generally safe to build
+     * large dependency graphs at once while later access the needed elements incrementally. The dependency graph
+     * can also be extended at any time, including from within other task methods.
      *
      * <p>The userTask argument can be freely wrapped any number of times by calling this method (as well as similar
      * methods). In other words, there is a many-to-one relationship between these wrappers and the target user POJO,
@@ -460,11 +462,6 @@ public interface Orchestrator extends CommonConfig {
      * @return Function task
      */
     <R> SupplierTask<R> fnTask(Supplier<R> fn);
-    /*
-    default <R> SupplierTask<R> fnTask(Supplier<R> fn) {
-        return task(new SupplierTask.SupplierTask0<>(fn));
-    }
-     */
 
     /**
      * Produces function task value that takes no arguments and produces one result.

@@ -382,10 +382,10 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public CompletableFuture<Void> cond(CompletableFuture<Boolean> condition,
-                                        CompletableFuture<Void> thenFuture, boolean thenActivate) {
-        ConditionalTask<Void> task = new ConditionalTask<>(this, condition, thenFuture, thenActivate);
-        return task.getOutput();
+    public <R> CompletableFuture<Optional<R>> cond(CompletableFuture<Boolean> condition,
+                                        CompletableFuture<R> thenFuture, boolean thenActivate) {
+        ConditionalTask<R> task = new ConditionalTask<>(this, condition, thenFuture, thenActivate);
+        return task.getOutput().thenApply(r->r==null ? Optional.empty() : Optional.of(r));
     }
 
 
