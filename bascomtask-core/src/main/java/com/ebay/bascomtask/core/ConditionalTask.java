@@ -19,42 +19,20 @@ package com.ebay.bascomtask.core;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * If-then-else or if-then (if elseFuture is null), optimized for thread execution. The task also serves as its
- * own {@link Binding} to reduce object creation for this built-in case.
+ * Base class for conditional logic (if-then or if-then-else) optimized for thread execution. The task also
+ * serves as its own {@link Binding} to reduce object creation for this built-in case.
  *
  * @author Brendan McCarthy
  */
-class ConditionalTask<R> extends Binding<R> implements TaskInterface<ConditionalTask<R>> {
-    private final BascomTaskFuture<Boolean> condition;
-    final BascomTaskFuture<R> thenFuture;
-    final BascomTaskFuture<R> elseFuture;
-    final boolean thenActivate;
-    final boolean elseActivate;
+abstract class ConditionalTask<R> extends Binding<R> {
+    protected final BascomTaskFuture<Boolean> condition;
 
-    ConditionalTask(Engine engine,
-                    CompletableFuture<Boolean> condition,
-                    CompletableFuture<R> thenValue, boolean thenActivate) {
+    ConditionalTask(Engine engine, CompletableFuture<Boolean> condition) {
         super(engine);
         this.condition = ensureWrapped(condition, true);
-        this.thenFuture = ensureWrapped(thenValue, false);
-        this.elseFuture = null;
-        this.thenActivate = thenActivate;
-        this.elseActivate = false;
     }
 
-    ConditionalTask(Engine engine,
-                    CompletableFuture<Boolean> condition,
-                    CompletableFuture<R> thenValue, boolean thenActivate,
-                    CompletableFuture<R> elseValue, boolean elseActivate) {
-        super(engine);
-        this.condition = ensureWrapped(condition, true);
-        this.thenFuture = ensureWrapped(thenValue, false);
-        this.elseFuture = ensureWrapped(elseValue, false);
-        this.thenActivate = thenActivate;
-        this.elseActivate = elseActivate;
-    }
-
-    private Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<R> bascomTaskFuture, boolean activate, TimeBox timeBox) {
+    protected Binding<?> activateIf(Binding<?> pending, BascomTaskFuture<?> bascomTaskFuture, boolean activate, TimeBox timeBox) {
         if (activate && bascomTaskFuture != null) {
             // Activate it, but don't connect its completion yet -- that will happen once condition is resolved
             pending = bascomTaskFuture.getBinding().activate(pending, timeBox);
@@ -63,38 +41,16 @@ class ConditionalTask<R> extends Binding<R> implements TaskInterface<Conditional
     }
 
     /**
-     * Always activate the condition, and also active then and/or else if requested.
-     *
-     * @param pending to be processed
-     * @return pending
+     * Ensure that the future is activated if it is not already.
+     * @param bf to ensure to activate
      */
-    @Override
-    Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
-        pending = condition.activate(this, pending, timeBox);
-        pending = activateIf(pending, thenFuture, thenActivate, timeBox);
-        pending = activateIf(pending, elseFuture, elseActivate, timeBox);
-        return pending;
-    }
-
-    @Override
-    protected Object invokeTaskMethod() {
-        if (get(condition)) {
-            return thenFuture;
-        } else if (elseFuture == null) {
-            return CompletableFuture.completedFuture(null);
-        } else {
-            return elseFuture;
-        }
+    protected void ensureActivated(BascomTaskFuture<?> bf) {
+        engine.executeAndReuseUntilReady(bf);
     }
 
     @Override
     String doGetExecutionName() {
         return "<<CONDITIONAL>>";
-    }
-
-    @Override
-    public TaskInterface<?> getTask() {
-        return this;
     }
 
     @Override

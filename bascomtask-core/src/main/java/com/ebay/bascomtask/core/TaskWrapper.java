@@ -34,13 +34,21 @@ class TaskWrapper<T> implements InvocationHandler {
     private final T original;
     private final TaskInterface<T> target; // same instance as original, but needed to call TaskInterface ops
     private String name = null;
-    private boolean light = false;
-    private boolean runSpawned = false;
+    private boolean light;
+    private boolean runSpawned;
+    private boolean activate;
+
+    // Marks explicit wiring calls to runSpawned, necessary in order to keep the priorities consistent among
+    // the several ways that affect method weight;
+    private boolean explicitRunSpawn = false;
 
     public TaskWrapper(Engine engine, T original, TaskInterface<T> target) {
         this.engine = engine;
         this.original = original;
         this.target = target;
+        this.light = target.isLight();
+        this.runSpawned = target.isRunSpawned();
+        this.activate = target.isActivate();
     }
 
     public String getName() {
@@ -54,6 +62,14 @@ class TaskWrapper<T> implements InvocationHandler {
 
     public boolean isRunSpawned() {
         return runSpawned;
+    }
+
+    boolean explicitRunSpawn() {
+        return explicitRunSpawn;
+    }
+
+    public boolean isActivate() {
+        return activate;
     }
 
     public Object invoke(Object proxy, Method method, Object[] args)
@@ -88,15 +104,24 @@ class TaskWrapper<T> implements InvocationHandler {
         } else if ("runSpawned".equals(targetMethodName)) {
             this.light = false;
             this.runSpawned = true;
+            this.explicitRunSpawn = true;
+            return proxy;
+        } else if ("activate".equals(targetMethodName)) {
+            this.activate = true;
             return proxy;
         }
 
         if (method.getReturnType().equals(Void.TYPE) || !CompletableFuture.class.isAssignableFrom(method.getReturnType())) {
-            // Execute immediately if not return a CompletableFuture
+            // Execute immediately if not returning a CompletableFuture
             return method.invoke(original, args);
         } else {
+            // Else return a placeholder non-activated CompletableFuture
             Binding<T> binding = new ReflectionBinding<>(engine, this, original, method, args);
-            return binding.getOutput();
+            BascomTaskFuture<?> bascomTaskFuture = binding.getOutput();
+            if (activate) {
+                engine.executeAndReuseUntilReady(bascomTaskFuture);
+            }
+            return bascomTaskFuture;
         }
     }
 }

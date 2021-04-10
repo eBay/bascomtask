@@ -1,22 +1,22 @@
 # BascomTask
-Implementing microservices often requires managing multiple requests that reach out to multiple external sources such 
-as other services or datastores. The mechanisms of object orientation can be a great aid for making this work more
-manageable: each integration point can be split into its own task object. Several benefits accrue from this division 
-of labor:
+There are many ways in Java to express parallelized units of work that reach out to external sources such as services
+or datastores. There are also complexities to manage that can quickly make such code difficult to manage and change.
+The mechanisms of object orientation can be a great aid for making this more manageable: each integration point can 
+be split into its own task object. Several benefits accrue from this division of labor:
 
 * Enforcing separation of concerns between tasks
 * Unifying cross-cutting capabilities such as logging and exception handling across tasks
 * Parallel execution among tasks that can be time-wise expensive on their own 
 
-A means to wire together and execute these tasks is needed, often referred to as "task orchestration". A common 
-challenge in making this work is specifying what can be run in parallel while ensuring strict dependency ordering.
-Full management of Java threads is tedious and error prone. CompletableFutures are much better but can still lead
-to considerable complexities. BascomTask is a lightweight task orchestration library alternative that features: 
+To make this work, a means to wire tasks together (what are the tasks, what are their dependencies) must be 
+provided along with orchestration (executing tasks in parallel such that tasks supplying values are executed prior 
+to tasks consuming those values). BascomTask is a lightweight task orchestration library that provides these
+mechanisms. Its features include:
 
 * **Implicit dependency analysis** based on Java static typing -- dependencies are computed from method signatures without additional programmer effort 
 * **Optimal thread management** that spawns threads automatically only when it is advantageous to do so
 * **Lazy execution** that automatically determines what to execute while freely allowing the execution graph to be extended at any time 
-* **Fully asynchronous operation** with complete integration with Java 8+ CompletableFutures
+* **Fully asynchronous operation** that compliments and integrates fully with Java 8+ CompletableFutures
 * **Smart exception handling and rollback** that is customizable and minimizes wasteful task execution
 * **Extensible task execution wrappers** with pre-existing built-ins for logging and profiling
 
@@ -44,7 +44,7 @@ Notice how the generic parameter to TaskInterface is the interface itself (IEcho
 
 > The requirements to task-enable any POJO into a task are minimal: implement a marker interface (TaskInterface) that 
 > has no methods that need to be overridden. There are no other requirements or restrictions on task classes.
-> Task methods can have any number of and type of parameter, and there can be any number of task methods on a class. 
+> Task methods can have any number and type of parameter, and there can be any number of task methods on a class. 
 > The task class may be stateful or not, depending on programming needs.
 
 ## Invoking a Task
@@ -57,10 +57,10 @@ Java code. On the right the same task invocation is run through BascomTask:
 2 | String msg =  new EchoTask().echo("hello"); | String msg = $.task(new EchoTask()).echo("hello");
 
 The difference is that instead of invoking the task method directly on the user POJO, that POJO is first added to
-a BascomTask Orchestrator before being invoked (we use '$' as the variable name for an Orchestrator, but that is just
-a convention that makes it stand out more). The benefit for this extra effort, in this simple example, is only that 
+a BascomTask Orchestrator before being invoked ('$' as the Orchestrator variable name is a just a convention for
+readability). The benefit for this extra effort, in this simple example, is only that 
 the task is managed by the framework and facilities such as logging and profiling apply. 
-The real gains come when we aim for parallel execution if tasks. 
+More useful examples involve multiple tasks and parallelism.
 
 ## Parallel Hello World
 The first step toward parallelism is to employ CompletableFutures as the medium of exchange among tasks, which
@@ -107,17 +107,19 @@ With the above task definitions in place, we can wire them together like this:
        }
    }
 ```
-With this, the left and right echo tasks will be executed in parallel and when they both complete then (and only then)
-the CombinerTask will be executed. This works because the actual execution does start until the _get()_ call. 
-The framework works backward from the _get()_ call, recursively determining all the tasks that are required to complete 
-that call, then initiates execution such that any task's inputs are executed prior to it being started.
-Because of this lazy execution, it is not costly to create many tasks and only later determine which ones are needed; 
-the framework will determine the minimal spanning set of tasks to actually execute, and then proceed in a 
+With this wiring, the left and right echo tasks will be executed in parallel and when they both complete then 
+(and only then) the CombinerTask will be executed. This works because the actual execution does start until the 
+_get()_ call. The framework works backward from the _get()_ call, recursively determining all the tasks that are 
+required to complete that call, then initiates execution such that any task's inputs are executed prior to it being 
+started. Because of this lazy execution, it is not costly to create many tasks and only later determine which ones 
+are needed; the framework will determine the minimal spanning set of tasks to actually execute, and then proceed in a 
 dataflow-forward execution style, executing tasks once (and only when) all their inputs are available 
 and completed. 
 
 > Since the dependency analysis is determined from the method signatures themselves, it is not possible
 to mistakenly execute a task before its parameters are ready.
+
+
 
 ## General Programming Model
 1) Task methods on are activated (scheduled for execution) on demand by a call to execute, get, or other access
@@ -130,7 +132,7 @@ to mistakenly execute a task before its parameters are ready.
    arguments ready. All _those_ ready-to-fire task methods are collected.
 6) Return to step 4. 
 
-> Note without any extra programming effort, the framework determines what tasks can be executed in parallel.
+> Without any extra programming effort, the framework determines what tasks can be executed in parallel.
 
 The following diagram illustrates the thread flow among 12 task method invocations (circles) activated by a
 get() call, with execution color-coded with the thread (there are 4 in this example) that executes them:
@@ -168,25 +170,82 @@ no main thread waiting it spawns an orange 4th thread for task 10. The final tas
 assuming it arrives as the last argument for task 12. The result is now available to return to the original green
 thread caller.
 
-### Options for Task Initiation
-As in the previous examples, a task method is activated (scheduled for execution) when its value is retrieved through 
-a _get()_ call. Activating a task method activates all its predecessors, recursively, if they have not already been 
-activated. Activation can also be done independently of retrieving a value by calling _execute()_ on an Orchestrator. 
-That call can be useful in the following scenarios:
+## More on Activation
+In BascomTask, task methods are not executed until activated, which occurs once, the first time any one of the
+following actions occurs on the CompletableFuture returned from a task method:
+<ol type="a">
+<li>Accessing its value through get(), getNow(), or join()
+<li>Passing it to one of several variations of execute() defined on Orchestrator
+<li>Being passed as input to another task method that is activated
+<li>The task wrapper is marked with activate() (see below)
+</ol>
 
-* For activating multiple tasks at once (_execute()_ takes a vararg list of CompletableFutures). If, for example, you
-  otherwise simply call f1.get() followed by a call f2.get(), f2 won't be activated until f1 completes. While there is
-  no functional impact to doing that, it might not be as efficient as activating them both at the same time with 
-  a single call to  _execute(f1,f2)_.
-* For activating a task that you don't want to wait for, e.g. a background task.
-* For activating a task that is otherwise hidden. This is a special case. In addition to  _get()_, any of the many
-  methods on CompletableFuture, such as _thenApply()_, _applyToEitherAsync()_, and so on, will also implicitly activate
-  their arguments. The one case where this does _not_ happen is _thenCompose()_ because its CompletableFuture argument
-  is hidden in a lambda. For tha case, its argument should be activated explicitly by an _execute()_ call.
+The options in (a) are simply convenience operations that call execute() internally. These save you from having to always
+invoke execute() prior (for example) to get(). This makes intuitive sense and prevents errors, since there is never
+any point to attempting to get() a value from a task method that has not been activated and will not therefore execute,
+leaving the get() call to block indefinitely.
 
-> There is no harm in calling _execute()_ multiple times and/or calling both execute and get for a CompletableFuture. 
-The execution graph can also be freely extended at any time, even in a nested task, in a thread-safe manner with 
-any of these calls. 
+Convenience aside, (b) provides the most general and flexible form of activating task methods, notably allowing
+for multiple activations at the same time. If, for example, you otherwise simply call _f1.get()_ followed by a call 
+to _f2.get()_, _f2_ won't be activated until _f1_ completes. While there is no functional impact to doing that, it 
+might not be as efficient as activating them both at the same time with a single call to  _execute(f1,f2)_.
+
+There is additional functionality available with execute methods. There are four types, each with optional timeout 
+arguments and varargs and list variations:
+* _execute_ activates multiple values at once, without (necessarily) waiting</li>
+* _executeAndWait_ activates multiple values at once and does not return until all are complete</li>
+* _executeFuture_ activates multiple values at once and returns a CompletableFuture that asynchronously completes
+when all of its inputs complete
+* _executeAsReady_ activates multiple values at once and returns results independently and incrementally
+as soon as they complete
+
+> There is no harm in calling _execute()_ multiple times with the same or different arguments, nor for calling both 
+> execute and get for a given CompletableFuture. The execution graph can also be freely extended at any time, even 
+> in a nested task, in a thread-safe manner with any of these calls.
+
+### Comparing BascomTask Futures with Standard CompletableFutures
+The BascomTask model of activation has implications as compared with using CompletableFutures alone. For example,
+consider some _ConcatTask_ class with a string _concat_ method (not otherwise shown). Using only CompletableFutures, 
+the _concat_ method below will be called and _cfw_ --regardless of whether it is accessed or not-- will be completed 
+with a value of "hello world":
+
+```java
+CompletableFuture cfh = CompletableFuture.supplyAsync(() -> "hello");
+CompletableFuture cfw = cf.thenApply(s->concatTask.concat(s," world"));
+```
+
+In contrast, the concat method in the BascomTask version below will not be executed because it is not activated,
+even though its input argument _cfh_ completes:
+
+```java
+CompletableFuture cfh = CompletableFuture.supplyAsync(() -> "hello");
+CompletableFuture cfw = $.task(concatTask).concat(cfh," world");
+```
+
+This illustrates that BascomTask is a compliment to, rather than an alternative to, CompletableFutures. If you want 
+the first behavior, just use CompletableFutures. If want the lazy task/activation behavior, use BascomTask. 
+BascomTask is completely compatible with CompletableFutures, and they can be freely intermixed. For some programs, 
+a predominantly CompletableFuture program might mix in an occasional use of BascomTask,
+while for other programs that balance might be reversed.
+
+Nonetheless, it is important to keep in mind that BascomTask CompletableFutures must be activated in some way before 
+they can be chained. For example, in the following:
+
+```java
+$.task(concatTask).concat(cfh," world").thenAccept(System.out::println);
+```
+
+No output would be printed, because the CompletableFuture returned by _concat_ has not been activated
+according the rules listed earlier. _CompletableFuture.thenAccept()_ or any similar call has no effect on anything that
+comes before it in a processing chain, whether using CompletableFutures only or in conjunction with BascomTask,
+so the _concat_ task method that started out unactivated remains unactivated. Activation could be effected by splitting 
+this one line into several  and passing the CompletableFuture to _Orchestrator.execute()_ prior to invoking 
+_thenAccept()_ on it, but a simpler way is to let TaskInterface.activate() do that for you. That is simply another 
+convenience method that allows everything to remain as one expression:
+
+```java
+$.task(concatTask).activate().concat(cfh," world").thenAccept(System.out::println);
+```
 
 ### External CompletableFutures
 CompletableFutures that originate externally to BascomTask can be used as task method arguments just like any 
@@ -237,6 +296,10 @@ The _cond()_ call has an alternate form for this purpose that allows booleans to
 ```
 The _true_ values in this example indicate that the tasks behind each of firstChoice and secondChoice should be 
 started at the same time as the task behind _cond_.
+
+> BascomTask can reduce the proliferation of repeated if-then-else statements in task wiring, since the expression
+> of dependencies is not tied to a decision to actually execute a task method. Conditional logic can be wrapped into
+> Conditional expressions and applied only where it influences the logical outcome.
 
 ## Function Tasks
 Sometimes it is convenient to define a task simply with a lambda function, without having to write separate

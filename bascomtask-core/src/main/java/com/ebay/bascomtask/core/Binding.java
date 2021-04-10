@@ -37,7 +37,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
     final Engine engine;
 
     // Set (once and only once) to a TimeBox (as supplied by a user call) when this binding's task is scheduled
-    // for execution, either immediately oe once its arguments are ready
+    // for execution, either immediately or once its arguments are ready
     private final AtomicReference<TimeBox> activated = new AtomicReference<>(null);
 
     // Subset of args that are BascomTaskFutures
@@ -87,11 +87,11 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         return getClass().getSimpleName() + "(" + getTaskPlusMethodName() + ")";
     }
 
-    protected boolean isLight() {
+    public boolean isLight() {
         return false;
     }
 
-    protected boolean isRunSpawned() {
+    public boolean isRunSpawned() {
         return false;
     }
 

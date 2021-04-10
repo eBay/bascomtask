@@ -19,6 +19,7 @@ package com.ebay.bascomtask.core;
 import static org.junit.Assert.*;
 
 import com.ebay.bascomtask.exceptions.InvalidTaskMethodException;
+import com.ebay.bascomtask.exceptions.MisplacedTaskMethodException;
 import com.ebay.bascomtask.exceptions.TaskNotStartedException;
 import com.ebay.bascomtask.exceptions.TimeoutExceededException;
 import com.ebay.bascomtask.util.CommonTestingUtils;
@@ -192,6 +193,64 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf = new CompletableFuture<>();
         cf.completeExceptionally(new RuntimeException());
         task(0).inc(cf);  // Should fault on get(cf)
+    }
+
+    @Test
+    public void defaultLightFalse() {
+        IThreadTask task = new IThreadTask.ThreadTask();
+        assertEquals(Thread.currentThread(), $.task(task).computeAnnotated().join());
+        if (mode==SpawnMode.NEVER_MAIN || mode==SpawnMode.ALWAYS_SPAWN) {
+            assertNotEquals(Thread.currentThread(), $.task(task).computeNotAnnotated().join());
+        }
+    }
+
+    @Test
+    public void defaultLightTrue() {
+        IThreadTask task = new IThreadTask.ThreadTask().light();
+        assertEquals(Thread.currentThread(),$.task(task).computeAnnotated().join());
+        if (mode==SpawnMode.NEVER_MAIN || mode==SpawnMode.ALWAYS_SPAWN) {
+            assertEquals(Thread.currentThread(),$.task(task).computeNotAnnotated().join());
+        }
+    }
+
+    @Test
+    public void defaultLightFalseLightTrue() {
+        IThreadTask task = new IThreadTask.ThreadTask();
+        assertEquals(Thread.currentThread(), $.task(task).computeAnnotated().join());
+        if (mode==SpawnMode.NEVER_MAIN || mode==SpawnMode.ALWAYS_SPAWN) {
+            assertEquals(Thread.currentThread(), $.task(task).light().computeNotAnnotated().join());
+        }
+    }
+
+    @Test
+    public void defaultRunSpawned() {
+        IThreadTask task = new IThreadTask.ThreadTask().runSpawned();
+
+        if (mode==SpawnMode.NEVER_SPAWN) {
+            assertEquals(Thread.currentThread(), $.task(task).computeAnnotated().join());
+            assertEquals(Thread.currentThread(), $.task(task).computeNotAnnotated().join());
+        } else {
+            assertEquals(Thread.currentThread(), $.task(task).computeAnnotated().join());
+            assertNotEquals(Thread.currentThread(), $.task(task).computeNotAnnotated().join());
+            assertEquals(Thread.currentThread(), $.task(task).light().computeNotAnnotated().join());
+        }
+    }
+
+    @Test
+    public void defaultActivate() {
+        IThreadTask.ThreadTask task = new IThreadTask.ThreadTask();
+        $.task(task).activate().computeAnnotated();
+        assertTrue(task.calledAnnotated);
+    }
+
+    @Test(expected = MisplacedTaskMethodException.class)
+    public void activateNotOverridden() {
+        new UberTask.UberTasker(0).activate();
+    }
+
+    @Test(expected = MisplacedTaskMethodException.class)
+    public void lightNotOverridden() {
+        new UberTask.UberTasker(0).light();
     }
 
     @Test
@@ -478,8 +537,21 @@ public class CoreTest extends BaseOrchestratorTest {
     @Test
     public void externalToExternal() throws Exception {
         CompletableFuture<Integer> cf1 = CompletableFuture.supplyAsync(() -> sleepThen(20, 1));
-        CompletableFuture<Integer> cf2 = $.task(task()).inc(cf1).thenApply(v -> v + 1);
+        CompletableFuture<Integer> cfi = $.task(task()).inc(cf1);
+        $.execute(cfi);
+        CompletableFuture<Integer> cf2 = cfi.thenApply(v -> v + 1);
         assertEquals(3, (int) cf2.get());
+    }
+
+    @Test
+    public void fromMultipleOrchestrators() {
+        Orchestrator ox = Orchestrator.create("ox");
+        Orchestrator oy = Orchestrator.create("oy");
+        CompletableFuture<Integer> cf1 = ox.task(task()).ret(1);
+        CompletableFuture<Integer> cf2 = oy.task(task()).inc(cf1);
+        CompletableFuture<Integer> cf3 = ox.task(task()).inc(cf2);
+        CompletableFuture<Integer> cf4 = oy.task(task()).add(cf1,cf2,cf3);
+        assertEquals(6,(int)cf4.join());
     }
 
     private <T extends TaskInterface<T>> T spawn(T t, boolean spawn) {

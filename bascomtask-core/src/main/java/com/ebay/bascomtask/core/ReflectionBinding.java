@@ -45,7 +45,8 @@ class ReflectionBinding<USERTASKTYPE, RETURNTYPE> extends Binding<RETURNTYPE> {
         // Only one of these should be set -- that is also true in TaskWrapper
         // An explicit call on the task overrules a @Light annotation if present
         this.runSpawned = taskWrapper.isRunSpawned();
-        this.light = taskWrapper.isLight() || (Utils.getAnnotation(userTask, method, Light.class) != null && !runSpawned);
+        this.light = taskWrapper.isLight()
+                || (Utils.getAnnotation(userTask, method, Light.class) != null && !taskWrapper.explicitRunSpawn());
 
         if (args != null) {
             for (Object next : args) {
@@ -58,12 +59,12 @@ class ReflectionBinding<USERTASKTYPE, RETURNTYPE> extends Binding<RETURNTYPE> {
     }
 
     @Override
-    protected boolean isLight() {
+    public boolean isLight() {
         return light;
     }
 
     @Override
-    protected boolean isRunSpawned() {
+    public boolean isRunSpawned() {
         return runSpawned;
     }
 

@@ -24,7 +24,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.*;
 
 /**
- * Manages execution flow among one or more tasks.
+ * Provides entry points for task execution, and for common configuration among all tasks so executed.
+ *
+ * <p>There is no limit to the number of orchestrators created and they are thread-safe and relatively lightweight.
+ * Task execution is only tied to its orchestrator for configuration purposes. Tasks from different orchestrators
+ * can be freely intermixed.
  *
  * @author Brendan McCarthy
  */
@@ -373,36 +377,36 @@ public interface Orchestrator extends CommonConfig {
 
     /**
      * Creates a task wrapper around any POJO class whose interface X in turn implements TaskInterface&lt;X&gt;.
-     * The returned wrapper also implements interface X, but delays the actual execution of all methods invoked
-     * on it until the value from the returned CompletableFuture is accessed, e.g. through
-     * {@link CompletableFuture#get()}. Internally, the effect of calling any such method is to create
-     * dependency links between the task method and its arguments, for later execution if/when activated.
-     * The dependency linkages so created have little performance cost so it is generally safe to build
-     * large dependency graphs at once while later access the needed elements incrementally. The dependency graph
-     * can also be extended at any time, including from within other task methods.
+     * The returned wrapper implements the same interface <code>X</code> that intercepts all calls on it in order
+     * to provide alternate execution behavior where CompletableFutures are present as inputs or output:
+     * <ul>
+     *     <li>The task method is delayed until all CompletableFuture inputs have completed, and
+     *     <li>If it returns a CompletableFuture, the task method is suspended until it is activated (enabled for execution)
+     * </ul>
+     * Activation of a task method occurs the first time any of the following actions are performed on its
+     * returned CompletableFuture:
+     * <ul>
+     *     <li>Accessing its value through get(), getNow(), or join()
+     *     <li>Passing it to one of several variations of execute() defined on Orchestrator
+     *     <li>Being passed as input to another task method that is activated
+     * </ul>
      *
-     * <p>The userTask argument can be freely wrapped any number of times by calling this method (as well as similar
-     * methods). In other words, there is a many-to-one relationship between these wrappers and the target user POJO,
-     * which may be of interest for stateful user POJO tasks or simply for avoiding the overhead of repeatedly
-     * creating user task instances. In the following example, 4 task wrappers around the same user POJO task
-     * instance are created:
-     * <pre>
-     *     MyTask myTask = new MyTask();
-     *     CompletableFuture f1 = $.task(myTask).doSomething();
-     *     CompletableFuture f2 = $.task(myTask).doSomething();  // or doSomethingElse()
-     *     MyTask wrapper = $.task(myTask);
-     *     CompletableFuture f3 = wrapper.doSomething();
-     *     CompletableFuture f4 = wrapper.doSomething();  // or doSomethingElse()
-     * </pre>
+     * <p>Activating a task method implicitly activates all tasks methods supplying CompletableFutures as inputs.
+     * Once activated, a task method will be executed, possibly in a different thread, as soon as all of its
+     * CompletableFuture input arguments (if any) have completed. A task method with no CompletableFuture arguments
+     * (perhaps no arguments at all) is executed right away, though (again) possibly in a different thread.
      *
-     * <p>Note that a 'read operation' in this context refers to standard CompletableFuture access operations that
-     * initiate execution. This includes simple operations such as {@link CompletableFuture#get()} as well as any
-     * composition operations such as {@link CompletableFuture#thenApply(Function)} with the exception of the
-     * 'compose' variations such as {@link CompletableFuture#thenCompose(Function)} whose _fn_ argument can only be
-     * started with {@link #execute(CompletionStage[])}.
+     * <p>Internally, task method suspension (as described above) involves recording dependency links between the
+     * task method and its arguments for later execution if/when activated. Those dependency links are designed to
+     * have minimal performance cost so it is generally safe to build large dependency graphs with many calls to
+     * this (<code>task</code>) method in one pass while later incrementally choosing which elements are actually
+     * needed. Such graphs need not be defined all at once. This method can be called at any time or place (including
+     * from within other task methods), whether its arguments have already completed or not.
      *
-     * <p>If a task method returns anything other than a CompletableFuture, it is executed right away, with
-     * any predecessors executed in the same thread-spawning manner as occurs when CompletableFutures are activated.
+     * <p>The single userTask argument can be wrapped by this call any number of times. There is in effect a many-to-
+     * one relationship between these wrappers and any target user POJO instance. It may be desirable to share
+     * stateful POJO instances or conversely to simply reuse stateless POJO instances to avoid the overhead of
+     * creating multiple POJO instances.
      *
      * @param userTask any userTask with an interface that extends {@link TaskInterface}
      * @param <BASE>   the interface for the task
