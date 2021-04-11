@@ -82,7 +82,10 @@ class ReflectionBinding<USERTASKTYPE, RETURNTYPE> extends Binding<RETURNTYPE> {
     @Override
     protected Object invokeTaskMethod() {
         try {
-            //method.setAccessible(true); // TODO, better place for this?
+            // Don't require public access, especially because of poor JVM exception messages, e.g. failure to make
+            // an interface public, when BT accessed as a library, can otherwise result in
+            // IllegalAccessException ... cannot access a member of interface ... with modifiers "public abstract"
+            method.setAccessible(true);
             return method.invoke(userTask, args);
         } catch (InvocationTargetException itx) {
             Throwable actual = itx.getCause();
