@@ -141,7 +141,6 @@ public interface Orchestrator extends CommonConfig {
      */
     void execute(long timeoutMs, CompletionStage<?>... futures);
 
-    // TODO check exception
     /**
      * Variant of {@link #execute(CompletionStage[])} that waits for all of its arguments to complete,
      * ignoring any exceptions. After this call, any call on the supplied futures will not block since

@@ -99,7 +99,7 @@ public class GlobalOrchestratorConfig {
             setSpawnMode(SpawnMode.WHEN_NEEDED);
             setTimeoutMs(0);
             setTimeoutStrategy(TimeoutStrategy.PREVENT_NEW);
-            removeAllTaskRunners();
+            removeAllInterceptors();
             restoreDefaultExecutorService();
             initializers.clear();
         }
@@ -171,7 +171,7 @@ public class GlobalOrchestratorConfig {
         }
 
         @Override
-        public void removeAllTaskRunners() {
+        public void removeAllInterceptors() {
             first.clear();
             last.clear();
         }

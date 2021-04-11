@@ -163,13 +163,13 @@ public class TaskRunnerTest {
     @Before
     public void before() {
         count.set(0);
-        GlobalOrchestratorConfig.getConfig().removeAllTaskRunners();
+        GlobalOrchestratorConfig.getConfig().removeAllInterceptors();
     }
 
     @Test
     public void noRunners() throws Exception {
         Orchestrator $ = Orchestrator.create();
-        $.removeAllTaskRunners();
+        $.removeAllInterceptors();
         assertEquals(1, (int) $.task(task()).ret(1).get());
     }
 

@@ -58,8 +58,6 @@ public interface TaskRunner {
      */
     Object executeTaskMethod(TaskRun taskRun, Thread parentThread, Object fromBefore);
 
-    // TODO expose exceptions to handler
-
     /**
      * Called once any CompletableFuture return result completes, which may be before the call to
      * TaskRun.run() or after if a method returns an incomplete CompletableFuture.

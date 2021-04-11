@@ -53,7 +53,6 @@ public class Engine implements Orchestrator {
     private final AtomicInteger threadCounter = new AtomicInteger(0);
 
     // BT-managed threads are flagged for bookkeeping purposes
-    // TODO still needed?
     private final ThreadLocal<Boolean> isBtManagedThread = ThreadLocal.withInitial(() -> false);
 
     // For passing work (i.e. running tasks) back to the main thread
@@ -501,7 +500,7 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public void removeAllTaskRunners() {
+    public void removeAllInterceptors() {
         synchronized (runners) {
             runners.clear();
         }
