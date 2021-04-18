@@ -25,7 +25,7 @@ mechanisms. Its features include:
 To work within BascomTask, a task class can be any Java class that (a) has an interface and (b) that interface 
 extends the BascomTask _TaskInterface_. There are no method implementations required when extending TaskInterface, 
 it is simply a marker interface used by the BascomTask framework that also provides some useful default operations
-that will be explained later on. An example of a simple task interface and class with one method that takes and returns
+as explained later. An example of a simple task interface and class with one method that takes and returns
 its argument might be:
 
 ```java
@@ -66,7 +66,7 @@ More useful examples involve multiple tasks and parallelism.
 The first step toward parallelism is to employ CompletableFutures as the medium of exchange among tasks, which
 maximizes opportunities for mapping different tasks to different threads. This is illustrated in the following 
 modification of the previous example that includes an additional task for combining space-separated strings. 
-We could have simple added the _combine()_ method same _EchoTask_ (a single task can have multiple diverse methods), 
+We could have simply added the _combine()_ method same _EchoTask_ (a single task can have multiple diverse methods), 
 but for clarity they are separated in this example:
 
 ```java
@@ -88,9 +88,9 @@ but for clarity they are separated in this example:
         }
     }
 ```
-The above makes calls to _get()_ and _complete()_, which are convenience methods defined in _TaskInterface_ 
-for getting and setting values from/to CompletableFutures. These are examples of convenience methods, not otherwise
-mandatory, defined on _TaskInterface_
+The above makes calls to _get()_ and _complete()_, which are default utility methods defined in _TaskInterface_ 
+for getting and setting values from/to CompletableFutures. These are examples of convenience methods whose 
+use is optional.
 
 With the above task definitions in place, we can wire them together like this:
 
@@ -108,7 +108,7 @@ With the above task definitions in place, we can wire them together like this:
    }
 ```
 With this wiring, the left and right echo tasks will be executed in parallel and when they both complete then 
-(and only then) the CombinerTask will be executed. This works because the actual execution does start until the 
+(and only then) the CombinerTask will be executed. This works because the actual execution is not initiated until the 
 _get()_ call. The framework works backward from the _get()_ call, recursively determining all the tasks that are 
 required to complete that call, then initiates execution such that any task's inputs are executed prior to it being 
 started. Because of this lazy execution, it is not costly to create many tasks and only later determine which ones 
@@ -117,17 +117,19 @@ dataflow-forward execution style, executing tasks once (and only when) all their
 and completed. 
 
 > Since the dependency analysis is determined from the method signatures themselves, it is not possible
-to mistakenly execute a task before its parameters are ready.
+to mistakenly execute a task before its parameters are ready. Accessing the values of CompletablueFuture
+> input parameters will never block.
 
 
 
 ## General Programming Model
-1) Task methods on are activated (scheduled for execution) on demand by a call to execute, get, or other access
-   operation on a CompletableFuture returned from a task method. 
+1) Task methods are activated (scheduled for execution) on demand by an explicit call to _activate_ (on Orchestrator
+   or TaskWrapper), or implicitly by a call to _get()_ or other access operation on a CompletableFuture returned 
+   from a task method. 
 2) Activation works recursively backward, activating that task method and all its predecessors (incoming arguments).
 3) Task methods that are ready to fire (begin execution), either because all their CompletableFuture inputs have
    already completed or because they have no CompletableFuture inputs, are collected. 
-4) All except one are spawned to new threads and all are started (one is kept for execution by the processing thread). 
+4) All except one are assigned to newly spawned threads and all are started (one is kept for execution by the processing thread). 
 5) Completion runs forward. Each completion checks for each of its dependents whether that dependent has all its 
    arguments ready. All _those_ ready-to-fire task methods are collected.
 6) Return to step 4. 
@@ -135,7 +137,7 @@ to mistakenly execute a task before its parameters are ready.
 > Without any extra programming effort, the framework determines what tasks can be executed in parallel.
 
 The following diagram illustrates the thread flow among 12 task method invocations (circles) activated by a
-get() call, with execution color-coded with the thread (there are 4 in this example) that executes them:
+get() call, with the executing thread (there are 4 in this example) color-coded: 
 
 ![Thread Flow](doc/thread_flow.svg)
 
@@ -171,40 +173,40 @@ assuming it arrives as the last argument for task 12. The result is now availabl
 thread caller.
 
 ## More on Activation
-In BascomTask, task methods are not executed until activated, which occurs once, the first time any one of the
+In BascomTask, task methods are not executed until activated. Activation occurs the first time any one of the
 following actions occurs on the CompletableFuture returned from a task method:
 <ol type="a">
-<li>Accessing its value through get(), getNow(), or join()
-<li>Passing it to one of several variations of execute() defined on Orchestrator
+<li>Accessing its value through _get()_, _getNow()_, or _join()_
+<li>Passing it to one of several variations of _activate()_ defined on Orchestrator
 <li>Being passed as input to another task method that is activated
-<li>The task wrapper is marked with activate() (see below)
+<li>Invoking _activate()_ on the TaskWrapper (see below)
 </ol>
 
-The options in (a) are simply convenience operations that call execute() internally. These save you from having to always
-invoke execute() prior (for example) to get(). This makes intuitive sense and prevents errors, since there is never
-any point to attempting to get() a value from a task method that has not been activated and will not therefore execute,
-leaving the get() call to block indefinitely.
+The options in (a) are simply convenience operations that call activate() internally. These save you from having to
+always invoke _activate()_ prior (for example) to _get()_. This makes intuitive sense and prevents errors, since there
+is never any point to attempting to _get()_ a value from a task method that has not been activated and will not 
+therefore execute, leaving the _get()_ call to block indefinitely.
 
 Convenience aside, (b) provides the most general and flexible form of activating task methods, notably allowing
 for multiple activations at the same time. If, for example, you otherwise simply call _f1.get()_ followed by a call 
 to _f2.get()_, _f2_ won't be activated until _f1_ completes. While there is no functional impact to doing that, it 
-might not be as efficient as activating them both at the same time with a single call to  _execute(f1,f2)_.
+might not be as efficient as activating them both at the same time with a single call to  _activate(f1,f2)_.
 
-There is additional functionality available with execute methods. There are four types, each with optional timeout 
-arguments and varargs and list variations:
-* _execute_ activates multiple values at once, without (necessarily) waiting</li>
-* _executeAndWait_ activates multiple values at once and does not return until all are complete</li>
-* _executeFuture_ activates multiple values at once and returns a CompletableFuture that asynchronously completes
+There is additional functionality available with the Orchestrator _activate_ methods. They fall in four categories, 
+each with optional timeout arguments and varargs and list variations:
+* _activate_ activates multiple values at once, without (necessarily) waiting</li>
+* _activateAndWait_ activates multiple values at once and does not return until all are complete</li>
+* _activateFuture_ activates multiple values at once and returns a CompletableFuture that asynchronously completes
 when all of its inputs complete
-* _executeAsReady_ activates multiple values at once and returns results independently and incrementally
+* _activateAsReady_ activates multiple values at once and returns results independently and incrementally
 as soon as they complete
 
-> There is no harm in calling _execute()_ multiple times with the same or different arguments, nor for calling both 
-> execute and get for a given CompletableFuture. The execution graph can also be freely extended at any time, even 
+> There is no harm in calling _activate()_ multiple times with the same or different arguments, nor for calling both 
+> _activate_ and _get_ for a given CompletableFuture. The execution graph can also be freely extended at any time, even 
 > in a nested task, in a thread-safe manner with any of these calls.
 
 ### Comparing BascomTask Futures with Standard CompletableFutures
-The BascomTask model of activation has implications as compared with using CompletableFutures alone. For example,
+Using the BascomTask model of activation has implications as compared with using CompletableFutures alone. For example,
 consider some _ConcatTask_ class with a string _concat_ method (not otherwise shown). Using only CompletableFutures, 
 the _concat_ method below will be called and _cfw_ --regardless of whether it is accessed or not-- will be completed 
 with a value of "hello world":
@@ -222,11 +224,11 @@ CompletableFuture cfh = CompletableFuture.supplyAsync(() -> "hello");
 CompletableFuture cfw = $.task(concatTask).concat(cfh," world");
 ```
 
-This illustrates that BascomTask is a compliment to, rather than an alternative to, CompletableFutures. If you want 
-the first behavior, just use CompletableFutures. If want the lazy task/activation behavior, use BascomTask. 
+This illustrates the purpose of BascomTask as a compliment to, rather than an alternative to, CompletableFutures. 
+If you want the first behavior, just use CompletableFutures. If want the lazy activation behavior, use BascomTask. 
 BascomTask is completely compatible with CompletableFutures, and they can be freely intermixed. For some programs, 
-a predominantly CompletableFuture program might mix in an occasional use of BascomTask,
-while for other programs that balance might be reversed.
+a predominantly CompletableFuture program might mix in an occasional use of BascomTask, while for other programs 
+that balance might be reversed.
 
 Nonetheless, it is important to keep in mind that BascomTask CompletableFutures must be activated in some way before 
 they can be chained. For example, in the following:
@@ -236,29 +238,35 @@ $.task(concatTask).concat(cfh," world").thenAccept(System.out::println);
 ```
 
 No output would be printed, because the CompletableFuture returned by _concat_ has not been activated
-according the rules listed earlier. _CompletableFuture.thenAccept()_ or any similar call has no effect on anything that
-comes before it in a processing chain, whether using CompletableFutures only or in conjunction with BascomTask,
-so the _concat_ task method that started out unactivated remains unactivated. Activation could be effected by splitting 
-this one line into several  and passing the CompletableFuture to _Orchestrator.execute()_ prior to invoking 
-_thenAccept()_ on it, but a simpler way is to let TaskInterface.activate() do that for you. That is simply another 
-convenience method that allows everything to remain as one expression:
+according the rules listed earlier. _CompletableFuture.thenAccept()_ or any similar CompletableFuture method has 
+no effect on anything that comes before it in a processing chain, whether using CompletableFutures only or in 
+conjunction with BascomTask, so the _concat_ task method that started out unactivated remains unactivated. 
+Activation could be effected by splitting this one line into several  and passing the CompletableFuture to 
+_Orchestrator.activate()_ prior to invoking _thenAccept()_ on it, but it is simpler to call _activate_ on either 
+the TaskWrapper:
 
 ```java
 $.task(concatTask).activate().concat(cfh," world").thenAccept(System.out::println);
 ```
+Or Orchestrator:
+```java
+CompletableFuture future = $.task(concatTask).concat(cfh," world");
+$.activate(future).thenAccept(System.out::println);
+```
+
+The first applies to the TaskWrapper itself which matters if that is reused for multiple method invocations. 
+The second option applies only to the task method behind the supplied future argument.
 
 ### External CompletableFutures
 CompletableFutures that originate externally to BascomTask can be used as task method arguments just like any 
 BascomTask-managed CompletableFutures. BascomTask-managed CompletableFutures can be used externally to BascomTask 
-just like any other CompletableFuture. BascomTask thus fits naturally into any asynchronous execution scheme.
+just like any other CompletableFuture (again, as described in the previous section, with the caveat that 
+BascomTask futures must be activated before being chained). BascomTask thus fits naturally into any asynchronous 
+execution scheme.
 
-In this simple (though not very useful) example, a CompletableFuture from some other source is fed into a task and that
-output through a thenApply function:
-```
-    CompletableFuture<Integer> fromSomewereElse = ..
-    CompletableFuture<integer> result = $.task(new MyTask()).computeSomething(fromSomwhereElse))).thenAccept(v->doSomethingWith(v));
-```
-The CompletableFuture result will now reflect having applied MyTask.computeSomething to the fromSomewhereElse value.
+BascomTask does not initiate execution of TaskMethods until all their incoming CompletableFuture arguments, whether
+originated from BascomTask or not, are complete. The non-blocking nature of task method execution is preserved.
+Calls to retrieve values from incoming arguments will not block.
 
 ## Conditional Execution
 
@@ -269,10 +277,10 @@ level, the condition is known during graph construction, allowing a simple choic
    boolean cond = ...
    CompletableFuture f1 = cond ? $.task(new Task1()).compute1(...) : $.task(new Task2()).compute2(...);
 ```
-Sometimes, however, the condition itself must be executed by a task. While you can compute _cond_ by a _get()_ on
+Sometimes, however, the condition itself is an outcome of another task. While you can compute _cond_ by a _get()_ on
 the task method the produces the boolean condition, that would block until completed, and you may not even want
-the entire conditional block to be executed in the first place. That could be avoided by moving the conditional logic 
-itself to its own task, but BascomTask already provides a convenience form for. Suppose we have a task 
+the entire conditional to be executed in the first place. That could be avoided by moving the conditional logic 
+itself to its own task, but BascomTask provides a simpler and concise way to achieve this. Suppose we have a task 
 _SomeConditionTask_ with a method that produces a boolean result, then the following can be applied:
 
 ```
@@ -282,14 +290,16 @@ _SomeConditionTask_ with a method that produces a boolean result, then the follo
    CompletableFuture<Integer> resolved = $.cond(cond,firstChoice,secondChoice);
    int got = resolved.get();
 ```
-In this example, once _computeCondition()_ completes, then either _Task1.compute1()_ or _Task2.compute2_ will be 
-executed. Because the _resolved_ value is requested (through the _get()_ call), then _cond_ task is required, 
-and once complete then either _Task1.compute_ or _Task2.compute_ is executed. 
+In this example, the _get()_ call activates the conditional expression _resolved_. That in turn activates
+_computeCondition_ which is the task method behind _cond_. Once complete, the _cond()_ Orchestrator method
+then activates one of its other arguments depending on boolean result in _cond_. The value returned by the
+chosen task method finds its way to _got_.
 
 While that call to _cond()_ efficiently avoids executing either the _then_ or _else_ choice that will not be used,
 it may be more desirable in some cases to start either of those result tasks at the same time as the condition task 
-so that when the condition is ready the result tasks are also ready or at least have already been started.
-The _cond()_ call has an alternate form for this purpose that allows booleans to be specified indicating this intent:
+so that when the condition is ready, the result tasks are also ready or at least have already been started.
+The _cond()_ call has an alternate form for this purpose with two additional simple boolean values to be 
+specified indicating this intent:
 
 ```
    CompletableFuture<Integer> resolved = $.cond(cond,firstChoice,true,secondChoice,true);
@@ -335,7 +345,7 @@ that multiplies them together:
             (x,y)->x*y);
 ```
 Consumer functions (producing void results) are called with vfn/vfnTask rather than fn/fnTask. They produce a
-CompletableFuture<Void> that _must_ be accessed (e.g. by a get() or execute() call) in order to make the 
+CompletableFuture<Void> that _must_ be accessed (e.g. by a get() or activate() call) in order to make the 
 function execute. 
 
 
@@ -360,11 +370,11 @@ exposes the task to BascomTask that is slightly more helpful for logging and deb
 
 
 ## Exception Handling
-Any exception thrown from a task method is propagated to callers or execute() or to any of the various CompletableFuture 
-methods that return values. This occurs even if the exception is generated in any spawned thread, at any level of 
-nesting, from predecessor to successor recursively. If you get an exception while trying to perform an operation on a
-CompletableFuture, it means that either the immediate task method behind it, or one of its ancestors, generated tha 
-exception.
+Any exception thrown from a task method is propagated to callers of activate() or to any of the various 
+CompletableFuture methods that return values. This occurs even if the exception is generated in any spawned thread, 
+at any level of nesting, from predecessor to successor recursively. If you get an exception while trying to perform 
+an operation on a CompletableFuture, it means that either the immediate task method behind it, or one of its ancestors, 
+generated tha exception.
 
 It is sometimes desirable to take action when tasks generate exceptions, such as reverting the side effects of previous 
 tasks and/or computing an alternative result. The fate() operation serves this purpose, accepting a variable list of 
@@ -393,7 +403,7 @@ Reversion functions can be conditionally applied:
    if (fate.get()) {
        CompletableFuture<Void> r1 = $.task(task1).revertThing(f1);
        CompletableFuture<Void> r2 = $.task(task2).revertOtherThing(f2);
-       $.execute(r1,r2);
+       $.activate(r1,r2);
    }   
    
 ```
@@ -423,7 +433,7 @@ When a task throws an exception:
 which are collected in a list
 1. For every collected FateTask,
    1. For every input to that FateTask
-      1. For each ancestor task (recursively) that is not executed 
+      1. For each ancestor task (recursively) that has not yet started executing 
          1. mark it as TaskNotCompleted and propagate recursively to its descendents stopping at any task that either
             1. Is already completed (normally or with some other exception)
             1. Is a FateTask
@@ -519,10 +529,10 @@ external configuration store.
 
 
 ### Timeouts
-CompletableFutures provide a variant of get() that takes timeout arguments. The BascomTask execute and executeWait 
-methods, which each take a list of CompletableFutures that should be executed, also take such optional arguments. 
-Any of these calls has the same effect of ensuring that the calling thread does not wait longer than the provided 
-duration, and throw a java.util.concurrent.TimeoutException if so. 
+CompletableFutures provide a variant of get() that takes timeout arguments. The BascomTask _activate_ methods
+that take a list of CompletableFutures, also take such optional arguments. Any of these calls has the same effect 
+of ensuring that the calling thread does not wait longer than the provided duration, and throw a 
+java.util.concurrent.TimeoutException if so. 
 
 Threads spawned during execution are not subject to the same timeouts in standard CompletableFutures and by default 
 also BascomTask-managed CompletableFutures. What BascomTask will do at a minimum is to ensure that threads created in 
@@ -534,7 +544,7 @@ apply to any request that does not itself provide an explicit timeout. For examp
 without arguments will pick up the timeout set on an Orchestrator if one has been set. By default, 
 there is no timeout set. 
 
-Accessing a CompletableFuture whose execution path was spawned and timeout out will result in an exception. This
+Accessing a CompletableFuture whose execution path was spawned and timed out will result in an exception. This
 _may_ be a BascomTask TimeoutExceededException, which unlike java.util.concurrent.TimeoutException is unchecked. 
 If interrupts are enabled, the response may be something different if a task has handled the interrupt
 and thrown a different exception.

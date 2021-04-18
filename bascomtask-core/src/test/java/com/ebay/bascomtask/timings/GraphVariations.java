@@ -63,7 +63,7 @@ public class GraphVariations {
         CompletableFuture<Long> bm = $.task(task()).add(ml, mm, mr);
         CompletableFuture<Long> br = $.task(task()).add(ml, mm, mr);
 
-        $.executeAndWait(bl, bm, br);
+        $.activateAndWait(bl, bm, br);
 
         return get(bl) + get(bm) + get(br);
     }
@@ -90,19 +90,19 @@ public class GraphVariations {
         // Start various combinations first for variation in graph flow
         switch (((int) input % 5) + 1) {
             case 1:
-                $.execute(left1, right1);
+                $.activate(left1, right1);
                 break;
             case 2:
-                $.execute(left2, right2);
+                $.activate(left2, right2);
                 break;
             case 3:
-                $.execute(left3, right3);
+                $.activate(left3, right3);
                 break;
             case 4:
-                $.execute(left4, right4);
+                $.activate(left4, right4);
                 break;
             case 5:
-                $.execute(left5, right5);
+                $.activate(left5, right5);
                 break;
             default: // do nothing
         }

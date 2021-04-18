@@ -196,12 +196,12 @@ public class GlobalOrchestratorConfig {
      *
      * <p>The mechanism uses ThreadLocal internally and those must be closed properly to ensure cleanup of threadLocal
      * state. A typical usage is thus:
-     * <pre><code>
-     *   try (LaneRunner&lt;MyTaskRunner&gt; laneRunner = GlobalOrchestratorConfig.interceptFirstOnCreate(MyTaskRunner::new)) {
+     * <pre>{@code
+     *   try (LaneRunner<MyTaskRunner> laneRunner = GlobalOrchestratorConfig.interceptFirstOnCreate(MyTaskRunner::new)) {
      *       // Perform any logic here that might create Orchestrators at any point
-     *       laneRunner.runners.forEach(r-&gt;performRunnerOperation(r));
+     *       laneRunner.runners.forEach(r->performRunnerOperation(r));
      *   }
-     * </code></pre>
+     * }</pre>
      *
      * <p>Multiple TaskRunners can be installed in this way by nesting these calls.
      *

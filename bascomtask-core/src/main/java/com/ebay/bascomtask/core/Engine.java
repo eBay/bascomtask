@@ -169,7 +169,7 @@ public class Engine implements Orchestrator {
     }
 
     void executeAndReuseUntilReady(CompletableFuture<?> cf, long timeoutMs) {
-        execute(timeoutMs, cf);
+        activate(timeoutMs, cf);
         waitUntilComplete(timeoutMs, cf);
     }
 
@@ -246,9 +246,17 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public void execute(long timeoutMs, CompletionStage<?>... futures) {
+    public void activate(long timeoutMs, CompletableFuture<?>... futures) {
         TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
         executeWithMonitoringIfNeeded(timeBox, futures);
+    }
+
+    @Override
+    public <T> CompletableFuture<T> activate(long timeoutMs, CompletableFuture<T> future) {
+        CompletableFuture<?>[] futures = new CompletableFuture<?>[]{future};
+        TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
+        executeWithMonitoringIfNeeded(timeBox, futures);
+        return future;
     }
 
     private void executeWithMonitoringIfNeeded(TimeBox timeBox, CompletionStage<?>... futures) {
@@ -284,7 +292,7 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public void executeAndWait(long timeoutMs, CompletableFuture<?>... futures) {
+    public void activateAndWait(long timeoutMs, CompletableFuture<?>... futures) {
         TimeBox timeBox = timeoutMs <= 0 ? TimeBox.NO_TIMEOUT : new TimeBox(timeoutMs);
         executeWithMonitoringIfNeeded(timeBox, futures);
         for (CompletableFuture<?> next : futures) {
@@ -298,10 +306,17 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public <T> List<T> executeAndWait(long timeoutMs, List<CompletableFuture<T>> futures) {
+    public <T> CompletableFuture<T> activateAndWait(long timeoutMs, CompletableFuture<T> future) {
+        CompletableFuture<?>[] futures = new CompletableFuture<?>[]{future};
+        activateAndWait(timeoutMs,futures);
+        return future;
+    }
+
+    @Override
+    public <T> List<T> activateAndWait(long timeoutMs, List<CompletableFuture<T>> futures) {
         CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
         futures.toArray(array);
-        executeAndWait(timeoutMs,array);
+        activateAndWait(timeoutMs,array);
         try {
             return futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
         } catch (CompletionException e) {
@@ -317,7 +332,7 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public <T> CompletableFuture<List<T>> executeFuture(long timeoutMs, List<CompletableFuture<T>> futures) {
+    public <T> CompletableFuture<List<T>> activateFuture(long timeoutMs, List<CompletableFuture<T>> futures) {
         TimeBox timeBox = new TimeBox(timeoutMs);
         CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
         futures.toArray(array);
@@ -330,7 +345,7 @@ public class Engine implements Orchestrator {
     }
 
     @Override
-    public <T> void executeAsReady(long timeoutMs, List<CompletableFuture<T>> futures, TriConsumer<T,Throwable,Integer> completionFn) {
+    public <T> void activateAsReady(long timeoutMs, List<CompletableFuture<T>> futures, TriConsumer<T,Throwable,Integer> completionFn) {
         TimeBox timeBox = new TimeBox(timeoutMs);
         CompletableFuture<?>[] array = new CompletableFuture[futures.size()];
         futures.toArray(array);
@@ -383,11 +398,6 @@ public class Engine implements Orchestrator {
     @Override
     public <R> CompletableFuture<Optional<R>> cond(CompletableFuture<Boolean> condition,
                                         CompletableFuture<R> thenFuture, boolean thenActivate) {
-        //ConditionalTask<R> task = new ConditionalTask<>(this, condition, thenFuture, thenActivate);
-        //return task.getOutput().thenApply(r->r==null ? Optional.empty() : Optional.of(r));
-        //ConditionalTask<Optional<R>> task = new ConditionalTask<>(this, condition, thenFuture, thenActivate);
-        //return task.getOutput();
-
         BinaryConditionalTask<R> task = new BinaryConditionalTask<>(this, condition, thenFuture, thenActivate);
         return task.getOutput();
     }

@@ -99,6 +99,8 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
      * Ensures the provided CF is or is wrapped by a BT-controlled CF, and registered as an input argument.
      *
      * @param cf to ensure
+     * @param registerAsDependentInput if argument should be added to inputs list
+     * @param <RV> type of return value
      * @return BT-controlled CF
      */
     protected <RV> BascomTaskFuture<RV> ensureWrapped(CompletableFuture<RV> cf, boolean registerAsDependentInput) {

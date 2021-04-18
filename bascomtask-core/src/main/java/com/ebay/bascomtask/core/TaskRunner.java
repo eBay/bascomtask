@@ -17,11 +17,15 @@
 package com.ebay.bascomtask.core;
 
 /**
- * Task execution hook points. Implementations of this task can be added for all Orchestrators
- * through {@link GlobalOrchestratorConfig} or locally to any individual {@link Orchestrator}. Several built-in versions are
- * also available.
+ * Interface for task execution hooks that allow custom code to be inserted before and after the invocation of
+ * task methods. Implementing classes can be defined for such purposes as logging or various kinds of profiling or
+ * performance tracking. Subclass instances can be added for all Orchestrators through {@link GlobalOrchestratorConfig}
+ * or locally to any individual {@link Orchestrator}. Several built-in versions are also available.
  *
  * @author Brendan McCarthy
+ * @see com.ebay.bascomtask.runners.LogTaskRunner
+ * @see com.ebay.bascomtask.runners.StatTaskRunner
+ * @see com.ebay.bascomtask.runners.ProfilingTaskRunner
  */
 public interface TaskRunner {
 

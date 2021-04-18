@@ -217,7 +217,7 @@ public class FnTaskTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task()).ret(1);
         CompletableFuture<Integer> cf2 = $.fn(cf1,x->x+1);
         //System.out.println(cf2.join());
-        $.executeAndWait(cf1,cf2);
+        $.activateAndWait(cf1,cf2);
         System.out.println("E&W");
         assertEquals(Integer.valueOf(2),cf2.join());
     }

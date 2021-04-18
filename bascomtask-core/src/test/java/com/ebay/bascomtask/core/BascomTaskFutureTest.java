@@ -150,7 +150,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     @Test
     public void thenAcceptActivate() {
         CompletableFuture<Integer> cf = $.task(task(1)).ret(1);
-        $.execute(cf);
+        $.activate(cf);
         assertNotNull(cf.thenAccept(v -> hit()));
     }
 
@@ -159,7 +159,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf = $.task(task(2)).ret(1);
 
         CompletableFuture<Integer> c2 = cf.thenApply(v -> hit() + v + 10).thenApply(v -> hit() + v + 20);
-        $.execute(cf);
+        $.activate(cf);
         assertEquals(34, (int) c2.get());
     }
 
@@ -167,7 +167,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
     public void thenApplyThenAccept() throws Exception {
         CompletableFuture<Integer> cf = $.task(task(2)).ret(1);
         CompletableFuture<Void> c2 = cf.thenApply(v -> hit() + v + 10).thenAccept(v -> hit());
-        $.execute(cf);
+        $.activate(cf);
         c2.get();
     }
 
@@ -177,7 +177,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).ret(1);
         CompletableFuture<Integer> cf2 = $.task(task).ret(1);
         CompletableFuture<Integer> combine = cf1.thenCombineAsync(cf2, Integer::sum, executor);
-        $.execute(cf1,cf2);
+        $.activate(cf1,cf2);
         int got = combine.get();
         assertEquals(2, got);
     }
@@ -189,7 +189,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).ret(1);
         CompletableFuture<Integer> cf2 = $.task(task).ret(RV);
         CompletableFuture<Integer> compose = cf1.thenCompose(v -> cf2);
-        $.execute(cf1,cf2);
+        $.activate(cf1,cf2);
         int got = compose.get();
         assertEquals(RV, got);
     }
@@ -200,7 +200,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
         CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
         CompletableFuture<Integer> combine = cf1.applyToEither(cf2, x -> x * 5);
-        $.execute(cf1,cf2);
+        $.activate(cf1,cf2);
         int got = combine.get();
         assertEquals(5, got);
     }
@@ -211,7 +211,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
         CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
         CompletableFuture<Integer> combine = cf1.applyToEitherAsync(cf2, x -> x * 5);
-        $.execute(cf1,cf2);
+        $.activate(cf1,cf2);
         int got = combine.get();
         assertEquals(5, got);
     }
@@ -222,7 +222,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
         CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
         CompletableFuture<Integer> combine = cf1.applyToEitherAsync(cf2, x -> x * 5, executor);
-        $.execute(cf1,cf2);
+        $.activate(cf1,cf2);
         int got = combine.get();
         assertEquals(5, got);
     }
@@ -233,7 +233,7 @@ public class BascomTaskFutureTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> cf1 = $.task(task).retHit(1);
         CompletableFuture<Integer> cf2 = $.task(task).retHit(1);
         CompletableFuture<Void> either = cf1.acceptEitherAsync(cf2, x -> currentTask.holder.set(x));
-        $.executeAndWait(cf1,cf2);
+        $.activateAndWait(cf1,cf2);
         sleep(20);
         assertEquals(1, currentTask.holder.get());
     }

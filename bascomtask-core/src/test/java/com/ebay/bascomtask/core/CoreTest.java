@@ -31,6 +31,7 @@ import org.junit.runners.Parameterized;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -241,6 +242,22 @@ public class CoreTest extends BaseOrchestratorTest {
         IThreadTask.ThreadTask task = new IThreadTask.ThreadTask();
         $.task(task).activate().computeAnnotated();
         assertTrue(task.calledAnnotated);
+    }
+
+    @Test
+    public void activateFromOrchestrator() throws InterruptedException {
+        IThreadTask.ThreadTask task = new IThreadTask.ThreadTask();
+        CompletableFuture<Thread> cf = $.task(task).computeAnnotated();
+        CountDownLatch latch = new CountDownLatch(1);
+        $.activate(0,TimeUnit.HOURS,cf).thenAccept(t->latch.countDown());
+        latch.await();
+        assertTrue(task.calledAnnotated);
+    }
+
+    @Test
+    public void activateNull() {
+        CompletableFuture<Integer> cf = null;
+        $.activate(cf);
     }
 
     @Test(expected = MisplacedTaskMethodException.class)
@@ -469,7 +486,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t1 = $.task(task().delayFor(delay)).ret(1);
         CompletableFuture<Integer> t2 = $.task(task().delayFor(delay)).ret(1);
 
-        $.execute(t1, t2);
+        $.activate(t1, t2);
 
         // These ensure we don't test endingTime before it is actually set, since at this point the final
         // bookkeeping/processing on t1 and t2 might not have completed (very small window)
@@ -490,7 +507,7 @@ public class CoreTest extends BaseOrchestratorTest {
     public void voidNoArg() {
         $.task(task()).voidConsume();
         CompletableFuture<Void> vf = $.task(task().delayFor(0)).consume();
-        $.execute(vf);
+        $.activate(vf);
         sleep(5); // Give tasks chance to complete
     }
 
@@ -500,7 +517,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Void> t2 = $.task(task().delayFor(0)).consume(t1);
         $.task(task().delayFor(0)).voidConsume(t1);
 
-        $.execute(t2);
+        $.activate(t2);
         TaskMeta m1 = $.getTaskMeta(t1);
         TaskMeta m2 = $.getTaskMeta(t2);
         assertTrue(m1.completedBefore(m2));
@@ -538,7 +555,7 @@ public class CoreTest extends BaseOrchestratorTest {
     public void externalToExternal() throws Exception {
         CompletableFuture<Integer> cf1 = CompletableFuture.supplyAsync(() -> sleepThen(20, 1));
         CompletableFuture<Integer> cfi = $.task(task()).inc(cf1);
-        $.execute(cfi);
+        $.activate(cfi);
         CompletableFuture<Integer> cf2 = cfi.thenApply(v -> v + 1);
         assertEquals(3, (int) cf2.get());
     }
@@ -660,7 +677,7 @@ public class CoreTest extends BaseOrchestratorTest {
         UberTasker task = task().delayFor(wait);
         CompletableFuture<Integer> t1 = $.task(task).name("delayed").runSpawned().ret(1);
         CompletableFuture<Integer> t2 = $.task(task().delayFor(0)).name("fast").ret(2);
-        $.execute(t1, t2);
+        $.activate(t1, t2);
         int got = t2.get();
         int exp = mode == SpawnMode.NEVER_SPAWN ? 1 : 0;
         assertEquals(exp, task.getActualCount());
@@ -681,7 +698,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t3 = $.task(task3).name("task3").runSpawned().ret(3);
         CompletableFuture<Integer> t4 = $.task(task4).name("task4").runSpawned().ret(4);
 
-        $.executeAndWait(t1, t2, t3, t4);
+        $.activateAndWait(t1, t2, t3, t4);
 
         assertEquals(1, task1.getActualCount());
         assertEquals(1, task2.getActualCount());
@@ -694,6 +711,32 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(4, (int) t4.get());
     }
 
+    @Test(expected = ExceptionTask.FaultHappened.class)
+    public void executeAndWaitException() throws Exception {
+        CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
+        $.activateAndWait(faulting);
+        faulting.get(); // Exception exposed here, but stacktrace relative to call above
+    }
+
+    @Test(expected = ExceptionTask.FaultHappened.class)
+    public void executeException() throws Exception {
+        CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
+        $.activate(faulting);
+        faulting.get(); // Exception exposed here, but stacktrace relative to call above
+    }
+
+    @Test
+    public void executeExceptionInChain() throws Exception {
+        AtomicBoolean b = new AtomicBoolean(false);
+        CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
+        $.activate(faulting).handle((x,y)-> {
+            if (y instanceof ExceptionTask.FaultHappened) {
+                b.set(true);
+            }
+            return 0;
+        });
+    }
+
     @Test
     public void executeFuture() throws Exception {
         final int wait = 20;
@@ -704,7 +747,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> tSlow = $.task(slowerTask).name("slow3").ret(3);
 
         List<CompletableFuture<Integer>> list = Arrays.asList(t1,t2,tSlow);
-        CompletableFuture<List<Integer>> waitFuture = $.executeFuture(list);
+        CompletableFuture<List<Integer>> waitFuture = $.activateFuture(list);
         Map<Integer,Long> map = new HashMap<>();
         waitFuture.thenAccept(fs-> {
             Long time = System.nanoTime();
@@ -733,7 +776,7 @@ public class CoreTest extends BaseOrchestratorTest {
         // This shouldn't be executed because the first task exceeds timeout
         CompletableFuture<Integer> t2 = $.task(task(0).delayFor(0)).inc(t1);
         List<CompletableFuture<Integer>> list = Collections.singletonList(t2);
-        CompletableFuture<List<Integer>> waitFuture = $.executeFuture(timeoutMs,TimeUnit.MILLISECONDS,list);
+        CompletableFuture<List<Integer>> waitFuture = $.activateFuture(timeoutMs,TimeUnit.MILLISECONDS,list);
         waitFuture.thenAccept(fs->System.out.println("Shouldn't see this"));
         Thread.sleep(slowness*2); // Give time for completion
     }
@@ -746,7 +789,7 @@ public class CoreTest extends BaseOrchestratorTest {
         // This shouldn't be executed because the first task exceeds timeout
         CompletableFuture<Integer> t2 = $.task(task(0).delayFor(0)).inc(t1);
         List<CompletableFuture<Integer>> list = Collections.singletonList(t2);
-        $.executeAndWait(timeoutMs,TimeUnit.MILLISECONDS,list);
+        $.activateAndWait(timeoutMs,TimeUnit.MILLISECONDS,list);
     }
 
     @Test
@@ -766,7 +809,7 @@ public class CoreTest extends BaseOrchestratorTest {
         List<Track> results = new ArrayList<>();
         long start = System.currentTimeMillis();
         CountDownLatch latch = new CountDownLatch(4);
-        $.executeAsReady(Arrays.asList(t1, t2, t3, t4), (t,ex,count)-> {
+        $.activateAsReady(Arrays.asList(t1, t2, t3, t4), (t, ex, count)-> {
             Track track = new Track();
             track.result = t;
             track.timeFromStart = System.currentTimeMillis() - start;
@@ -798,7 +841,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t4 = $.task(task(spawning?1:0).delayFor(spread*3)).name("t4").ret(4);
         Set<Integer> set = new HashSet<>();
         List<Throwable> exs = new ArrayList<>();
-        $.executeAsReady(timeoutMs, TimeUnit.MILLISECONDS, Arrays.asList(t1, t2, t3, t4), (t,ex,count)-> {
+        $.activateAsReady(timeoutMs, TimeUnit.MILLISECONDS, Arrays.asList(t1, t2, t3, t4), (t, ex, count)-> {
             if (ex == null) {
                 set.add(t);
             } else {
@@ -855,7 +898,7 @@ public class CoreTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> g1 = $.task(task(exp).delayFor(4)).runSpawned().name("g1-delayed").ret(1);
         CompletableFuture<Integer> g2 = $.task(task(exp)).name("g2-follow").inc(g1);
 
-        $.execute(20, TimeUnit.MILLISECONDS, f2, g2);
+        $.activate(20, TimeUnit.MILLISECONDS, f2, g2);
         assertEquals(2, (int) g2.get());
         f2.get();
     }
@@ -895,7 +938,7 @@ public class CoreTest extends BaseOrchestratorTest {
             CompletableFuture<Integer> f2 = $.task(task(0).delayFor(20)).name("f2").ret(1);
             CompletableFuture<Integer> f3 = $.task(task(0).delayFor(20)).name("f3").ret(1);
 
-            $.executeAndWait(5, TimeUnit.MILLISECONDS, f1, f2, f3);
+            $.activateAndWait(5, TimeUnit.MILLISECONDS, f1, f2, f3);
             f1.get();
             f2.get();
             f3.get();

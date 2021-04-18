@@ -52,10 +52,10 @@ public interface TaskInterface<T> {
      * Provides a name for this task, useful for logging and profiling.
      *
      * TaskWrappers (as returned by {@link Orchestrator#task(TaskInterface)}, already support this method which
-     * therefore works in expressions like <pre><code>$.task(myTask).name("myTask").myMethod()</code></pre>.
+     * therefore works in expressions like {@code $.task(myTask).name("myTask").myMethod()}.
      * That is the typical usage, so there is normally no need to override this method, but subclasses can
      * override if desired to also enable invocation directly on the task, e.g.
-     * <pre><code>$.task(myTask.name("myTask")).myMethod()</code></pre>.
+     * {@code $.task(myTask.name("myTask")).myMethod()}
      *
      * @param name to set
      * @return this
@@ -78,14 +78,14 @@ public interface TaskInterface<T> {
     }
 
     /**
-     * Forces execution of task methods on this object to be done inline, i.e. prevents a new thread from being
-     * spawned when an <code>Orchestrator</code> might otherwise do so.
+     * Forces inline execution of task methods on this object, i.e. prevents a new thread from being
+     * spawned for them when an <code>Orchestrator</code> might otherwise do so.
      *
      * TaskWrappers (as returned by {@link Orchestrator#task(TaskInterface)}, already support this method which
-     * therefore works in expressions like <pre><code>$.task(myTask).light().myMethod()</code></pre>.
+     * therefore works in expressions like {@code $.task(myTask).light().myMethod()}
      * That is the typical usage, so there is normally no need to override this method, but subclasses can
      * override if desired to also enable invocation directly on the task, e.g.
-     * <pre><code>$.task(myTask.light()).myMethod()</code></pre>.
+     * {@code $.task(myTask.light()).myMethod()}.
      *
      * <p>This call reverses any previous call to {@link #runSpawned()}. The impact of this call is redundant for
      * task methods that already have {@link com.ebay.bascomtask.annotations.Light} annotation.
@@ -109,13 +109,13 @@ public interface TaskInterface<T> {
     /**
      * Forces a new thread to be allocated for task methods on this class, which can be useful to keep the calling
      * thread free for other purposes. This overrides the default behavior, which is spawn threads
-     * when an executing thread finds more than one task ready to fire.
+     * when an single thread finds more than one task ready to fire.
      *
      * TaskWrappers (as returned by {@link Orchestrator#task(TaskInterface)}, already support this method which
-     * therefore works in expressions like <pre><code>$.task(myTask).runSpawned().myMethod()</code></pre>.
+     * therefore works in expressions like {@code $.task(myTask).runSpawned().myMethod()}.
      * That is the typical usage, so there is normally no need to override this method, but subclasses can
      * override if desired to also enable invocation directly on the task, e.g.
-     * <pre><code>$.task(myTask.runSpawned()).myMethod()</code></pre>.
+     * {@code $.task(myTask.runSpawned()).myMethod()}
      *
      * <p>This call reverses any previous call to {@link #light()}. Its effect is superseded by a
      * {@link com.ebay.bascomtask.annotations.Light} annotation on a task method if present.
@@ -141,10 +141,10 @@ public interface TaskInterface<T> {
      * are only lazily activated according to the rules described in {@link Orchestrator#task(TaskInterface)}.
      *
      * TaskWrappers (as returned by {@link Orchestrator#task(TaskInterface)}, already support this method which
-     * therefore works in expressions like <pre><code>$.task(myTask).activate(true).myMethod()</code></pre>.
+     * therefore works in expressions like {@code $.task(myTask).activate(true).myMethod()}.
      * That is the typical usage, so there is normally no need to override this method, but subclasses can
      * override if desired to also enable invocation directly on the task, e.g.
-     * <pre><code>$.task(myTask.activate(true)).myMethod()</code></pre>.
+     * {@code $.task(myTask.activate(true)).myMethod()}
      *
      * @return this
      */
@@ -163,9 +163,9 @@ public interface TaskInterface<T> {
     }
 
     /**
-     * Convenience method for accessing the supplied future value that attempts to unwrap
-     * {@link java.util.concurrent.CompletionException}s in a more useful than is provided
-     * by calling the standard {@link CompletableFuture#join} operation.
+     * Convenience method for subclasses for accessing a CompletableFuture argument. This attempts to unwrap
+     * {@link java.util.concurrent.CompletionException}s in a more useful than is provided by calling
+     * the standard {@link CompletableFuture#join} operation.
      *
      * @param future to retrieve value from
      * @param <R>    type of value returned
@@ -187,7 +187,8 @@ public interface TaskInterface<T> {
     }
 
     /**
-     * Convenience method creates a CompletableFuture from a constant value, which may or may not be null.
+     * Convenience method for subclasses that creates a CompletableFuture from a constant value,
+     * which may or may not be null.
      *
      * @param arg value to wrap
      * @param <R> type of value returned
@@ -198,7 +199,7 @@ public interface TaskInterface<T> {
     }
 
     /**
-     * Convenience method for returning a void result. The framework requires a return result
+     * Convenience method for subclasses that return a void result. The framework requires a return result
      * even for logically void methods in order to expose common methods (such as being able to start
      * task execution) on the return result.
      *

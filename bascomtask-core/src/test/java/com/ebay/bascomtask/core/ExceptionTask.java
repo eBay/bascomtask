@@ -78,6 +78,7 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
 
         @Override
         public CompletableFuture<RET> faultImmediate(String msg) {
+            System.out.println("FI: " + Thread.currentThread().getName());
             throw new FaultHappened(msg);
         }
 
