@@ -389,9 +389,11 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         try {
             // Avoid actually invoking the task method if a timeout has been exceeded, always.
             activated.get().checkIfTimeoutExceeded(this);
+            ActiveManager.set(engine);
             return invokeTaskMethod();
         } finally {
             endedAt = System.currentTimeMillis();
+            ActiveManager.clear();
         }
     }
 

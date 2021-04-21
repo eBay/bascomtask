@@ -71,9 +71,10 @@ public interface Orchestrator extends CommonConfig {
     }
 
     /**
-     * Creates a new named Orchestrator, which is the same as <pre>create().setName(name)</pre>;
+     * Creates a new named Orchestrator with the supplied name. The name can also later be changed by calling
+     * {@code setName(name)}.
      *
-     * @param name for orchestrator, used in loggin
+     * @param name for orchestrator, useful in logging output
      * @return new Orchestrator
      */
     static Orchestrator create(String name) {
@@ -89,6 +90,21 @@ public interface Orchestrator extends CommonConfig {
      */
     static Orchestrator create(String name, Object arg) {
         return new Engine(name, arg);
+    }
+
+    /**
+     * Returns the orchestrator used to activate the current task method in the current thread. This is provided
+     * for use inside task methods when adding new tasks, and is an alternative to passing in the outer orchestrator
+     * as an argument although both approaches achieve the same result. Task methods can also simply create new
+     * Orchestrators when desired, but any configuration set in an outer orchestrator will not then be propagated.
+     *
+     * <p>The mechanism here uses ThreadLocal and is therefore thread-safe. It works for all cases even when the
+     * processing thread comes from the completion of CompletableFuture outside of BascomTask's control.
+     *
+     * @return active orchestrator or null if not called inside an activated task method
+     */
+    static Orchestrator current() {
+        return ActiveManager.current();
     }
 
     /**
