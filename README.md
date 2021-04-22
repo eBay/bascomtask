@@ -1,17 +1,44 @@
 # BascomTask
-There are many ways in Java to express parallelized units of work that reach out to external sources such as services
-or datastores. There are also complexities to manage that can quickly make such code difficult to manage and change.
-The mechanisms of object orientation can be a great aid for making this more manageable: each integration point can 
-be split into its own task object. Several benefits accrue from this division of labor:
+Lightweight and low friction in-process parallel task management for Java.
+
+#### Table of contents
+* [Overview](#overview)
+* [Getting Started](#getting-started)
+* [Maven Setup](#maven-setup)
+* [Creating a Task](#creating-a-task)
+* [Invoking a Task](#invoking-a-task)
+* [Parallel Hello World](#parallel-hello-world)
+* [How Tasks Are Executed](#how-tasks-are-executed)
+* [General Programming Model](#general-Programming-model)
+* [More on Activation](#more-on-activation)
+* [Comparing BascomTask Futures with Standard CompletableFutures](#comparing-bascomtask-futures-with-standard-completablefutures)
+* [External CompletableFutures](#external-completableFutures)
+* [Additional Features](#additional-features)
+* [Conditional Execution](#conditional-execution)
+* [Function Tasks](#function-tasks)
+* [User Task Adaptors](#user-task-adaptors)
+* [Exception Handling](#exception-handling)
+* [General Exception Handling Flow](#general-exception-handling-flow)
+* [Configuration](#configuration)
+* [Customizing the Thread Spawning Strategy](#customizing-the-thread-spawning-strategy)
+* [Task Runners](#task-runners)
+* [Timeouts](#timeouts)
+
+
+# Overview
+There are many ways in Java to parallelized larger grained units of work that often involve reaching out to external 
+sources such as services or datastores. There are also complexities involved that can quickly make such code difficult 
+to manage and change. The mechanisms of object orientation can be a great aid for making this more manageable: each 
+integration point can be split into its own task object. Several benefits accrue from this division of labor:
 
 * Enforcing separation of concerns between tasks
 * Unifying cross-cutting capabilities such as logging and exception handling across tasks
 * Parallel execution among tasks that can be time-wise expensive on their own 
 
-To make this work, a means to wire tasks together (what are the tasks, what are their dependencies) must be 
-provided along with orchestration (executing tasks in parallel such that tasks supplying values are executed prior 
-to tasks consuming those values). BascomTask is a lightweight task orchestration library that provides these
-mechanisms. Its features include:
+To make this work, a means to _wire_ tasks together (what are the tasks, what are their dependencies) is needed along 
+with orchestration (executing tasks in parallel such that tasks supplying values are executed prior to tasks consuming 
+those values). BascomTask is a lightweight task orchestration library that provides these mechanisms. 
+Its features include:
 
 * **Implicit dependency analysis** based on Java static typing -- dependencies are computed from method signatures without additional programmer effort 
 * **Optimal thread management** that spawns threads automatically only when it is advantageous to do so
@@ -20,6 +47,15 @@ mechanisms. Its features include:
 * **Smart exception handling and rollback** that is customizable and minimizes wasteful task execution
 * **Extensible task execution wrappers** with pre-existing built-ins for logging and profiling
 
+# Getting Started
+## Maven Setup
+```xml
+        <dependency>
+            <groupId>com.ebay.bascomtask</groupId>
+            <artifactId>bascomtask-core</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+```
 
 ## Creating a Task
 To work within BascomTask, a task class can be any Java class that (a) has an interface and (b) that interface 
@@ -49,12 +85,12 @@ Notice how the generic parameter to TaskInterface is the interface itself (IEcho
 
 ## Invoking a Task
 The example above can be invoked as follows. On the left, for reference, is how we would invoke the task using only
-Java code. On the right the same task invocation is run through BascomTask:
+Java code. On the right the same task invocation wired through BascomTask:
 
 | Line | Plain Java | With BascomTask |
 | --- | ----------------------------- | --------------------- |
 1 | ... | Orchestrator $ = Orchestrator.create();
-2 | String msg =  new EchoTask().echo("hello"); | String msg = $.task(new EchoTask()).echo("hello");
+2 | String msg = new EchoTask().echo("hello"); | String msg = $.task(new EchoTask()).echo("hello");
 
 The difference is that instead of invoking the task method directly on the user POJO, that POJO is first added to
 a BascomTask Orchestrator before being invoked ('$' as the Orchestrator variable name is a just a convention for
@@ -89,8 +125,7 @@ but for clarity they are separated in this example:
     }
 ```
 The above makes calls to _get()_ and _complete()_, which are default utility methods defined in _TaskInterface_ 
-for getting and setting values from/to CompletableFutures. These are examples of convenience methods whose 
-use is optional.
+for getting and setting values from/to CompletableFutures. Their use is optional.
 
 With the above task definitions in place, we can wire them together like this:
 
@@ -113,15 +148,15 @@ _get()_ call. The framework works backward from the _get()_ call, recursively de
 required to complete that call, then initiates execution such that any task's inputs are executed prior to it being 
 started. Because of this lazy execution, it is not costly to create many tasks and only later determine which ones 
 are needed; the framework will determine the minimal spanning set of tasks to actually execute, and then proceed in a 
-dataflow-forward execution style, executing tasks once (and only when) all their inputs are available 
+dataflow forward execution style, executing tasks once (and only when) all their inputs are available 
 and completed. 
 
 > Since the dependency analysis is determined from the method signatures themselves, it is not possible
-to mistakenly execute a task before its parameters are ready. Accessing the values of CompletablueFuture
+to mistakenly execute a task before its parameters are ready. Accessing the values of CompletableFuture
 > input parameters will never block.
 
 
-
+# How Tasks Are Executed
 ## General Programming Model
 1) Task methods are activated (scheduled for execution) on demand by an explicit call to _activate_ (on Orchestrator
    or TaskWrapper), or implicitly by a call to _get()_ or other access operation on a CompletableFuture returned 
@@ -129,7 +164,8 @@ to mistakenly execute a task before its parameters are ready. Accessing the valu
 2) Activation works recursively backward, activating that task method and all its predecessors (incoming arguments).
 3) Task methods that are ready to fire (begin execution), either because all their CompletableFuture inputs have
    already completed or because they have no CompletableFuture inputs, are collected. 
-4) All except one are assigned to newly spawned threads and all are started (one is kept for execution by the processing thread). 
+4) All except one are assigned to newly spawned threads and all are started (one is kept for execution by the 
+   processing thread). 
 5) Completion runs forward. Each completion checks for each of its dependents whether that dependent has all its 
    arguments ready. All _those_ ready-to-fire task methods are collected.
 6) Return to step 4. 
@@ -268,6 +304,7 @@ BascomTask does not initiate execution of TaskMethods until all their incoming C
 originated from BascomTask or not, are complete. The non-blocking nature of task method execution is preserved.
 Calls to retrieve values from incoming arguments will not block.
 
+# Additional Features
 ## Conditional Execution
 
 At times the choice of a task may vary based on some runtime condition. At the simplest
@@ -319,22 +356,22 @@ that return the value 1:
 ```
    CompletableFuture<Integer> t1 = $.fn(()->1);
 ```
-The call creates the task which is just like any other user POJO task and then invokes its
-task method to return a CompletableFuture result. The definition of this fn method Orchestrator is this:
+The call creates a task whose task method returns a CompletableFuture result from the supplied lambda function. 
+The definition of method _Orchestrator.fn_ with this signature is:
 
 ```
     default <R> CompletableFuture<R> fn(Supplier<R> fn) {
         return fnTask(fn).apply();
     }
 ```
-As can be seen, fnTask is the call to make to get the task itself, which you may want to do to apply common
+As can be seen, fnTask returns the task itself, which you may want to do to apply common
 methods on it such as giving it a name or changing its weight -- unlike regular tasks, function tasks are
 'light' by default meaning a separate thread will not be spawned for them, but that can be changed as described
 later in the configuration section. For must purposes, the simpler and shorter fn() call will likely be sufficient.
 
 There are number of these methods that take different kinds of lambdas, for Supplier as well as Consumer lambdas.
 For lambdas that take arguments these must be passed to the fn/fnTask methods in turn, as CompletableFutures. The 
-following example takes a value returned from a POJO task method, the hardwired value three, and a BiFunction 
+following example takes a value returned from a POJO task method, the hardwired value 3, and a BiFunction 
 that multiplies them together: 
 
 ```

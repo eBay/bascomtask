@@ -38,50 +38,12 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
      */
     CompletableFuture<R> apply();
 
-    abstract class BaseSupplierTask<R> extends Binding<R> implements SupplierTask<R> {
-        private String name = null;
-
-        public BaseSupplierTask(Engine engine) {
-            super(engine);
-        }
-
-        @Override
-        public BaseSupplierTask<R> name(String name) {
-            this.name = name;
-            return this;
-        }
-
-        @Override
-        String doGetExecutionName() {
-            if (name==null) {
-                return "FunctionTask";
-            } else {
-                return name;
-            }
-        }
-
-        @Override
-        public TaskInterface<?> getTask() {
-            return null;
-        }
-
-        @Override
-        public void formatActualSignature(StringBuilder sb) {
-
-        }
-
-        @Override
-        protected Object invokeTaskMethod() {
-            throw new RuntimeException("Invalid internal state for function task " + this);
-        }
-    }
-
     /**
      * An SupplierTask that takes no arguments.
      *
      * @param <R> type of return result
      */
-    class SupplierTask0<R> extends BaseSupplierTask<R> {
+    class SupplierTask0<R> extends BaseFnTask<R,SupplierTask0<R>> implements SupplierTask<R> {
         private final Supplier<R> fn;
 
         public SupplierTask0(Engine engine, Supplier<R> fn) {
@@ -102,7 +64,7 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
      * @param <T> type of input
      * @param <R>  type of return result
      */
-    class SupplierTask1<T, R> extends BaseSupplierTask<R> {
+    class SupplierTask1<T, R> extends BaseFnTask<R,SupplierTask1<T,R>> implements SupplierTask<R> {
         private final Function<T, R> fn;
         final BascomTaskFuture<T> input;
 
@@ -131,7 +93,7 @@ public interface SupplierTask<R> extends TaskInterface<SupplierTask<R>> {
      * @param <T> type of input
      * @param <R>  type of return result
      */
-    class SupplierTask2<T,U,R> extends BaseSupplierTask<R> {
+    class SupplierTask2<T,U,R> extends BaseFnTask<R,SupplierTask2<T,U,R>> implements SupplierTask<R> {
         private final BiFunction<T,U,R> fn;
         final BascomTaskFuture<T> firstInput;
         final BascomTaskFuture<U> secondInput;

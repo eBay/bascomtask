@@ -19,6 +19,7 @@ package com.ebay.bascomtask.core;
 import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.ebay.bascomtask.core.UberTask.task;
 import static org.junit.Assert.*;
@@ -45,6 +46,13 @@ public class FnTaskTest extends BaseOrchestratorTest {
             input = v;
             return -v;
         }
+    }
+
+    @Test
+    public void naming() {
+        SupplierTask<Integer> task = $.fnTask(() -> 1);
+        String nm = "foo";
+        assertEquals(nm,task.name(nm).getName());
     }
 
     @Test
@@ -76,6 +84,25 @@ public class FnTaskTest extends BaseOrchestratorTest {
         CompletableFuture<Integer> t2 = $.fn(t1, x -> x + 1);
         int got = t2.get();
         assertEquals(2, got);
+    }
+
+    @Test
+    public void applySupplierFn() throws Exception {
+        CompletableFuture<Integer> t1 = $.fn(() -> 5);
+        CompletableFuture<Integer> t2 = $.fn(t1,()->3, Integer::sum);
+        assertEquals(8,(int)t2.get());
+    }
+
+    @Test
+    public void supplierConsumer() throws Exception {
+        AtomicInteger i = new AtomicInteger(0);
+        //$.vfn(()->3, i::set);
+        CompletableFuture<Void> future = $.vfn(()->3, x->{
+            System.out.println("HERE");
+            i.set(x);
+        });
+        $.activate(future);
+        assertEquals(3,i.get());
     }
 
     @Test

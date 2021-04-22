@@ -12,3 +12,4 @@
 1. Added activate() methods on Orchestrator and TaskWrapper for easy explicit activation.
 1. Replaced ThreadLocalRunner with LaneRunner which for managing TaskRunners works more consistently and easily against asynchronous execution.
 1. Return parameterized Optional from cond/2 rather than void.
+1. Added Orchestrator.current() for accessing current Orchestrator from within a task method.

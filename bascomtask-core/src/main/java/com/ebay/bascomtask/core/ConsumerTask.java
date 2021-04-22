@@ -40,23 +40,31 @@ public interface ConsumerTask extends TaskInterface<ConsumerTask> {
      *
      * @param <IN> type of input
      */
-    class ConsumerTask1<IN> implements ConsumerTask {
-        private final Consumer<IN> fn;
-        private final CompletableFuture<IN> cf;
+    class ConsumerTask1<IN> extends BaseFnTask<Void,ConsumerTask1<IN>> implements ConsumerTask {
 
-        public ConsumerTask1(CompletableFuture<IN> cf, Consumer<IN> fn) {
-            this.cf = cf;
+        private final Consumer<IN> fn;
+        private final BascomTaskFuture<IN> input;
+
+        public ConsumerTask1(Engine engine, CompletableFuture<IN> input, Consumer<IN> fn) {
+            super(engine);
             this.fn = fn;
+            this.input = ensureWrapped(input,true);
+        }
+
+        @Override
+        Binding<?> doActivate(Binding<?> pending, TimeBox timeBox) {
+            return input.activate(this, pending, timeBox);
         }
 
         @Override
         @Light
         public CompletableFuture<Void> apply() {
-            IN v = get(cf);
-            fn.accept(v);
+            IN value = get(input);
+            fn.accept(value);
             return complete();
         }
     }
+
 
     /**
      * An ConsumerTask that takes 2 arguments.
@@ -64,14 +72,15 @@ public interface ConsumerTask extends TaskInterface<ConsumerTask> {
      * @param <IN1> type of first input
      * @param <IN2> type of second input
      */
-    class ConsumerTask2<IN1, IN2> implements ConsumerTask {
+    class ConsumerTask2<IN1, IN2> extends BaseFnTask<Void,ConsumerTask2<IN1,IN2>> implements ConsumerTask {
         private final BiConsumer<IN1, IN2> fn;
-        private final CompletableFuture<IN1> cf1;
-        private final CompletableFuture<IN2> cf2;
+        private final BascomTaskFuture<IN1> cf1;
+        private final BascomTaskFuture<IN2> cf2;
 
-        public ConsumerTask2(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-            this.cf1 = cf1;
-            this.cf2 = cf2;
+        public ConsumerTask2(Engine engine, CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+            super(engine);
+            this.cf1 = ensureWrapped(cf1,true);
+            this.cf2 = ensureWrapped(cf2,true);
             this.fn = fn;
         }
 

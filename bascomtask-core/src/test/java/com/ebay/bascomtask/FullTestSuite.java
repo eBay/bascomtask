@@ -34,7 +34,11 @@ import org.junit.runners.Suite;
         LogTaskRunnerTest.class,
         ProfilingTaskRunnerTest.class,
         StatTaskRunnerTest.class,
-        TimingTest.class
+        TimingTest.class,
+        AccessTest.class,
+        OrchestratorPassingTest.class,
+        TaskVariationsTest.class
+
 })
 public class FullTestSuite {
 }

@@ -436,6 +436,39 @@ public class Engine implements Orchestrator {
         return new SupplierTask.SupplierTask2<>(this,firstInput,secondInput,fn);
     }
 
+    @Override
+    public <IN> ConsumerTask vfnTask(Supplier<IN> s1, Consumer<IN> fn) {
+        CompletableFuture<IN> in1 = fnTask(s1).apply();
+        return task(new ConsumerTask.ConsumerTask1<>(this,in1, fn));
+    }
+
+    @Override
+    public <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
+        CompletableFuture<IN2> in2 = fnTask(s2).apply();
+        return task(new ConsumerTask.ConsumerTask2<>(this,cf1, in2, fn));
+    }
+
+    @Override
+    public <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+        return task(new ConsumerTask.ConsumerTask2<>(this, cf1, cf2, fn));
+    }
+
+    @Override
+    public <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
+        CompletableFuture<IN1> in1 = fnTask(s1).apply();
+        return task(new ConsumerTask.ConsumerTask2<>(this, in1, cf2, fn));
+    }
+
+    @Override
+    public <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
+        CompletableFuture<IN1> in1 = fnTask(s1).apply();
+        CompletableFuture<IN2> in2 = fnTask(s2).apply();
+        return task(new ConsumerTask.ConsumerTask2<>(this, in1, in2, fn));
+    }
+
+
+
+
 
 
     /**

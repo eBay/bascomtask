@@ -830,10 +830,7 @@ public interface Orchestrator extends CommonConfig {
      * @param <IN> type of input1
      * @return Function task
      */
-    default <IN> ConsumerTask vfnTask(Supplier<IN> s1, Consumer<IN> fn) {
-        CompletableFuture<IN> in1 = fnTask(s1).apply();
-        return task(new ConsumerTask.ConsumerTask1<>(in1, fn));
-    }
+    <IN> ConsumerTask vfnTask(Supplier<IN> s1, Consumer<IN> fn);
 
     /**
      * Produces function task value that takes one lambda argument and produces no result.
@@ -859,10 +856,7 @@ public interface Orchestrator extends CommonConfig {
      * @param <IN2> type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        CompletableFuture<IN2> in2 = fnTask(s2).apply();
-        return task(new ConsumerTask.ConsumerTask2<>(cf1, in2, fn));
-    }
+    <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn);
 
     /**
      * Produces function task value that takes mixed arguments and produces no result.
@@ -890,9 +884,7 @@ public interface Orchestrator extends CommonConfig {
      * @param <IN2> base type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        return task(new ConsumerTask.ConsumerTask2<>(cf1, cf2, fn));
-    }
+    <IN1, IN2> ConsumerTask vfnTask(CompletableFuture<IN1> cf1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn);
 
     /**
      * Produces function task value that takes non-lambda arguments and produces no result.
@@ -920,10 +912,7 @@ public interface Orchestrator extends CommonConfig {
      * @param <IN2> base type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn) {
-        CompletableFuture<IN1> in1 = fnTask(s1).apply();
-        return task(new ConsumerTask.ConsumerTask2<>(in1, cf2, fn));
-    }
+    <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, CompletableFuture<IN2> cf2, BiConsumer<IN1, IN2> fn);
 
     /**
      * Produces function task value that takes mixed arguments and produces no result.
@@ -951,11 +940,7 @@ public interface Orchestrator extends CommonConfig {
      * @param <IN2> type of input2
      * @return Function task
      */
-    default <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn) {
-        CompletableFuture<IN1> in1 = fnTask(s1).apply();
-        CompletableFuture<IN2> in2 = fnTask(s2).apply();
-        return task(new ConsumerTask.ConsumerTask2<>(in1, in2, fn));
-    }
+    <IN1, IN2> ConsumerTask vfnTask(Supplier<IN1> s1, Supplier<IN2> s2, BiConsumer<IN1, IN2> fn);
 
     /**
      * Produces function task value that takes two lambda arguments and produces no result.
