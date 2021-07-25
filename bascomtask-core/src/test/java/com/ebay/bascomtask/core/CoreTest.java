@@ -18,10 +18,7 @@ package com.ebay.bascomtask.core;
 
 import static org.junit.Assert.*;
 
-import com.ebay.bascomtask.exceptions.InvalidTaskMethodException;
-import com.ebay.bascomtask.exceptions.MisplacedTaskMethodException;
-import com.ebay.bascomtask.exceptions.TaskNotStartedException;
-import com.ebay.bascomtask.exceptions.TimeoutExceededException;
+import com.ebay.bascomtask.exceptions.*;
 import com.ebay.bascomtask.util.CommonTestingUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -711,6 +708,18 @@ public class CoreTest extends BaseOrchestratorTest {
         assertEquals(4, (int) t4.get());
     }
 
+    @Test
+    public void returnUnwrappedNull() {
+        try {
+            $.task(faulty()).returnsNull().join();
+        } catch (CompletionException e) {
+            assertTrue(e.getCause() instanceof InvalidTaskMethodException);
+            assertTrue(e.getMessage().contains("not supported"));
+            return;
+        }
+        fail("Expected exception");
+    }
+
     @Test(expected = ExceptionTask.FaultHappened.class)
     public void executeAndWaitException() throws Exception {
         CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
@@ -726,7 +735,7 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test
-    public void executeExceptionInChain() throws Exception {
+    public void executeExceptionInChain() {
         AtomicBoolean b = new AtomicBoolean(false);
         CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
         $.activate(faulting).handle((x,y)-> {

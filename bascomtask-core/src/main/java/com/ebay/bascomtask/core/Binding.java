@@ -16,6 +16,8 @@
  **************************************************************************/
 package com.ebay.bascomtask.core;
 
+import com.ebay.bascomtask.exceptions.InvalidTaskException;
+import com.ebay.bascomtask.exceptions.InvalidTaskMethodException;
 import com.ebay.bascomtask.exceptions.TaskNotStartedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -305,8 +307,10 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
                 completeRunner(taskRunner, taskRun, fromBefore, cf);
                 LOG.debug("Exiting {} from {}-{}", name, src1, src2);
                 output.bind(cf);
+            } else if (rv == null) {
+                throw new InvalidTaskMethodException("Null return values are not supported in BascomTask, return complete(null) instead");
             } else {
-                throw new RuntimeException("Return value is not a CompletableFuture " + this);
+                throw new InvalidTaskMethodException("Return value is not a CompletableFuture: " + rv);
             }
         } catch (Throwable e) {
             LOG.debug("Exception-exit {} from {}-{}: {}", name, src1, src2, e.getMessage());

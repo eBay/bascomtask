@@ -39,6 +39,8 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
 
     CompletableFuture<RET> faultImmediateCompletion(int ms, String msg);
 
+    CompletableFuture<RET> returnsNull();
+
     /**
      * Throws Exception after interval in external (non-BT) CompletableFuture-managed thread.
      *
@@ -97,6 +99,11 @@ public interface ExceptionTask<RET> extends TaskInterface<ExceptionTask<RET>> {
             return CompletableFuture.supplyAsync(() -> {
                 throw new FaultHappened(msg);
             });
+        }
+
+        @Override
+        public CompletableFuture<RET> returnsNull() {
+            return null; // Not valid and should raise Exception
         }
 
         @Override
