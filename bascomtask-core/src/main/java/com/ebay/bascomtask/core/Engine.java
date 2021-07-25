@@ -18,6 +18,7 @@ package com.ebay.bascomtask.core;
 
 import com.ebay.bascomtask.exceptions.InvalidTaskException;
 import com.ebay.bascomtask.exceptions.InvalidTaskMethodException;
+import com.ebay.bascomtask.exceptions.TimeoutExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -298,9 +299,13 @@ public class Engine implements Orchestrator {
         for (CompletableFuture<?> next : futures) {
             try {
                 next.get(timeBox.timeBudget, TimeUnit.MILLISECONDS);
-            } catch (Exception ignored) {
-                // do nothing since our only purpose here is to wait; subsequent external calls
-                // to get() will deal with the exception
+            } catch (TimeoutException e) {
+                throw new TimeoutExceededException(e.getMessage());
+            } catch (RuntimeException e) {
+                throw e;
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Orchestrator execution halted",e);
             }
         }
     }

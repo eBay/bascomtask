@@ -721,16 +721,15 @@ public class CoreTest extends BaseOrchestratorTest {
     }
 
     @Test(expected = ExceptionTask.FaultHappened.class)
-    public void executeAndWaitException() throws Exception {
+    public void activateAndWaitException() throws Exception {
         CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
         $.activateAndWait(faulting);
-        faulting.get(); // Exception exposed here, but stacktrace relative to call above
     }
 
     @Test(expected = ExceptionTask.FaultHappened.class)
     public void executeException() throws Exception {
         CompletableFuture<Object> faulting = $.task(faulty()).faultImmediate("faulting");
-        $.activate(faulting);
+        $.activate(faulting); // Exception not raised because calling thread is separate from task threads
         faulting.get(); // Exception exposed here, but stacktrace relative to call above
     }
 
