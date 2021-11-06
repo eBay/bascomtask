@@ -84,6 +84,7 @@ public class TaskRunnerTest {
         final AtomicInteger execDiffThreadHits = new AtomicInteger(0);
         final AtomicInteger completedHits = new AtomicInteger(0);
         final AtomicBoolean matched = new AtomicBoolean(false);
+        boolean lastTaskWasLight = false;
         private final String name;
         TaskRun taskRun;
 
@@ -98,6 +99,7 @@ public class TaskRunnerTest {
 
         @Override
         public Object before(TaskRun taskRun) {
+            lastTaskWasLight = taskRun.isLight();
             beforeHits.incrementAndGet();
             ordering.clear();
             this.taskRun = taskRun;
@@ -304,5 +306,23 @@ public class TaskRunnerTest {
         gr2.verify(2, 2, 0);
         or1.verify(1, 1, 0);
         or2.verify(2, 2, 0);
+    }
+
+    @Test
+    public void lightRunner() throws Exception {
+        MockRunner runner = new MockRunner(0);
+        Orchestrator $ = Orchestrator.create();
+        $.firstInterceptWith(runner);
+        $.task(task()).ret(1).get();
+        assertFalse(runner.lastTaskWasLight);
+
+        $.task(task()).retLight(1).get();
+        assertTrue(runner.lastTaskWasLight);
+
+        $.task(task()).ret(1).get();
+        assertFalse(runner.lastTaskWasLight);
+
+        $.task(task()).light().ret(1).get();
+        assertTrue(runner.lastTaskWasLight);
     }
 }

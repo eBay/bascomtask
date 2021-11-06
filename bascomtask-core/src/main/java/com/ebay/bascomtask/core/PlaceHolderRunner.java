@@ -56,6 +56,11 @@ class PlaceHolderRunner implements TaskRun {
     }
 
     @Override
+    public boolean isLight() {
+        return taskRun.isLight();
+    }
+
+    @Override
     public TaskInterface<?> getTask() {
         return taskRun.getTask();
     }

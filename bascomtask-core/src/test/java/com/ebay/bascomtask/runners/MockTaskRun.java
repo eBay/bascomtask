@@ -73,6 +73,11 @@ public class MockTaskRun implements TaskRun {
     }
 
     @Override
+    public boolean isLight() {
+        return false;
+    }
+
+    @Override
     public Object run() {
         return this; // doesn't matter
     }

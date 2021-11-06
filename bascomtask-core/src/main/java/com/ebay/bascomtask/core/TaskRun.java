@@ -41,5 +41,20 @@ public interface TaskRun extends TaskMeta {
 
     void formatActualSignature(StringBuilder sb);
 
+    /**
+     * Indicates whether the task method is 'light', regardless of how that method was marked as light.
+     *
+     * @return true iff this task method is light
+     * @see com.ebay.bascomtask.annotations.Light
+     * @see TaskInterface#light()
+     */
+    boolean isLight();
+
+    /**
+     * Invokes the task method. This should be called from {@link TaskRunner#executeTaskMethod(TaskRun, Thread, Object)},
+     * and the result of this call should be returned from that method.
+     *
+     * @return result of call to task method
+     */
     Object run();
 }

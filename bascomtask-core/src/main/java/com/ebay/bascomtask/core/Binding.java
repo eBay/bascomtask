@@ -89,6 +89,7 @@ abstract class Binding<RETURNTYPE> implements TaskRunner, TaskRun {
         return getClass().getSimpleName() + "(" + getTaskPlusMethodName() + ")";
     }
 
+    @Override
     public boolean isLight() {
         return false;
     }

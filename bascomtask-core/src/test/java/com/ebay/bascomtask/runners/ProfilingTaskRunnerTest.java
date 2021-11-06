@@ -68,6 +68,11 @@ public class ProfilingTaskRunnerTest extends BaseOrchestratorTest {
         }
 
         @Override
+        public boolean isLight() {
+            return false;
+        }
+
+        @Override
         public Object run() {
             return null;
         }
